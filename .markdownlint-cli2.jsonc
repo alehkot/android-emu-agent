@@ -1,0 +1,15 @@
+{
+  "configFile": ".markdownlint.jsonc",
+  "globs": ["**/*.md"],
+  "ignores": [
+    "**/node_modules/**",
+    "**/.venv/**",
+    "**/.git/**",
+    "**/.pytest_cache/**",
+    "**/.ruff_cache/**",
+    "**/.mypy_cache/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/docs/plans/**"
+  ]
+}

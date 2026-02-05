@@ -1,0 +1,84 @@
+---
+name: android-emu-agent
+description:
+  Automate Android apps on emulators and rooted devices via observe-act-verify UI snapshots and
+  actions. Use for Android UI automation/testing, emulator control, tapping/typing/navigation,
+  handling dialogs, diagnosing UI automation issues, and reliability forensics.
+---
+
+# Android Emu Agent Skill
+
+Use the `android-emu-agent` CLI + daemon to control Android UI with snapshots and ephemeral element
+refs. If you're working inside this repo, prefer `uv run android-emu-agent ...` to ensure the
+correct environment.
+
+## Quick Start
+
+1. Start the daemon.
+
+```bash
+uv run android-emu-agent daemon start
+uv run android-emu-agent daemon status
+```
+
+1. Verify a device is connected.
+
+```bash
+uv run android-emu-agent device list
+```
+
+1. Start a session.
+
+```bash
+uv run android-emu-agent session start --device <serial>
+# Returns: session_id = s-abc123
+```
+
+1. Run the observe-act-verify loop.
+
+```bash
+# Observe
+uv run android-emu-agent ui snapshot <session_id>
+
+# Act (one action)
+uv run android-emu-agent action tap <session_id> @a1
+
+# Verify
+uv run android-emu-agent ui snapshot <session_id>
+```
+
+## Daemon Lifecycle (When and How to Start)
+
+- Start the daemon before any device/session/ui/action/app/reliability/file commands.
+- The CLI can auto-start the daemon on first request, but start it explicitly for stable sessions.
+- Verify health with `uv run android-emu-agent daemon status` before long runs.
+- Stop it when you are done with `uv run android-emu-agent daemon stop`.
+- If you are working inside this repo, use `uv run android-emu-agent ...` for all of the above.
+
+## Core Rules
+
+- One action per snapshot. Refs are ephemeral.
+- Re-snapshot after any action or wait.
+- Verify state changes after each action.
+- If blocked by dialogs or loading, handle the blocker first.
+
+## Decision Guide
+
+- Need snapshot format or loop details: `references/core-loop.md`
+- Need full command/selector reference: `references/command-reference.md`
+- Need patterns (permissions, dialogs, login, onboarding, navigation, forms, scrolling):
+  `references/patterns.md`
+- Need error handling or debug playbooks: `references/troubleshooting.md`
+- Need end-to-end examples: `references/examples.md`
+- Need reliability and forensics workflows: `references/reliability.md`
+- Need file transfer workflows: `references/files.md`
+
+## Templates (Ready-to-Use)
+
+Templates are copy-pasteable flows with placeholders like `<session_id>` and `<package>`.
+
+- `templates/flow-permission.md` - handle runtime permission dialogs
+- `templates/flow-login.md` - login with email/password
+- `templates/flow-onboarding.md` - skip onboarding or tap-through tutorial
+- `templates/flow-e2e.md` - full E2E flow (reset, onboarding, login, verify)
+- `templates/flow-reliability-triage.md` - crash/ANR reliability triage

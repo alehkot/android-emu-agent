@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+cd "$ROOT_DIR"
+
+files=()
+while IFS= read -r file; do
+  files+=("$file")
+done < <(git diff --cached --name-only --diff-filter=ACM -- '*.md')
+
+if [[ ${#files[@]} -eq 0 ]]; then
+  exit 0
+fi
+
+if [[ ! -x node_modules/.bin/prettier || ! -x node_modules/.bin/markdownlint-cli2 ]]; then
+  echo "Markdown tools not installed. Run 'npm install' first." >&2
+  exit 1
+fi
+
+node_modules/.bin/prettier --write "${files[@]}"
+node_modules/.bin/markdownlint-cli2 --fix "${files[@]}"
+
+git add "${files[@]}"
+
+node_modules/.bin/markdownlint-cli2 "${files[@]}"

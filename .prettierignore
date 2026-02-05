@@ -1,0 +1,10 @@
+node_modules/
+.venv/
+.git/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+dist/
+build/
+.android-agent/
+.android-agent-artifacts/

@@ -1,0 +1,13 @@
+{
+  "name": "android-emu-agent",
+  "private": true,
+  "devDependencies": {
+    "markdownlint-cli2": "^0.13.0",
+    "prettier": "^3.2.5"
+  },
+  "scripts": {
+    "lint:md": "markdownlint-cli2",
+    "fix:md": "markdownlint-cli2 --fix",
+    "format:md": "prettier --write \"**/*.md\""
+  }
+}
