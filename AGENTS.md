@@ -11,7 +11,7 @@
   - `db/` + `artifacts/`: persistence and artifact handling.
 - `tests/`: pytest suites (`unit/` and `integration/`).
 - `scripts/dev.sh`: common dev workflows (lint, format, test, typecheck).
-- `README.md`, `ARCH.md`, `PRD.md`: usage, architecture, and product context.
+- `README.md`, `CLAUDE.md`, `AGENTS.md`: usage and development guidance.
 
 ## Build, Test, and Development Commands
 

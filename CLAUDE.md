@@ -35,14 +35,21 @@ uv run ruff format .       # Format
 uv run mypy src/           # Type check with mypy
 uv run pyright             # Type check with pyright
 
-# Convenience script
-./scripts/dev.sh setup     # Full setup
-./scripts/dev.sh check     # Run all checks (lint + typecheck + unit tests)
-./scripts/dev.sh test-unit # Run unit tests
-./scripts/dev.sh format    # Format code
-
-# Start daemon directly (for debugging)
-uv run uvicorn android_emu_agent.daemon.server:app --uds /tmp/android-emu-agent.sock
+# Convenience script (./scripts/dev.sh)
+./scripts/dev.sh setup            # Full setup (deps + markdown tooling + git hooks)
+./scripts/dev.sh check            # Run all checks (lint + typecheck + unit tests + md lint)
+./scripts/dev.sh test             # Run all tests
+./scripts/dev.sh test-unit        # Run unit tests only
+./scripts/dev.sh test-integration # Run integration tests (requires emulator)
+./scripts/dev.sh lint             # Lint only (no format)
+./scripts/dev.sh format           # Format code (ruff format + fix)
+./scripts/dev.sh typecheck        # Type check only (mypy + pyright)
+./scripts/dev.sh daemon           # Start daemon on Unix socket
+./scripts/dev.sh hooks            # Install git hooks
+./scripts/dev.sh format-md        # Format Markdown
+./scripts/dev.sh lint-md          # Lint Markdown
+./scripts/dev.sh md               # Format + lint Markdown
+./scripts/dev.sh skills [target]  # Symlink skills to agent dirs (codex|claude|all)
 ```
 
 ## Architecture
@@ -54,25 +61,32 @@ The system is organized into these layers:
 1. **CLI Layer** (`src/android_emu_agent/cli/`)
    - `main.py`: Typer CLI entry point
    - `commands/`: Command groups (daemon, device, session, ui, action, wait, app, artifact,
-     reliability, file)
+     reliability, file, emulator)
    - `daemon_client.py`: Unix socket client for communicating with daemon
+   - `utils.py`: Shared CLI helpers and timeout constants
 
 2. **Daemon Layer** (`src/android_emu_agent/daemon/`)
    - `core.py`: Central coordinator (`DaemonCore`) that manages all subsystems
    - `server.py`: FastAPI server that exposes daemon functionality over Unix socket
    - `models.py`: Pydantic request/response models
+   - `health.py`: `HealthMonitor` for device/daemon health checks
 
 3. **Core Subsystems** (all instantiated in `DaemonCore`)
    - `device/manager.py`: Device discovery and management (via adbutils)
    - `device/session.py`: Session lifecycle and state (`SessionManager`)
    - `ui/snapshotter.py`: UI hierarchy parsing and snapshot generation
    - `ui/ref_resolver.py`: Ephemeral ref (`@a1`, `@a2`, etc.) to locator bundle mapping
+   - `ui/context.py`: `ContextResolver` for activity/package/window/IME/dialog detection
    - `actions/executor.py`: Action dispatch (tap, swipe, text input)
    - `actions/wait.py`: Wait conditions (idle, text, element existence)
+   - `actions/selector.py`: Selector types (RefSelector, TextSelector, IDSelector, DescSelector,
+     CoordsSelector) for target resolution
    - `artifacts/manager.py`: Debug artifact collection (logs, screenshots, bundles)
    - `files/manager.py`: File transfer operations
    - `reliability/manager.py`: Advanced reliability/debugging commands
    - `db/models.py`: SQLite-based session persistence (via aiosqlite)
+   - `validation.py`: Input validation helpers (package names, URIs, emulator checks)
+   - `errors.py`: Error definitions with remediation codes
 
 ### Key Architectural Concepts
 
@@ -102,6 +116,14 @@ strategy fails.
 `DaemonCore` → Subsystem managers → Device (via ATX Server on port 7912)
 
 ## Code Patterns
+
+### Style Conventions
+
+- Python 3.11 target version
+- Line length is 100 (enforced by ruff)
+- Prefer `pathlib` over `os.path` (ruff PTH rules enabled)
+- `snake_case` for modules/functions/vars, `PascalCase` for classes, tests as `test_*.py`
+- Commit messages follow Conventional Commits: `feat:`, `fix:`, `docs:`, etc.
 
 ### Error Handling
 
@@ -152,6 +174,7 @@ Core runtime:
 
 - `fastapi` + `uvicorn`: Daemon server
 - `typer`: CLI framework
+- `httpx`: HTTP client for daemon communication over Unix socket
 - `adbutils`: ADB protocol communication
 - `uiautomator2`: Android UI automation (requires ATX Server on device)
 - `lxml`: XML parsing for UI hierarchy
@@ -164,6 +187,7 @@ Dev-only:
 - `pytest` + `pytest-asyncio` + `pytest-cov`: Testing
 - `ruff`: Linting and formatting
 - `mypy` + `pyright`: Type checking
+- `lxml-stubs`: Type stubs for lxml
 
 ## Project Structure Conventions
 
@@ -172,6 +196,7 @@ Dev-only:
 - `tests/integration/`: Tests requiring real Android emulator
 - `scripts/`: Development helper scripts
 - `skills/android-emu-agent/`: Agent skill for Claude Code and other agent environments
+- `AGENTS.md`: Companion guidelines (coding style, commit conventions, environment tips)
 
 ## Agent Skills Sync
 
