@@ -319,6 +319,23 @@ bump_version() {
     if ! maybe_update_uv_lock; then
         return 1
     fi
+
+    local tag="v$new_version"
+    local tag_confirm
+    read -r -p "Create git tag $tag? [y/N]: " tag_confirm
+    case "$tag_confirm" in
+        y|Y|yes|YES)
+            if git tag "$tag"; then
+                echo "Created git tag: $tag"
+            else
+                echo "Failed to create git tag $tag."
+                return 1
+            fi
+            ;;
+        *)
+            echo "Skipped git tag creation."
+            ;;
+    esac
 }
 
 case "${1:-help}" in
@@ -482,8 +499,8 @@ case "${1:-help}" in
         echo "  typecheck        Run type checkers (mypy + pyright)"
         echo "  check            Run all checks (lint + typecheck + unit tests)"
         echo "  daemon           Start the daemon server"
-        echo "  bump-version     Interactively bump package version (patch/minor/major/custom)"
-        echo "                   and optionally refresh uv.lock"
+        echo "  bump-version     Interactively bump package version (patch/minor/major/custom),"
+        echo "                   optionally refresh uv.lock, and optionally create a git tag"
         echo "  skills [target]  Symlink skills into agent directories (codex|claude|all)"
         echo "  skills-codex     Symlink skills into Codex agent directory"
         echo "  skills-claude    Symlink skills into Claude agent directory"
