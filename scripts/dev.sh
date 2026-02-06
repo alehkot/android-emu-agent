@@ -59,6 +59,240 @@ install_skills() {
     fi
 }
 
+read_project_version() {
+    awk '
+        BEGIN { in_project = 0 }
+        /^\[project\][[:space:]]*$/ { in_project = 1; next }
+        /^\[[^]]+\][[:space:]]*$/ { in_project = 0 }
+        in_project && /^[[:space:]]*version[[:space:]]*=/ {
+            line = $0
+            sub(/^[^"]*"/, "", line)
+            sub(/".*$/, "", line)
+            print line
+            exit 0
+        }
+    ' pyproject.toml
+}
+
+is_semver() {
+    [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]
+}
+
+calculate_next_version() {
+    local current_version="$1"
+    local bump_type="$2"
+
+    if ! [[ "$current_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+        return 1
+    fi
+
+    local major="${BASH_REMATCH[1]}"
+    local minor="${BASH_REMATCH[2]}"
+    local patch="${BASH_REMATCH[3]}"
+
+    case "$bump_type" in
+        patch)
+            printf "%s.%s.%s\n" "$major" "$minor" "$((patch + 1))"
+            ;;
+        minor)
+            printf "%s.%s.0\n" "$major" "$((minor + 1))"
+            ;;
+        major)
+            printf "%s.0.0\n" "$((major + 1))"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+render_pyproject_with_version() {
+    local new_version="$1"
+    local output_file="$2"
+
+    awk -v version="$new_version" '
+        BEGIN { in_project = 0; updated = 0 }
+        /^\[project\][[:space:]]*$/ { in_project = 1; print; next }
+        /^\[[^]]+\][[:space:]]*$/ { in_project = 0 }
+        in_project && !updated && /^[[:space:]]*version[[:space:]]*=/ {
+            sub(/"[^"]*"/, "\"" version "\"")
+            updated = 1
+        }
+        { print }
+        END {
+            if (!updated) {
+                exit 1
+            }
+        }
+    ' pyproject.toml > "$output_file"
+}
+
+render_init_with_version() {
+    local new_version="$1"
+    local output_file="$2"
+
+    awk -v version="$new_version" '
+        BEGIN { updated = 0 }
+        !updated && /^[[:space:]]*__version__[[:space:]]*=/ {
+            sub(/"[^"]*"/, "\"" version "\"")
+            updated = 1
+        }
+        { print }
+        END {
+            if (!updated) {
+                exit 1
+            }
+        }
+    ' src/android_emu_agent/__init__.py > "$output_file"
+}
+
+bump_version() {
+    local current_version
+    current_version="$(read_project_version)"
+
+    if [ -z "$current_version" ]; then
+        echo "Unable to read version from pyproject.toml [project].version."
+        return 1
+    fi
+
+    local patch_version=""
+    local minor_version=""
+    local major_version=""
+
+    if [[ "$current_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        patch_version="$(calculate_next_version "$current_version" patch)"
+        minor_version="$(calculate_next_version "$current_version" minor)"
+        major_version="$(calculate_next_version "$current_version" major)"
+    fi
+
+    echo "Current version: $current_version"
+
+    local choice=""
+    local new_version=""
+    while :; do
+        if [ -n "$patch_version" ]; then
+            echo ""
+            echo "Select bump type:"
+            echo "  1) patch -> $patch_version"
+            echo "  2) minor -> $minor_version"
+            echo "  3) major -> $major_version"
+            echo "  4) custom"
+            echo "  5) cancel"
+            read -r -p "Choice [1-5]: " choice
+        else
+            echo "Current version is not a plain x.y.z semver."
+            choice="4"
+        fi
+
+        case "$choice" in
+            ""|1|patch|p|P)
+                if [ -z "$patch_version" ]; then
+                    echo "Patch/minor/major suggestions require an x.y.z current version."
+                    continue
+                fi
+                new_version="$patch_version"
+                ;;
+            2|minor|m|M)
+                if [ -z "$minor_version" ]; then
+                    echo "Patch/minor/major suggestions require an x.y.z current version."
+                    continue
+                fi
+                new_version="$minor_version"
+                ;;
+            3|major)
+                if [ -z "$major_version" ]; then
+                    echo "Patch/minor/major suggestions require an x.y.z current version."
+                    continue
+                fi
+                new_version="$major_version"
+                ;;
+            4|custom|c|C)
+                local suggested_version="$patch_version"
+                if [ -z "$suggested_version" ]; then
+                    suggested_version="$current_version"
+                fi
+                while :; do
+                    read -r -p "Enter new version [$suggested_version]: " new_version
+                    new_version="${new_version:-$suggested_version}"
+                    if is_semver "$new_version"; then
+                        break
+                    fi
+                    echo "Invalid semantic version. Expected format: x.y.z[-prerelease][+build]."
+                done
+                ;;
+            5|cancel|q|quit)
+                echo "Version bump cancelled."
+                return 0
+                ;;
+            *)
+                echo "Invalid choice '$choice'."
+                continue
+                ;;
+        esac
+
+        if ! is_semver "$new_version"; then
+            echo "Version '$new_version' is not a valid semantic version."
+            continue
+        fi
+
+        if [ "$new_version" = "$current_version" ]; then
+            echo "Version unchanged ($current_version)."
+            return 0
+        fi
+
+        local confirm
+        read -r -p "Bump version from $current_version to $new_version? [y/N]: " confirm
+        case "$confirm" in
+            y|Y|yes|YES)
+                break
+                ;;
+            *)
+                echo "No changes made."
+                return 0
+                ;;
+        esac
+    done
+
+    local pyproject_tmp
+    local init_tmp
+    local pyproject_backup
+    local init_backup
+    pyproject_tmp="$(mktemp)"
+    init_tmp="$(mktemp)"
+    pyproject_backup="$(mktemp)"
+    init_backup="$(mktemp)"
+
+    cp pyproject.toml "$pyproject_backup"
+    cp src/android_emu_agent/__init__.py "$init_backup"
+
+    if ! render_pyproject_with_version "$new_version" "$pyproject_tmp"; then
+        rm -f "$pyproject_tmp" "$init_tmp" "$pyproject_backup" "$init_backup"
+        echo "Failed to prepare updated pyproject.toml."
+        return 1
+    fi
+
+    if ! render_init_with_version "$new_version" "$init_tmp"; then
+        rm -f "$pyproject_tmp" "$init_tmp" "$pyproject_backup" "$init_backup"
+        echo "Failed to prepare updated __init__.py."
+        return 1
+    fi
+
+    if ! mv "$pyproject_tmp" pyproject.toml || ! mv "$init_tmp" src/android_emu_agent/__init__.py; then
+        cp "$pyproject_backup" pyproject.toml
+        cp "$init_backup" src/android_emu_agent/__init__.py
+        rm -f "$pyproject_tmp" "$init_tmp" "$pyproject_backup" "$init_backup"
+        echo "Failed to write version updates. Original files restored."
+        return 1
+    fi
+
+    rm -f "$pyproject_backup" "$init_backup"
+
+    echo "Version bumped: $current_version -> $new_version"
+    echo "Updated files:"
+    echo "  pyproject.toml"
+    echo "  src/android_emu_agent/__init__.py"
+}
+
 case "${1:-help}" in
     setup)
         echo "Setting up development environment..."
@@ -156,6 +390,10 @@ case "${1:-help}" in
         uv run uvicorn android_emu_agent.daemon.server:app --uds /tmp/android-emu-agent.sock
         ;;
 
+    bump-version)
+        bump_version
+        ;;
+
     skills)
         ensure_supported_os
         target="${2:-all}"
@@ -216,6 +454,7 @@ case "${1:-help}" in
         echo "  typecheck        Run type checkers (mypy + pyright)"
         echo "  check            Run all checks (lint + typecheck + unit tests)"
         echo "  daemon           Start the daemon server"
+        echo "  bump-version     Interactively bump package version (patch/minor/major/custom)"
         echo "  skills [target]  Symlink skills into agent directories (codex|claude|all)"
         echo "  skills-codex     Symlink skills into Codex agent directory"
         echo "  skills-claude    Symlink skills into Claude agent directory"
