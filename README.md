@@ -311,6 +311,7 @@ For deeper guidance, see `skills/android-emu-agent/references/troubleshooting.md
 Full auto-generated CLI reference docs can be built locally:
 
 ```bash
+./scripts/dev.sh docs-gen      # Regenerate docs/reference.md from CLI
 ./scripts/dev.sh docs          # Build to site/
 ./scripts/dev.sh docs-serve    # Serve at http://127.0.0.1:8000
 ```
@@ -369,6 +370,7 @@ The `./scripts/dev.sh` helper centralizes common development tasks. Make it exec
 | `./scripts/dev.sh skills`           | Symlink skills to agent dirs (codex, claude, all)               |
 | `./scripts/dev.sh docs`             | Build documentation (mkdocs)                                    |
 | `./scripts/dev.sh docs-serve`       | Serve documentation locally                                     |
+| `./scripts/dev.sh docs-gen`         | Regenerate CLI reference from Typer app                         |
 | `./scripts/dev.sh hooks`            | Install git hooks                                               |
 | `./scripts/dev.sh md`               | Format + lint Markdown                                          |
 

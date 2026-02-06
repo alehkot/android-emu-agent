@@ -51,6 +51,7 @@ uv run pyright             # Type check with pyright
 ./scripts/dev.sh md               # Format + lint Markdown
 ./scripts/dev.sh docs             # Build documentation (mkdocs)
 ./scripts/dev.sh docs-serve       # Serve documentation locally
+./scripts/dev.sh docs-gen         # Regenerate CLI reference from Typer app
 ./scripts/dev.sh skills [target]  # Symlink skills to agent dirs (codex|claude|all)
 ```
 
@@ -190,7 +191,7 @@ Dev-only:
 - `ruff`: Linting and formatting
 - `mypy` + `pyright`: Type checking
 - `lxml-stubs`: Type stubs for lxml
-- `mkdocs` + `mkdocs-typer2`: Documentation generation from Typer CLI
+- `mkdocs`: Documentation site generation
 
 ## Project Structure Conventions
 

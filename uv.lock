@@ -50,7 +50,6 @@ dependencies = [
 dev = [
     { name = "lxml-stubs" },
     { name = "mkdocs" },
-    { name = "mkdocs-typer2" },
     { name = "mypy" },
     { name = "pyright" },
     { name = "pytest" },
@@ -68,7 +67,6 @@ requires-dist = [
     { name = "lxml", specifier = ">=5.0.0" },
     { name = "lxml-stubs", marker = "extra == 'dev'", specifier = ">=0.5.0" },
     { name = "mkdocs", marker = "extra == 'dev'", specifier = ">=1.6.0" },
-    { name = "mkdocs-typer2", marker = "extra == 'dev'", specifier = ">=0.2.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0" },
     { name = "pydantic", specifier = ">=2.5.0" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1.0" },
@@ -783,20 +781,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/98/f5/ed29cd50067784976f25ed0ed6fcd3c2ce9eb90650aa3b2796ddf7b6870b/mkdocs_get_deps-0.2.0.tar.gz", hash = "sha256:162b3d129c7fad9b19abfdcb9c1458a651628e4b1dea628ac68790fb3061c60c", size = 10239, upload-time = "2023-11-20T17:51:09.981Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9f/d4/029f984e8d3f3b6b726bd33cafc473b75e9e44c0f7e80a5b29abc466bdea/mkdocs_get_deps-0.2.0-py3-none-any.whl", hash = "sha256:2bf11d0b133e77a0dd036abeeb06dec8775e46efa526dc70667d8863eefc6134", size = 9521, upload-time = "2023-11-20T17:51:08.587Z" },
-]
-
-[[package]]
-name = "mkdocs-typer2"
-version = "0.2.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "mkdocs" },
-    { name = "pydantic" },
-    { name = "typer" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/e1/fb/7f1b0fe2eecbcc2700bc8a857f5470ba3c71fc81a727851312c67670dd35/mkdocs_typer2-0.2.0.tar.gz", hash = "sha256:3f389b83f3d5f8d270bf81a2840f9307b74dbce9575243ab1f96d0e89ccbe5a1", size = 29342, upload-time = "2026-01-15T03:19:25.588Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ab/6e/4b82657b44567f430e35e62c4c22b5cd5fd1f40f369873e2fd92fb77a662/mkdocs_typer2-0.2.0-py3-none-any.whl", hash = "sha256:079fab0b30889f509f9f29a190722aa5cb29a8cf13c231571155fdb69838ec18", size = 14636, upload-time = "2026-01-15T03:19:24.497Z" },
 ]
 
 [[package]]

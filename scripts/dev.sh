@@ -484,6 +484,19 @@ case "${1:-help}" in
         uv run mkdocs serve
         ;;
 
+    docs-gen)
+        echo "Regenerating CLI reference docs..."
+        uv run typer android_emu_agent.cli.main utils docs --name android-emu-agent \
+            | sed 's/^\$ //' \
+            | sed 's/^- /\* /' \
+            | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' \
+            > docs/reference.md
+        if command -v npm >/dev/null 2>&1; then
+            npx markdownlint-cli2 --fix docs/reference.md 2>/dev/null || true
+        fi
+        echo "Updated docs/reference.md"
+        ;;
+
     skills-claude)
         ensure_supported_os
         echo "Installing skills for Claude..."
@@ -514,6 +527,7 @@ case "${1:-help}" in
         echo "                   optionally refresh uv.lock, and optionally create a git tag"
         echo "  docs             Build documentation (mkdocs)"
         echo "  docs-serve       Serve documentation locally"
+        echo "  docs-gen         Regenerate CLI reference from Typer app"
         echo "  skills [target]  Symlink skills into agent directories (codex|claude|all)"
         echo "  skills-codex     Symlink skills into Codex agent directory"
         echo "  skills-claude    Symlink skills into Claude agent directory"
