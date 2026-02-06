@@ -57,10 +57,18 @@ uv run android-emu-agent ui snapshot <session_id>
 
 ## Core Rules
 
+- **Never act without a user request.** When the user starts a session (e.g. "I'm going to use my
+  emulator"), only ensure readiness (daemon up, device connected, session active). Do not tap,
+  swipe, type, launch apps, or take any UI action until the user explicitly asks. See
+  `references/patterns.md` > Session Readiness Check.
 - One action per snapshot. Refs are ephemeral.
 - Re-snapshot after any action or wait.
 - Verify state changes after each action.
 - If blocked by dialogs or loading, handle the blocker first.
+- When an action fails, follow the recovery protocol (re-snapshot, visual analysis, then ask user).
+  Do not blindly retry. See `references/recovery.md`.
+- Confirm before write/destructive actions unless the user explicitly requested them. See
+  `references/patterns.md` > Write-Action Confirmation Protocol.
 
 ## Decision Guide
 
@@ -72,6 +80,9 @@ uv run android-emu-agent ui snapshot <session_id>
 - Need end-to-end examples: `references/examples.md`
 - Need reliability and forensics workflows: `references/reliability.md`
 - Need file transfer workflows: `references/files.md`
+- Need action failure recovery: `references/recovery.md`
+- Need write-action confirmation rules: `references/patterns.md` > Write-Action Confirmation
+  Protocol
 
 ## Templates (Ready-to-Use)
 
@@ -82,3 +93,4 @@ Templates are copy-pasteable flows with placeholders like `<session_id>` and `<p
 - `templates/flow-onboarding.md` - skip onboarding or tap-through tutorial
 - `templates/flow-e2e.md` - full E2E flow (reset, onboarding, login, verify)
 - `templates/flow-reliability-triage.md` - crash/ANR reliability triage
+- `templates/flow-recovery.md` - action failure recovery escalation (L1/L2/L3)

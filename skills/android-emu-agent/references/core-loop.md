@@ -45,6 +45,9 @@ Analyze the snapshot:
 - Identify the target element by `@ref`, label, or role
 - Check for blockers (dialogs, overlays, loading states)
 - If blocked, handle with `action back`, a targeted tap, or a wait
+- Classify the action: Is this a write/destructive action? If so, check whether the user explicitly
+  requested it. If not, confirm before proceeding (see `references/patterns.md` > Write-Action
+  Confirmation Protocol)
 
 ## Act
 
@@ -59,6 +62,10 @@ uv run android-emu-agent action back <session_id>
 Refs are ephemeral and tied to a specific snapshot generation. After any action, take a new snapshot
 before acting again.
 
+If an action fails, follow the Action Failure Recovery Protocol (`references/recovery.md`): Level 1
+re-snapshots automatically, Level 2 uses screenshots for visual analysis, Level 3 asks the user for
+guidance.
+
 ## Verify
 
 Take a new snapshot to confirm the action had the expected effect:
@@ -67,7 +74,9 @@ Take a new snapshot to confirm the action had the expected effect:
 uv run android-emu-agent ui snapshot <session_id>
 ```
 
-Verify that the expected UI change occurred and no error dialogs appeared.
+Verify that the expected UI change occurred and no error dialogs appeared. If the expected state is
+not present, treat this as a potential action failure and enter the recovery protocol at Level 1
+(see `references/recovery.md`).
 
 ## Example Loop
 

@@ -2,6 +2,53 @@
 
 Common automation patterns and strategies for handling typical Android UI scenarios.
 
+## Session Readiness Check
+
+When the user indicates they want to work with a device (e.g. "I'm going to use my emulator", "let's
+test on my phone", "I have a rooted device ready"), the agent should **only ensure prerequisites are
+met** and then wait for instructions. Do not take any UI actions.
+
+What to do:
+
+1. Verify the daemon is running (`daemon status`, start if needed)
+1. Verify the device is connected (`device list`)
+1. Ensure a session exists or create one (`session list` / `session start`)
+1. Report readiness to the user and **wait for their next request**
+
+What **not** to do:
+
+- Do not launch any app
+- Do not take a snapshot (unless the user asks)
+- Do not tap, swipe, type, scroll, or perform any UI action
+- Do not make assumptions about what the user wants to do next
+
+The agent is a tool that responds to user requests — it does not drive the session autonomously.
+
+Example:
+
+```bash
+# User: "Hey, I'm going to use my Android emulator"
+
+# Agent checks readiness:
+uv run android-emu-agent daemon status
+# If not running:
+uv run android-emu-agent daemon start
+
+uv run android-emu-agent device list
+# Confirms: emulator-5554 is connected
+
+uv run android-emu-agent session list
+# If no active session:
+uv run android-emu-agent session start --device emulator-5554
+# Returns: session_id = s-abc123
+
+# Agent responds:
+# "Ready. Daemon is running, emulator-5554 is connected, session s-abc123 is active.
+#  What would you like to do?"
+
+# Agent does NOT take any further action until the user asks.
+```
+
 ## Handling Permission Dialogs
 
 Android runtime permissions appear as system dialogs that block app interaction until dismissed.
@@ -470,3 +517,95 @@ Tips:
 2. If snapshot unchanged after scroll, you are at the end
 3. Always `wait idle` before snapshotting
 4. Use smaller distances near target
+
+## Write-Action Confirmation Protocol
+
+Before executing a write or destructive action, determine whether the user explicitly requested it.
+If the agent is deciding autonomously, confirm with the user first.
+
+### Classification Rules
+
+**Always safe (no confirmation needed):**
+
+| Category            | Examples                                                     |
+| ------------------- | ------------------------------------------------------------ |
+| Read-only snapshots | `ui snapshot`, `ui screenshot`                               |
+| Wait commands       | `wait idle`, `wait text`, `wait activity`, `wait exists`     |
+| Artifacts           | `artifact screenshot`, `artifact logs`, `artifact bundle`    |
+| Navigation taps     | Tapping tabs, menu items, "Back", "Next", "Close", "Dismiss" |
+| Scrolling           | `action scroll *`, `action swipe *`                          |
+| System navigation   | `action back`, `action home`, `action recents`               |
+| Read-only queries   | `device list`, `session list`, `daemon status`               |
+
+**Requires confirmation (unless user explicitly requested):**
+
+| Category                | Examples                                                             |
+| ----------------------- | -------------------------------------------------------------------- |
+| App lifecycle           | `app reset`, `app force-stop`, `app uninstall`                       |
+| Autonomous text entry   | `action set-text` when the user did not dictate the text content     |
+| Destructive tap targets | Tapping "Delete", "Submit", "Place order", "Purchase", "Send"        |
+| File operations         | `file push` (writes to device)                                       |
+| Device settings         | `device set *` (changes device state)                                |
+| Form submissions        | Tapping a submit/confirm button that triggers an irreversible action |
+
+### When Confirmation Is NOT Needed
+
+Skip confirmation when the user specifically asked for the action:
+
+- User says "tap Submit" → tap Submit without asking
+- User says "enter my email as `alice@example.com`" → `set-text` without asking
+- User says "reset the app" → `app reset` without asking
+- User says "delete the item" → tap "Delete" without asking
+
+**Key test:** Did the user specifically ask for this action, or is the agent deciding autonomously?
+If the user said to do it, just do it. If the agent is choosing to do it as part of a broader goal,
+confirm first.
+
+### Confirmation Format
+
+When confirmation is needed, present:
+
+```text
+I'm about to <action description>.
+This will <potential side effect>.
+Should I proceed? (yes / no / modify)
+```
+
+Examples:
+
+```text
+I'm about to tap "Place Order" ($49.99).
+This will submit a purchase that may charge a payment method.
+Should I proceed? (yes / no / modify)
+```
+
+```text
+I'm about to run `app reset com.example.app`.
+This will clear all app data including login state.
+Should I proceed? (yes / no / modify)
+```
+
+### Detecting Destructive Tap Targets
+
+When the agent decides to tap a button autonomously, classify the label:
+
+**High-risk (always confirm):**
+
+- "Delete", "Remove", "Submit", "Place order", "Purchase", "Buy", "Pay"
+- "Send", "Post", "Publish", "Sign out", "Log out", "Deactivate"
+- "Confirm" on payment, order, or account-deletion screens
+
+**Low-risk (no confirmation needed):**
+
+- "OK", "Close", "Dismiss", "Cancel", "Allow", "Deny"
+- "Next", "Continue", "Back", "Done", "Got it"
+- Tab names, menu items, navigation elements
+
+**Ambiguous (use context):**
+
+- "Confirm" — high-risk on payment/order screens, low-risk on permission dialogs
+- "Yes" — depends on what the dialog is asking
+- "Apply" — depends on whether the change is reversible
+
+For ambiguous labels, check the surrounding context (activity name, dialog text, nearby elements) to
+determine the risk level.

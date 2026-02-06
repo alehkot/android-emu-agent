@@ -2,15 +2,20 @@
 
 ## Error Reference
 
-| Error                 | Cause                      | Solution                                               |
-| --------------------- | -------------------------- | ------------------------------------------------------ |
-| `ERR_STALE_REF`       | Ref from outdated snapshot | Take fresh snapshot, find element again                |
-| `ERR_NOT_FOUND`       | Element not in current UI  | Verify correct screen, try different selector          |
-| `ERR_DEVICE_OFFLINE`  | Device disconnected        | Run `device list`, reconnect device                    |
-| `ERR_SESSION_EXPIRED` | Session timed out          | Create new session with `session start`                |
-| `ERR_BLOCKED_INPUT`   | Dialog/keyboard blocking   | Dismiss blocker with `back`, or `wait idle`            |
-| `ERR_TIMEOUT`         | Wait condition never met   | Increase `--timeout-ms` or verify condition is correct |
-| `ERR_DAEMON_OFFLINE`  | Daemon not running         | Run `daemon start`                                     |
+| Error                 | Cause                        | Solution                                               | Recovery        |
+| --------------------- | ---------------------------- | ------------------------------------------------------ | --------------- |
+| `ERR_STALE_REF`       | Ref from outdated snapshot   | Take fresh snapshot, find element again                | Level 1 (auto)  |
+| `ERR_NOT_FOUND`       | Element not in current UI    | Verify correct screen, try different selector          | Level 1 (auto)  |
+| `ERR_BLOCKED_INPUT`   | Dialog/keyboard blocking     | Dismiss blocker with `back`, or `wait idle`            | Level 1 (auto)  |
+| `ERR_ACTION_FAILED`   | Action dispatched but failed | Re-snapshot, verify target state, retry                | Level 1 (auto)  |
+| `ERR_TIMEOUT`         | Wait condition never met     | Increase `--timeout-ms` or verify condition is correct | Level 2 (auto)  |
+| `ERR_NO_LOCATOR`      | No locator strategy found    | Use `--full` snapshot, try coordinate-based action     | Level 2 (auto)  |
+| `ERR_DEVICE_OFFLINE`  | Device disconnected          | Run `device list`, reconnect device                    | Not recoverable |
+| `ERR_SESSION_EXPIRED` | Session timed out            | Create new session with `session start`                | Not recoverable |
+| `ERR_DAEMON_OFFLINE`  | Daemon not running           | Run `daemon start`                                     | Not recoverable |
+
+> **Note:** Infrastructure errors (device offline, session expired, daemon offline) cannot be
+> recovered automatically. Stop and report to the user.
 
 ## Common Issues
 
@@ -38,6 +43,8 @@ adb start-server
 - Element in WebView: consider coordinates or WebView-specific handling.
 - Element behind dialog: dismiss dialog first.
 - Element not yet loaded: `wait idle` and re-snapshot.
+- If in the middle of an action flow and the element has disappeared, follow the recovery protocol
+  (`references/recovery.md`) rather than manually debugging.
 
 ```bash
 uv run android-emu-agent ui snapshot <session_id> --full
@@ -57,6 +64,17 @@ uv run android-emu-agent ui snapshot <session_id>
 uv run android-emu-agent wait idle <session_id> --timeout-ms 3000
 uv run android-emu-agent action long-tap <session_id> @a1
 ```
+
+### Action Failure Recovery
+
+When an action fails during an automation flow, use the structured recovery protocol:
+
+- **Level 1 (auto):** Re-snapshot and retry with fresh refs (handles stale refs, missing elements)
+- **Level 2 (auto):** Screenshot + full snapshot for visual diagnosis (handles off-screen, dialogs,
+  wrong activity)
+- **Level 3 (interactive):** Present state and options to user for guidance
+
+See `references/recovery.md` for the full protocol, limits, and decision flowchart.
 
 ### App Keeps Crashing
 

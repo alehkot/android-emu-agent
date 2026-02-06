@@ -185,3 +185,120 @@ uv run android-emu-agent ui snapshot s-test01
 uv run android-emu-agent artifact screenshot s-test01 --pull --output ./artifacts/
 uv run android-emu-agent session stop s-test01
 ```
+
+## Example 7: Action Failure Recovery Escalation
+
+Goal: Tap "Confirm Purchase" but the action fails. Recover through Level 1 → Level 2.
+
+```bash
+# Observe
+uv run android-emu-agent ui snapshot s-abc123
+# @a5 = "Confirm Purchase" button
+
+# Act — fails with ERR_STALE_REF
+uv run android-emu-agent action tap s-abc123 @a5
+# Error: ERR_STALE_REF - Element @a5 not found or bounds changed
+
+# --- Level 1: Re-snapshot Recovery ---
+
+# Wait for UI to settle
+uv run android-emu-agent wait idle s-abc123 --timeout-ms 5000
+
+# Fresh snapshot
+uv run android-emu-agent ui snapshot s-abc123
+# "Confirm Purchase" not visible in snapshot — Level 1 cannot resolve
+
+# --- Level 2: Visual / Screenshot Recovery ---
+
+# Capture screenshot for visual analysis
+uv run android-emu-agent artifact screenshot s-abc123 --pull --output ./debug-purchase.png
+# Screenshot reveals "Confirm Purchase" is below the fold
+
+# Full snapshot to confirm
+uv run android-emu-agent ui snapshot s-abc123 --full
+# Scrollable container detected
+
+# Corrective action: scroll down
+uv run android-emu-agent action scroll down -s s-abc123
+uv run android-emu-agent wait idle s-abc123
+
+# Re-snapshot — target found
+uv run android-emu-agent ui snapshot s-abc123
+# @a3 = "Confirm Purchase"
+
+# Retry action — success
+uv run android-emu-agent action tap s-abc123 @a3
+uv run android-emu-agent wait idle s-abc123
+
+# Verify
+uv run android-emu-agent ui snapshot s-abc123
+# context.activity = ".OrderConfirmationActivity"
+```
+
+## Example 8: Write-Action Confirmation
+
+Goal: Agent is navigating a checkout flow and reaches the "Place Order" button. The user's original
+request was "show me the checkout page", not "place the order".
+
+```bash
+# User said: "show me the checkout page"
+
+# Agent navigated to checkout
+uv run android-emu-agent ui snapshot s-abc123
+# context.activity = ".CheckoutActivity"
+# @a1 = "Edit Cart"
+# @a2 = "Promo Code" text field
+# @a3 = "Place Order" button ($49.99)
+# @a4 = "Back"
+
+# Agent has reached the checkout page as requested.
+# The user asked to "show" the page, not to place the order.
+# "Place Order" is a high-risk destructive action.
+
+# ✓ Report to user instead of tapping:
+# "You're on the checkout page. Total is $49.99. Items: ...
+#  Would you like me to place the order, or do something else?"
+
+# User responds: "Yes, place the order"
+
+# Now the user explicitly requested it — proceed without confirmation
+uv run android-emu-agent action tap s-abc123 @a3
+uv run android-emu-agent wait idle s-abc123 --timeout-ms 10000
+
+# Verify
+uv run android-emu-agent ui snapshot s-abc123
+# context.activity = ".OrderConfirmationActivity"
+# Text: "Order placed successfully"
+```
+
+## Example 9: Session Start — Readiness Only
+
+Goal: User says they want to use their emulator. Agent ensures readiness and waits.
+
+```bash
+# User: "Hey, I'm going to use my Android emulator"
+
+# ✓ Check daemon
+uv run android-emu-agent daemon status
+# Daemon is not running → start it
+uv run android-emu-agent daemon start
+
+# ✓ Check device
+uv run android-emu-agent device list
+# emulator-5554 | online
+
+# ✓ Ensure session
+uv run android-emu-agent session start --device emulator-5554
+# session_id = s-abc123
+
+# ✓ Report to user:
+# "Ready. Daemon running, emulator-5554 connected, session s-abc123 active.
+#  What would you like to do?"
+
+# ✗ Do NOT take a snapshot
+# ✗ Do NOT launch any app
+# ✗ Do NOT tap, swipe, or type anything
+# ✗ Do NOT assume the user wants to test a specific app
+
+# Wait for the user's next request.
+```
