@@ -171,6 +171,11 @@ maybe_update_uv_lock() {
 }
 
 bump_version() {
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+        echo "Working tree has uncommitted changes. Please commit or stash them first."
+        return 1
+    fi
+
     local current_version
     current_version="$(read_project_version)"
 
@@ -322,9 +327,19 @@ bump_version() {
 
     local tag="v$new_version"
     local tag_confirm
-    read -r -p "Create git tag $tag? [y/N]: " tag_confirm
+    read -r -p "Commit and tag as $tag? [y/N]: " tag_confirm
     case "$tag_confirm" in
         y|Y|yes|YES)
+            git add pyproject.toml src/android_emu_agent/__init__.py
+            if [ -f uv.lock ]; then
+                git add uv.lock
+            fi
+            if git commit -m "chore: bump version to $new_version"; then
+                echo "Committed version bump."
+            else
+                echo "Failed to commit version bump."
+                return 1
+            fi
             if git tag "$tag"; then
                 echo "Created git tag: $tag"
             else
@@ -333,7 +348,7 @@ bump_version() {
             fi
             ;;
         *)
-            echo "Skipped git tag creation."
+            echo "Skipped commit and tag creation."
             ;;
     esac
 }
