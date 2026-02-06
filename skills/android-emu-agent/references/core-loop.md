@@ -42,9 +42,14 @@ Advanced (when needed): `--raw` returns the raw XML hierarchy for low-level debu
 
 Analyze the snapshot:
 
+- Classify the task intent — is this an inquiry (user asking for information) or an action (user
+  asking you to do something)? If inquiry, use only read-only methods to answer. See
+  `references/patterns.md` > Inquiry vs. Action Tasks.
 - Identify the target element by `@ref`, label, or role
 - Check for blockers (dialogs, overlays, loading states)
 - If blocked, handle with `action back`, a targeted tap, or a wait
+- Assess element confidence — if the target is unlabeled or its purpose is unknown, do not tap
+  without user confirmation. See `references/patterns.md` > Unknown and Unlabeled Elements.
 - Classify the action: Is this a write/destructive action? If so, check whether the user explicitly
   requested it. If not, confirm before proceeding (see `references/patterns.md` > Write-Action
   Confirmation Protocol)

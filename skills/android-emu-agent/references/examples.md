@@ -302,3 +302,64 @@ uv run android-emu-agent session start --device emulator-5554
 
 # Wait for the user's next request.
 ```
+
+## Example 10: Inquiry Task — Identifying Unknown Buttons (Read-Only)
+
+Goal: User asks "check if there is a button to play music." The agent must answer using only
+read-only methods and must NOT tap any buttons to discover their purpose.
+
+```bash
+# User said: "check if there is a button to play music"
+# This is an INQUIRY task — the user wants information, not an action.
+
+# Step 1: Take a snapshot to inspect elements
+uv run android-emu-agent ui snapshot s-abc123
+# context.package = "com.example.musicplayer"
+# context.activity = ".NowPlayingActivity"
+# @a1 = ImageButton, no text, no content_desc, resource_id: "btn_prev"
+# @a2 = ImageButton, no text, no content_desc, resource_id: "btn_play_pause"
+# @a3 = ImageButton, no text, no content_desc, resource_id: "btn_next"
+# @a4 = TextView, text: "Song Title - Artist Name"
+# @a5 = SeekBar, resource_id: "seekbar_progress"
+
+# Observation: Three unlabeled ImageButtons found. resource_ids suggest
+# prev/play_pause/next but there is no text or content_desc to confirm.
+
+# Step 2: Take a screenshot for visual identification
+uv run android-emu-agent artifact screenshot s-abc123 --pull --output ./debug-music.png
+# Screenshot reveals: Three icons in a horizontal transport bar.
+# Left icon: skip-back (|◁), Center icon: play triangle (▶), Right icon: skip-forward (▷|)
+
+# Step 3: Take a full snapshot for additional context
+uv run android-emu-agent ui snapshot s-abc123 --full
+# Full tree confirms: The three ImageButtons are inside a LinearLayout
+# with resource_id "media_controls". SeekBar and song title are siblings.
+
+# Step 4: Report findings to user
+# "Yes, there appears to be a play button. I found three unlabeled ImageButtons
+#  in a media transport bar:
+#  - @a1: skip-back icon (resource_id: btn_prev) — high confidence
+#  - @a2: play/pause icon (resource_id: btn_play_pause) — high confidence
+#  - @a3: skip-forward icon (resource_id: btn_next) — high confidence
+#
+#  The center button @a2 shows a play triangle (▶) in the screenshot and has
+#  resource_id 'btn_play_pause'. This is very likely the play button.
+#
+#  Would you like me to tap it?"
+
+# Step 5: Wait for user response
+# User: "Yes, tap the play button"
+
+# NOW this is an action task with explicit user authorization — proceed
+uv run android-emu-agent action tap s-abc123 @a2
+uv run android-emu-agent wait idle s-abc123
+
+# Verify
+uv run android-emu-agent ui snapshot s-abc123
+# @a2 icon changed to pause (❚❚) — confirms it was the play button
+
+# ✗ Do NOT tap @a2 autonomously to "confirm" it is the play button
+# ✗ Do NOT tap any unlabeled button to discover its function
+# ✗ Do NOT escalate from read-only to state-modifying during an inquiry
+# ✗ Do NOT assume a button's purpose and act on it without user permission
+```

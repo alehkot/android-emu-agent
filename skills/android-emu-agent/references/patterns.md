@@ -537,6 +537,12 @@ If the agent is deciding autonomously, confirm with the user first.
 | System navigation   | `action back`, `action home`, `action recents`               |
 | Read-only queries   | `device list`, `session list`, `daemon status`               |
 
+**Additional considerations:**
+
+- If the user's task is purely informational (inquiry), even "Always safe" actions like navigation
+  taps require justification. See Inquiry vs. Action Tasks below.
+- If the tap target is unlabeled or unknown, see Unknown and Unlabeled Elements below.
+
 **Requires confirmation (unless user explicitly requested):**
 
 | Category                | Examples                                                             |
@@ -609,3 +615,89 @@ When the agent decides to tap a button autonomously, classify the label:
 
 For ambiguous labels, check the surrounding context (activity name, dialog text, nearby elements) to
 determine the risk level.
+
+## Inquiry vs. Action Tasks
+
+Before choosing an action, classify the user's task intent.
+
+### Classification
+
+| Intent        | Signal Phrases                                                             |
+| ------------- | -------------------------------------------------------------------------- |
+| **Inquiry**   | "is there", "check if", "find the", "what does", "show me", "does it have" |
+| **Action**    | "tap", "open", "type", "launch", "enable", "turn on", "swipe", "scroll to" |
+| **Ambiguous** | "go to settings", "try the button" — could be inquiry or action            |
+
+When ambiguous, default to **inquiry**. It is always safer to report findings and ask than to act
+and cause unintended state changes.
+
+### Read-Only Escalation Path (Inquiry Tasks)
+
+When the task is an inquiry, use only read-only methods in this order:
+
+1. **Snapshot analysis** — `ui snapshot` to inspect element labels, roles, and state
+2. **Screenshot analysis** — `artifact screenshot` for visual identification (icons, colors, layout)
+3. **Scroll to reveal** — `action scroll` is non-destructive and may expose off-screen elements
+4. **Full snapshot** — `ui snapshot --full` to include all nodes, not just interactive ones
+5. **Ask the user** — if none of the above resolves the question, report what you found and ask
+
+**Do NOT** tap, type, swipe (non-scroll), or launch apps to answer an inquiry. These are
+state-modifying actions that go beyond what the user asked.
+
+### When Inquiry Becomes Action
+
+An inquiry can transition to an action when the user explicitly bridges the gap:
+
+```text
+Agent: "I found three buttons in the media transport bar. Based on the screenshot,
+       @a2 appears to be a play button (triangle icon). Would you like me to tap it?"
+User:  "Yes, tap it."
+```
+
+At this point, the task has become an action with explicit user authorization. Proceed normally
+using the Write-Action Confirmation Protocol for classification.
+
+**Key rule:** The agent must never autonomously escalate from read-only observation to
+state-modifying action during an inquiry task. The user must explicitly request the transition.
+
+## Unknown and Unlabeled Elements
+
+When the agent encounters an element without a clear label, it must assess confidence before
+interacting.
+
+### Classification by Element State
+
+| Element State                                                             | Action                                          |
+| ------------------------------------------------------------------------- | ----------------------------------------------- |
+| **Clear label** (text, content_desc, or resource_id with meaningful name) | Classify per Write-Action Confirmation Protocol |
+| **Unclear but inferable** (icon + surrounding context suggest purpose)    | State inference, proceed with caution           |
+| **No label, no description, unknown purpose**                             | **Do not tap without user confirmation**        |
+
+### Before Tapping an Unknown Element
+
+When a target element lacks a clear label, perform these checks before interacting:
+
+1. **Check available identifiers** — inspect `resource_id`, `content_desc`, `text`, and `role` from
+   the snapshot
+2. **Take a screenshot** — visual inspection may reveal icons, colors, or positional cues
+3. **Check surrounding elements** — nearby labels, container context, or sibling elements may
+   clarify purpose
+4. **State your best guess and ask** — report your inference to the user with a confidence level and
+   request permission
+
+### Applies to All Task Types
+
+**Inquiry tasks:** Describe the unknown element to the user. Do not tap to discover its purpose —
+that is a state-modifying action used to answer an informational question.
+
+**Action tasks:** If the user asked to tap a specific function (e.g. "tap the play button") but the
+best match is an unlabeled element, state your confidence and ask before tapping:
+
+```text
+Agent: "I found an unlabeled ImageButton at @a2. Based on its position in the media
+       transport bar and the triangle icon visible in the screenshot, I believe this is
+       the play button (medium confidence). Should I tap it?"
+```
+
+If the user confirms, proceed. If the user says no, ask for clarification or try alternative
+identification strategies.

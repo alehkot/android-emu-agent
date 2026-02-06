@@ -69,6 +69,10 @@ uv run android-emu-agent ui snapshot <session_id>
   Do not blindly retry. See `references/recovery.md`.
 - Confirm before write/destructive actions unless the user explicitly requested them. See
   `references/patterns.md` > Write-Action Confirmation Protocol.
+- **Read-only first for informational tasks.** When the user asks a question about the UI (e.g. "is
+  there a button for...", "what does this screen show", "check if..."), use only read-only methods
+  (snapshots, screenshots, scrolling) to answer. Do not tap, type, or otherwise modify UI state to
+  investigate. See `references/patterns.md` > Inquiry vs. Action Tasks.
 
 ## Decision Guide
 
@@ -83,6 +87,7 @@ uv run android-emu-agent ui snapshot <session_id>
 - Need action failure recovery: `references/recovery.md`
 - Need write-action confirmation rules: `references/patterns.md` > Write-Action Confirmation
   Protocol
+- Need inquiry vs. action task rules: `references/patterns.md` > Inquiry vs. Action Tasks
 
 ## Templates (Ready-to-Use)
 
