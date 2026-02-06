@@ -36,23 +36,26 @@ uv run mypy src/           # Type check with mypy
 uv run pyright             # Type check with pyright
 
 # Convenience script (./scripts/dev.sh)
-./scripts/dev.sh setup            # Full setup (deps + markdown tooling + git hooks)
-./scripts/dev.sh check            # Run all checks (lint + typecheck + unit tests + docs + md lint)
+./scripts/dev.sh setup            # Install dependencies
+./scripts/dev.sh check            # Run all checks (lint + typecheck + unit tests + docs)
 ./scripts/dev.sh test             # Run all tests
 ./scripts/dev.sh test-unit        # Run unit tests only
 ./scripts/dev.sh test-integration # Run integration tests (requires emulator)
-./scripts/dev.sh lint             # Lint only (no format)
-./scripts/dev.sh format           # Format code (ruff format + fix)
-./scripts/dev.sh typecheck        # Type check only (mypy + pyright)
-./scripts/dev.sh daemon           # Start daemon on Unix socket
-./scripts/dev.sh hooks            # Install git hooks
+./scripts/dev.sh lint             # Run linter
+./scripts/dev.sh format           # Format code
 ./scripts/dev.sh format-md        # Format Markdown
 ./scripts/dev.sh lint-md          # Lint Markdown
 ./scripts/dev.sh md               # Format + lint Markdown
+./scripts/dev.sh hooks            # Install git hooks
+./scripts/dev.sh typecheck        # Run type checkers (mypy + pyright)
+./scripts/dev.sh daemon           # Start the daemon server
+./scripts/dev.sh bump-version     # Interactively bump version, refresh lock, optionally tag
 ./scripts/dev.sh docs             # Build documentation (mkdocs)
 ./scripts/dev.sh docs-serve       # Serve documentation locally
 ./scripts/dev.sh docs-gen         # Regenerate CLI reference from Typer app
 ./scripts/dev.sh skills [target]  # Symlink skills to agent dirs (codex|claude|all)
+./scripts/dev.sh skills-codex     # Symlink skills into Codex agent directory
+./scripts/dev.sh skills-claude    # Symlink skills into Claude agent directory
 ```
 
 ## Architecture
