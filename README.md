@@ -308,7 +308,9 @@ For deeper guidance, see `skills/android-emu-agent/references/troubleshooting.md
 
 ## CLI Reference
 
-Full auto-generated CLI reference docs can be built locally:
+Full auto-generated CLI reference is available at [`docs/reference.md`](docs/reference.md).
+
+To regenerate or browse the docs locally:
 
 ```bash
 ./scripts/dev.sh docs-gen      # Regenerate docs/reference.md from CLI
