@@ -1,6 +1,6 @@
 # Android Emu Agent
 
-A CLI + daemon system for LLM-driven Android UI control on emulators and rooted devices.
+CLI + daemon for LLM-driven Android UI control — ships with **ready-to-use coding agent skills**.
 
 ## Overview
 
@@ -10,7 +10,15 @@ Android Emu Agent automates Android apps using a fast observe-act-verify loop:
 2. Act: issue commands using ephemeral element refs like `@a1`
 3. Verify: re-snapshot when needed
 
-The CLI is a thin client. A long-running daemon handles all device I/O.
+The CLI is a thin client. A long-running daemon handles all device I/O. All commands support
+`--json` for machine-readable output, making the tool ideal for agent consumption.
+
+**Highlights:**
+
+- **Daemon-first architecture** — persistent process handles device I/O over Unix socket
+- **Ephemeral refs** — deterministic `@a1`-style handles with locator bundle fallbacks
+- **Agent skills included** — structured reference docs, workflow templates, and safety guardrails
+- **Machine-readable output** — every command supports `--json` for agent pipelines
 
 ## Inspiration
 
@@ -71,6 +79,62 @@ Example `--json` output for `session start`:
   "generation": 0
 }
 ```
+
+## Agent Skills
+
+This repo ships a first-class `android-emu-agent` skill in `skills/android-emu-agent/` for coding
+agents that support skills (Claude Code, Codex, and similar environments).
+
+The skill provides:
+
+- **Structured reference docs** — command reference, troubleshooting, error codes
+- **Workflow templates** — login flows, navigation patterns, form filling
+- **Recovery protocols** — handling stale refs, dialog blockers, idle waits
+- **Safety guardrails** — root-required checks, emulator-only safeguards
+
+### Install via dev script (recommended)
+
+```bash
+./scripts/dev.sh skills          # Symlink to all supported agents
+./scripts/dev.sh skills claude   # Claude Code only
+./scripts/dev.sh skills codex    # Codex only
+```
+
+### Manual install
+
+**Claude Code:**
+
+```bash
+mkdir -p ~/.claude/skills
+ln -sfn "$(pwd)/skills/android-emu-agent" ~/.claude/skills/android-emu-agent
+```
+
+**Codex:**
+
+```bash
+export CODEX_HOME="$HOME/.codex"
+mkdir -p "$CODEX_HOME/skills"
+ln -sfn "$(pwd)/skills/android-emu-agent" "$CODEX_HOME/skills/android-emu-agent"
+```
+
+If symlinks are not an option, copy the directory instead.
+
+### Using the Skill
+
+After installation, the agent should be primed to start a session with your connected device before
+you ask for specific actions. Begin with a direct initialization request, for example:
+
+`I want to interact with my connected Android emulator.`
+
+Once the agent has initialized the session, you can proceed with normal requests (snapshots,
+tap/type actions, app launches, waits, etc.).
+
+Prerequisites you may need (if the agent reports it cannot connect):
+
+1. Start the daemon: `uv run android-emu-agent daemon start`
+2. Confirm a device is visible: `uv run android-emu-agent device list`
+3. If needed, start a session explicitly:
+   `uv run android-emu-agent session start --device emulator-5554`
 
 ## Core Concepts
 
@@ -279,7 +343,27 @@ uv run android-emu-agent <group> --help
                                          └──────────────────────────────────┘
 ```
 
-## Development
+## Development Scripts
+
+The `./scripts/dev.sh` helper centralizes common development tasks. Make it executable with
+`chmod +x scripts/dev.sh` if needed.
+
+| Command                             | Description                                              |
+| ----------------------------------- | -------------------------------------------------------- |
+| `./scripts/dev.sh setup`            | Full setup (deps + markdown tooling + git hooks)         |
+| `./scripts/dev.sh check`            | Run all checks (lint + typecheck + unit tests + md lint) |
+| `./scripts/dev.sh test`             | Run all tests                                            |
+| `./scripts/dev.sh test-unit`        | Run unit tests only                                      |
+| `./scripts/dev.sh test-integration` | Run integration tests (requires emulator)                |
+| `./scripts/dev.sh lint`             | Lint only (ruff check, no format)                        |
+| `./scripts/dev.sh format`           | Format code (ruff format + fix)                          |
+| `./scripts/dev.sh typecheck`        | Type check (mypy + pyright)                              |
+| `./scripts/dev.sh daemon`           | Start daemon on Unix socket                              |
+| `./scripts/dev.sh skills`           | Symlink skills to agent dirs (codex, claude, all)        |
+| `./scripts/dev.sh hooks`            | Install git hooks                                        |
+| `./scripts/dev.sh md`               | Format + lint Markdown                                   |
+
+### Raw `uv run` commands
 
 ```bash
 # Install with dev dependencies
@@ -296,49 +380,7 @@ uv run ruff format .
 
 # Type check
 uv run mypy src/
-
-# Run all checks
-./scripts/dev.sh check
 ```
-
-## Agent Skills
-
-This repo ships an `android-emu-agent` skill in `skills/android-emu-agent/` for agent environments
-that support skills. Use the install steps below.
-
-### Install for Codex
-
-```bash
-export CODEX_HOME="$HOME/.codex"
-mkdir -p "$CODEX_HOME/skills"
-ln -sfn "$(pwd)/skills/android-emu-agent" "$CODEX_HOME/skills/android-emu-agent"
-```
-
-### Install for Claude Code
-
-```bash
-mkdir -p ~/.claude/skills
-ln -sfn "$(pwd)/skills/android-emu-agent" ~/.claude/skills/android-emu-agent
-```
-
-If symlinks are not an option, copy the directory instead.
-
-### Using the Skill
-
-After installation, the agent should be primed to start a session with your connected device before
-you ask for specific actions. Begin with a direct initialization request, for example:
-
-`I want to interact with my connected Android emulator.`
-
-Once the agent has initialized the session, you can proceed with normal requests (snapshots,
-tap/type actions, app launches, waits, etc.).
-
-Prerequisites you may need (if the agent reports it cannot connect):
-
-1. Start the daemon: `uv run android-emu-agent daemon start`
-2. Confirm a device is visible: `uv run android-emu-agent device list`
-3. If needed, start a session explicitly:
-   `uv run android-emu-agent session start --device emulator-5554`
 
 ## License
 
