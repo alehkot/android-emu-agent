@@ -46,7 +46,7 @@ def stale_ref_error(ref: str, ref_generation: int, current_generation: int) -> A
             "ref_generation": ref_generation,
             "current_generation": current_generation,
         },
-        remediation="Take a new snapshot with 'ui snapshot' and use fresh @refs",
+        remediation="Take a new snapshot with 'ui snapshot' and use fresh ^refs",
     )
 
 
@@ -188,7 +188,7 @@ def invalid_selector_error(selector: str) -> AgentError:
         code="ERR_INVALID_SELECTOR",
         message=f"Invalid selector: {selector}",
         context={"selector": selector},
-        remediation='Use @ref, text:"...", id:..., desc:"...", or coords:x,y',
+        remediation='Use ^ref, text:"...", id:..., desc:"...", or coords:x,y',
     )
 
 

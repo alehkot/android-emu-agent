@@ -72,10 +72,10 @@ Example:
 # Snapshot shows permission dialog
 uv run android-emu-agent ui snapshot s-abc123
 # context.package = "com.google.android.permissioncontroller"
-# @a1 = "While using the app", @a2 = "Only this time", @a3 = "Don't allow"
+# ^a1 = "While using the app", ^a2 = "Only this time", ^a3 = "Don't allow"
 
 # Grant permission
-uv run android-emu-agent action tap s-abc123 @a1
+uv run android-emu-agent action tap s-abc123 ^a1
 
 # Verify dismissed
 uv run android-emu-agent ui snapshot s-abc123
@@ -105,13 +105,13 @@ ANR dialog (App Not Responding):
 uv run android-emu-agent ui snapshot s-abc123
 # context.package = "android"
 # Text: "MyApp isn't responding"
-# @a1 = "Wait", @a2 = "Close app"
+# ^a1 = "Wait", ^a2 = "Close app"
 
 # Option 1: Wait for recovery
-uv run android-emu-agent action tap s-abc123 @a1
+uv run android-emu-agent action tap s-abc123 ^a1
 
 # Option 2: Close and restart
-uv run android-emu-agent action tap s-abc123 @a2
+uv run android-emu-agent action tap s-abc123 ^a2
 uv run android-emu-agent app launch s-abc123 com.example.myapp
 ```
 
@@ -119,9 +119,9 @@ Crash dialog:
 
 ```bash
 # Text: "MyApp has stopped" or "MyApp keeps stopping"
-# @a1 = "Close app", @a2 = "App info" (optional)
+# ^a1 = "Close app", ^a2 = "App info" (optional)
 
-uv run android-emu-agent action tap s-abc123 @a1
+uv run android-emu-agent action tap s-abc123 ^a1
 uv run android-emu-agent wait idle s-abc123
 uv run android-emu-agent app launch s-abc123 com.example.myapp
 ```
@@ -135,7 +135,7 @@ Strategy:
 
 ## Dealing With Stale Refs
 
-`ERR_STALE_REF` occurs when an `@ref` from a previous snapshot no longer matches a current element.
+`ERR_STALE_REF` occurs when an `^ref` from a previous snapshot no longer matches a current element.
 
 Common causes:
 
@@ -149,16 +149,16 @@ Recovery flow:
 
 ```bash
 # Action fails with ERR_STALE_REF
-uv run android-emu-agent action tap s-abc123 @a3
-# Error: ERR_STALE_REF - Element @a3 not found or bounds changed
+uv run android-emu-agent action tap s-abc123 ^a3
+# Error: ERR_STALE_REF - Element ^a3 not found or bounds changed
 
 # Recovery: Take fresh snapshot
 uv run android-emu-agent ui snapshot s-abc123
 # Find the element again by its characteristics
-# @a5 now has the same label "Submit"
+# ^a5 now has the same label "Submit"
 
 # Use new ref
-uv run android-emu-agent action tap s-abc123 @a5
+uv run android-emu-agent action tap s-abc123 ^a5
 ```
 
 Prevention tips:
@@ -225,18 +225,18 @@ Step-by-step login flow:
 uv run android-emu-agent app launch s-abc123 com.example.app
 uv run android-emu-agent wait idle s-abc123 --timeout-ms 5000
 uv run android-emu-agent ui snapshot s-abc123
-# Identify: @a1 = username field, @a2 = password field, @a3 = sign in button
+# Identify: ^a1 = username field, ^a2 = password field, ^a3 = sign in button
 
 # 2. Enter username
-uv run android-emu-agent action tap s-abc123 @a1
+uv run android-emu-agent action tap s-abc123 ^a1
 uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action set-text s-abc123 @a1 "user@example.com"
+uv run android-emu-agent action set-text s-abc123 ^a1 "user@example.com"
 
 # 3. Enter password (re-snapshot to get fresh refs)
 uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action tap s-abc123 @a2
+uv run android-emu-agent action tap s-abc123 ^a2
 uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action set-text s-abc123 @a2 "secretpassword"
+uv run android-emu-agent action set-text s-abc123 ^a2 "secretpassword"
 
 # 4. Dismiss keyboard if visible
 uv run android-emu-agent ui snapshot s-abc123
@@ -245,7 +245,7 @@ uv run android-emu-agent action back s-abc123
 
 # 5. Submit login
 uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action tap s-abc123 @a3
+uv run android-emu-agent action tap s-abc123 ^a3
 
 # 6. Wait and verify success
 uv run android-emu-agent wait activity s-abc123 "HomeActivity" --timeout-ms 15000
@@ -283,8 +283,8 @@ Strategy 1: Look for a skip button
 
 ```bash
 uv run android-emu-agent ui snapshot s-abc123
-# Look for @ref with text "Skip"
-uv run android-emu-agent action tap s-abc123 @a5
+# Look for ^ref with text "Skip"
+uv run android-emu-agent action tap s-abc123 ^a5
 uv run android-emu-agent wait idle s-abc123
 ```
 
@@ -292,17 +292,17 @@ Strategy 2: Tap through pages
 
 ```bash
 uv run android-emu-agent ui snapshot s-abc123
-# @a1 = "Next"
-uv run android-emu-agent action tap s-abc123 @a1
+# ^a1 = "Next"
+uv run android-emu-agent action tap s-abc123 ^a1
 uv run android-emu-agent wait idle s-abc123
 
 uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action tap s-abc123 @a1
+uv run android-emu-agent action tap s-abc123 ^a1
 uv run android-emu-agent wait idle s-abc123
 
 uv run android-emu-agent ui snapshot s-abc123
-# @a2 = "Get Started"
-uv run android-emu-agent action tap s-abc123 @a2
+# ^a2 = "Get Started"
+uv run android-emu-agent action tap s-abc123 ^a2
 ```
 
 Strategy 3: Swipe through carousel
@@ -318,7 +318,7 @@ uv run android-emu-agent action swipe left -s s-abc123
 uv run android-emu-agent wait idle s-abc123
 
 uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action tap s-abc123 @a1
+uv run android-emu-agent action tap s-abc123 ^a1
 ```
 
 Strategy 4: Use emulator snapshots for repeated testing
@@ -336,9 +336,9 @@ Bottom navigation tabs:
 
 ```bash
 uv run android-emu-agent ui snapshot s-abc123
-# @a10 = "Home", @a11 = "Search", @a12 = "Profile"
+# ^a10 = "Home", ^a11 = "Search", ^a12 = "Profile"
 
-uv run android-emu-agent action tap s-abc123 @a12
+uv run android-emu-agent action tap s-abc123 ^a12
 uv run android-emu-agent wait idle s-abc123
 ```
 
@@ -346,14 +346,14 @@ Hamburger menu (navigation drawer):
 
 ```bash
 uv run android-emu-agent ui snapshot s-abc123
-# @a1 = hamburger menu button
+# ^a1 = hamburger menu button
 
-uv run android-emu-agent action tap s-abc123 @a1
+uv run android-emu-agent action tap s-abc123 ^a1
 uv run android-emu-agent wait idle s-abc123
 uv run android-emu-agent ui snapshot s-abc123
-# Drawer items: @a5 = "Settings", @a6 = "Help"
+# Drawer items: ^a5 = "Settings", ^a6 = "Help"
 
-uv run android-emu-agent action tap s-abc123 @a5
+uv run android-emu-agent action tap s-abc123 ^a5
 ```
 
 Back navigation:
@@ -364,29 +364,29 @@ uv run android-emu-agent action back s-abc123
 
 # Toolbar back arrow
 uv run android-emu-agent ui snapshot s-abc123
-# @a1 = "Navigate up"
-uv run android-emu-agent action tap s-abc123 @a1
+# ^a1 = "Navigate up"
+uv run android-emu-agent action tap s-abc123 ^a1
 ```
 
 Toolbar actions:
 
 ```bash
 uv run android-emu-agent ui snapshot s-abc123
-# @a2 = "Search", @a3 = "More options"
+# ^a2 = "Search", ^a3 = "More options"
 
-uv run android-emu-agent action tap s-abc123 @a3
+uv run android-emu-agent action tap s-abc123 ^a3
 uv run android-emu-agent wait idle s-abc123
 uv run android-emu-agent ui snapshot s-abc123
-# Menu items: @a5 = "Settings", @a6 = "Share"
+# Menu items: ^a5 = "Settings", ^a6 = "Share"
 ```
 
 Tab switching (TabLayout):
 
 ```bash
 uv run android-emu-agent ui snapshot s-abc123
-# @a1 = "Tab 1" (selected), @a2 = "Tab 2"
+# ^a1 = "Tab 1" (selected), ^a2 = "Tab 2"
 
-uv run android-emu-agent action tap s-abc123 @a2
+uv run android-emu-agent action tap s-abc123 ^a2
 uv run android-emu-agent wait idle s-abc123
 ```
 
@@ -396,13 +396,13 @@ Text fields:
 
 ```bash
 uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action tap s-abc123 @a1
+uv run android-emu-agent action tap s-abc123 ^a1
 uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action set-text s-abc123 @a1 "My text input"
+uv run android-emu-agent action set-text s-abc123 ^a1 "My text input"
 
 # Clear existing text first
-uv run android-emu-agent action clear s-abc123 @a1
-uv run android-emu-agent action set-text s-abc123 @a1 "New text"
+uv run android-emu-agent action clear s-abc123 ^a1
+uv run android-emu-agent action set-text s-abc123 ^a1 "New text"
 
 # Dismiss keyboard after entry
 uv run android-emu-agent action back s-abc123
@@ -412,9 +412,9 @@ Checkboxes and toggles:
 
 ```bash
 uv run android-emu-agent ui snapshot s-abc123
-# @a5 = checkbox, state: { checked: false }
+# ^a5 = checkbox, state: { checked: false }
 
-uv run android-emu-agent action tap s-abc123 @a5
+uv run android-emu-agent action tap s-abc123 ^a5
 uv run android-emu-agent ui snapshot s-abc123
 # Verify: state.checked true
 ```
@@ -423,14 +423,14 @@ Dropdowns and spinners:
 
 ```bash
 uv run android-emu-agent ui snapshot s-abc123
-# @a3 = spinner showing current selection
+# ^a3 = spinner showing current selection
 
-uv run android-emu-agent action tap s-abc123 @a3
+uv run android-emu-agent action tap s-abc123 ^a3
 uv run android-emu-agent wait idle s-abc123
 uv run android-emu-agent ui snapshot s-abc123
-# @a10 = "Option A", @a11 = "Option B"
+# ^a10 = "Option A", ^a11 = "Option B"
 
-uv run android-emu-agent action tap s-abc123 @a11
+uv run android-emu-agent action tap s-abc123 ^a11
 uv run android-emu-agent wait idle s-abc123
 ```
 
@@ -438,17 +438,17 @@ Date pickers:
 
 ```bash
 uv run android-emu-agent ui snapshot s-abc123
-# @a4 = date field showing "Select date"
+# ^a4 = date field showing "Select date"
 
-uv run android-emu-agent action tap s-abc123 @a4
+uv run android-emu-agent action tap s-abc123 ^a4
 uv run android-emu-agent wait idle s-abc123
 uv run android-emu-agent ui snapshot s-abc123
-# @a1 = prev month, @a2 = next month
-# Days: @a15 = "15", @a20 = "20"
+# ^a1 = prev month, ^a2 = next month
+# Days: ^a15 = "15", ^a20 = "20"
 
-uv run android-emu-agent action tap s-abc123 @a20
+uv run android-emu-agent action tap s-abc123 ^a20
 uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action tap s-abc123 @a30  # "OK"
+uv run android-emu-agent action tap s-abc123 ^a30  # "OK"
 ```
 
 Form validation:
@@ -477,9 +477,9 @@ Scrolling within containers:
 
 ```bash
 uv run android-emu-agent ui snapshot s-abc123
-# @a5 = scrollable container
+# ^a5 = scrollable container
 
-uv run android-emu-agent action scroll down -s s-abc123 --in @a5
+uv run android-emu-agent action scroll down -s s-abc123 --in ^a5
 ```
 
 Finding elements by scrolling:
@@ -508,7 +508,7 @@ Horizontal scrolling:
 ```bash
 uv run android-emu-agent action scroll left -s s-abc123
 uv run android-emu-agent action scroll right -s s-abc123
-uv run android-emu-agent action scroll left -s s-abc123 --in @a3
+uv run android-emu-agent action scroll left -s s-abc123 --in ^a3
 ```
 
 Tips:
@@ -650,7 +650,7 @@ An inquiry can transition to an action when the user explicitly bridges the gap:
 
 ```text
 Agent: "I found three buttons in the media transport bar. Based on the screenshot,
-       @a2 appears to be a play button (triangle icon). Would you like me to tap it?"
+       ^a2 appears to be a play button (triangle icon). Would you like me to tap it?"
 User:  "Yes, tap it."
 ```
 
@@ -694,7 +694,7 @@ that is a state-modifying action used to answer an informational question.
 best match is an unlabeled element, state your confidence and ask before tapping:
 
 ```text
-Agent: "I found an unlabeled ImageButton at @a2. Based on its position in the media
+Agent: "I found an unlabeled ImageButton at ^a2. Based on its position in the media
        transport bar and the triangle icon visible in the screenshot, I believe this is
        the play button (medium confidence). Should I tap it?"
 ```

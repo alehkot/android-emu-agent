@@ -46,19 +46,19 @@ class TestErrorConstructors:
 
     def test_stale_ref_error(self) -> None:
         """Should create stale ref error."""
-        error = stale_ref_error("@a1", ref_generation=1, current_generation=5)
+        error = stale_ref_error("^a1", ref_generation=1, current_generation=5)
 
         assert error.code == "ERR_STALE_REF"
-        assert "@a1" in error.message
-        assert error.context["ref"] == "@a1"
+        assert "^a1" in error.message
+        assert error.context["ref"] == "^a1"
         assert "snapshot" in error.remediation.lower()
 
     def test_not_found_error(self) -> None:
         """Should create not found error."""
-        error = not_found_error("@a5")
+        error = not_found_error("^a5")
 
         assert error.code == "ERR_NOT_FOUND"
-        assert "@a5" in error.message
+        assert "^a5" in error.message
 
     def test_blocked_input_error(self) -> None:
         """Should create blocked input error."""

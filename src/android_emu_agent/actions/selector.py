@@ -20,7 +20,7 @@ class Selector(ABC):
 
 @dataclass
 class RefSelector(Selector):
-    """Selector for @ref syntax."""
+    """Selector for ^ref syntax."""
 
     ref: str
 
@@ -79,7 +79,7 @@ def parse_selector(target: str) -> Selector:
     Parse escape hatch selector or ref.
 
     Supported formats:
-    - @ref (e.g., @a1, @b5) - RefSelector
+    - ^ref (e.g., ^a1, ^b5) - RefSelector
     - text:"..." or text:'...' or text:value - TextSelector
     - id:resource_id - ResourceIdSelector
     - desc:"..." or desc:'...' or desc:value - DescSelector
@@ -97,7 +97,7 @@ def parse_selector(target: str) -> Selector:
     if not target:
         raise invalid_selector_error(target)
 
-    if target.startswith("@"):
+    if target.startswith("^"):
         return RefSelector(ref=target)
 
     if target.startswith("text:"):

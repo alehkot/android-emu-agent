@@ -23,10 +23,10 @@ class TestTapSelectorParsing:
     """Tests for selector parsing used by tap action."""
 
     def test_parse_ref_selector(self) -> None:
-        """Should parse @ref to RefSelector."""
-        selector = parse_selector("@a1")
+        """Should parse ^ref to RefSelector."""
+        selector = parse_selector("^a1")
         assert isinstance(selector, RefSelector)
-        assert selector.ref == "@a1"
+        assert selector.ref == "^a1"
 
     def test_parse_coords_selector(self) -> None:
         """Should parse coords:x,y to CoordsSelector."""
@@ -106,7 +106,7 @@ class TestRefSelectorHandling:
 
     def test_ref_selector_returns_empty_kwargs(self) -> None:
         """RefSelector returns empty kwargs (resolved elsewhere)."""
-        selector = parse_selector("@a1")
+        selector = parse_selector("^a1")
         assert selector.to_u2_kwargs() == {}
 
 
@@ -127,7 +127,7 @@ class TestStaleRefWithWarning:
 
         # Create a locator with resource_id (for re-identification)
         locator = LocatorBundle(
-            ref="@a5",
+            ref="^a5",
             generation=3,  # Old generation
             resource_id="com.foo:id/sign_in",
             content_desc=None,
@@ -144,16 +144,16 @@ class TestStaleRefWithWarning:
         assert exists
 
         # Action proceeds with warning in response
-        expected_warning = "Used stale ref @a5; take a new snapshot for reliable refs"
+        expected_warning = "Used stale ref ^a5; take a new snapshot for reliable refs"
         assert "stale" in expected_warning.lower()
-        assert "@a5" in expected_warning
+        assert "^a5" in expected_warning
 
     @pytest.mark.asyncio
     async def test_stale_ref_without_resource_id_fails(self) -> None:
         """Stale ref without resource_id should fail with ERR_STALE_REF."""
         # Locator without resource_id cannot be re-identified
         locator = LocatorBundle(
-            ref="@a5",
+            ref="^a5",
             generation=3,
             resource_id=None,  # No resource_id for re-identification
             content_desc=None,
@@ -176,7 +176,7 @@ class TestStaleRefWithWarning:
         mock_device.return_value = mock_element
 
         locator = LocatorBundle(
-            ref="@a5",
+            ref="^a5",
             generation=3,
             resource_id="com.foo:id/deleted_btn",  # Has resource_id
             content_desc=None,

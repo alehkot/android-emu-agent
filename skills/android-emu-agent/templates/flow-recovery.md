@@ -14,7 +14,7 @@ uv run android-emu-agent wait idle <session_id> --timeout-ms 5000
 uv run android-emu-agent ui snapshot <session_id>
 
 # Step 3: Search for <target_description> by text/desc/role/id in snapshot output
-# If found under new @ref → retry:
+# If found under new ^ref → retry:
 uv run android-emu-agent <failed_action> <session_id> @<new_ref>
 
 # Step 4: If blocker detected (dialog, overlay), handle it first:

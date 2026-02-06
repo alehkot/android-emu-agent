@@ -487,7 +487,7 @@ async def action_tap(req: ActionRequest) -> EndpointResponse:
     """Tap an element.
 
     Supports multiple selector formats:
-    - @ref (e.g., @a1): Use element ref from snapshot
+    - ^ref (e.g., ^a1): Use element ref from snapshot
     - text:"..." : Find by text content
     - id:resource_id : Find by resource ID
     - desc:"..." : Find by content description
@@ -709,7 +709,7 @@ async def wait_exists(req: WaitSelectorRequest) -> EndpointResponse:
         return _error_response(
             AgentError(
                 code="ERR_SELECTOR_REQUIRED",
-                message="wait exists requires a selector or @ref",
+                message="wait exists requires a selector or ^ref",
                 context={"session_id": req.session_id},
                 remediation="Provide --ref or a selector dict",
             ),
@@ -750,7 +750,7 @@ async def wait_gone(req: WaitSelectorRequest) -> EndpointResponse:
         return _error_response(
             AgentError(
                 code="ERR_SELECTOR_REQUIRED",
-                message="wait gone requires a selector or @ref",
+                message="wait gone requires a selector or ^ref",
                 context={"session_id": req.session_id},
                 remediation="Provide --ref or a selector dict",
             ),

@@ -149,13 +149,13 @@ The `action tap` command accepts these selector formats:
 
 | Selector     | Example                 | Description                           |
 | ------------ | ----------------------- | ------------------------------------- |
-| `@ref`       | `@a1`                   | Element ref from snapshot (preferred) |
+| `^ref`       | `^a1`                   | Element ref from snapshot (preferred) |
 | `text:"..."` | `text:"Sign in"`        | Match by visible text                 |
 | `id:...`     | `id:com.example:id/btn` | Match by resource ID                  |
 | `desc:"..."` | `desc:"Open menu"`      | Match by content description          |
 | `coords:x,y` | `coords:540,1200`       | Tap at absolute coordinates           |
 
-`long-tap`, `set-text`, and `clear` require an `@ref`.
+`long-tap`, `set-text`, and `clear` require an `^ref`.
 
 ## Swipe and Scroll Directions
 

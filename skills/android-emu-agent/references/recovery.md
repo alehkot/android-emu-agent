@@ -26,7 +26,7 @@ Cost: low. Two CLI calls at most.
 1. `wait idle` for UI to settle (timeout 3-5 s)
 1. Take a fresh `ui snapshot`
 1. Search for the target element by its characteristics (text, description, role, resource_id)
-1. If found under a new `@ref` → retry the original action with the new ref
+1. If found under a new `^ref` → retry the original action with the new ref
 1. If a blocker is detected (dialog, overlay, keyboard) → handle the blocker first, re-snapshot,
    retry
 1. If the target exists but is disabled (`state.enabled = false`) → `wait idle` once more, then
@@ -38,7 +38,7 @@ Max attempts: **2** (initial attempt + 1 retry). If both fail → escalate to Le
 # Level 1 example
 uv run android-emu-agent wait idle <session_id> --timeout-ms 5000
 uv run android-emu-agent ui snapshot <session_id>
-# Find target again by text/desc/role, get new @ref
+# Find target again by text/desc/role, get new ^ref
 uv run android-emu-agent action tap <session_id> @<new_ref>
 ```
 

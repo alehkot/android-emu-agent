@@ -7,7 +7,7 @@ CLI + daemon for LLM-driven Android UI control — ships with **ready-to-use cod
 Android Emu Agent automates Android apps using a fast observe-act-verify loop:
 
 1. Observe: capture a compact UI snapshot (interactive elements only)
-2. Act: issue commands using ephemeral element refs like `@a1`
+2. Act: issue commands using ephemeral element refs like `^a1`
 3. Verify: re-snapshot when needed
 
 The CLI is a thin client. A long-running daemon handles all device I/O. All commands support
@@ -16,7 +16,7 @@ The CLI is a thin client. A long-running daemon handles all device I/O. All comm
 **Highlights:**
 
 - **Daemon-first architecture** — persistent process handles device I/O over Unix socket
-- **Ephemeral refs** — deterministic `@a1`-style handles with locator bundle fallbacks
+- **Ephemeral refs** — deterministic `^a1`-style handles with locator bundle fallbacks
 - **Agent skills included** — structured reference docs, workflow templates, and safety guardrails
 - **Machine-readable output** — every command supports `--json` for agent pipelines
 
@@ -61,7 +61,7 @@ uv run android-emu-agent session start --device emulator-5554
 uv run android-emu-agent ui snapshot s-abc123 --format text
 
 # 5. Tap an element using a ref
-uv run android-emu-agent action tap s-abc123 @a1
+uv run android-emu-agent action tap s-abc123 ^a1
 
 # 6. Stop the session
 uv run android-emu-agent session stop s-abc123
@@ -145,18 +145,18 @@ Sessions
 
 Snapshots and refs
 
-- `ui snapshot` returns `@refs` that are stable only for that snapshot.
+- `ui snapshot` returns `^refs` that are stable only for that snapshot.
 - If you get `ERR_STALE_REF`, take a new snapshot and use fresh refs.
 
 Selectors
 
-- `action tap` accepts an `@ref` or a selector.
-- `long-tap`, `set-text`, and `clear` require an `@ref`.
+- `action tap` accepts an `^ref` or a selector.
+- `long-tap`, `set-text`, and `clear` require an `^ref`.
 
 Selector examples:
 
 ```text
-@a1
+^a1
 text:"Sign in"
 id:com.example:id/login_btn
 desc:"Open navigation"
@@ -180,7 +180,7 @@ Compact snapshot output includes context and interactive elements only:
   },
   "elements": [
     {
-      "ref": "@a1",
+      "ref": "^a1",
       "role": "button",
       "label": "Sign in",
       "resource_id": "com.example:id/login_btn",
@@ -213,9 +213,9 @@ Login flow
 uv run android-emu-agent app launch s-abc123 com.example.app
 uv run android-emu-agent wait idle s-abc123 --timeout-ms 5000
 uv run android-emu-agent ui snapshot s-abc123 --format text
-uv run android-emu-agent action set-text s-abc123 @a3 "user@example.com"
-uv run android-emu-agent action set-text s-abc123 @a4 "hunter2"
-uv run android-emu-agent action tap s-abc123 @a5
+uv run android-emu-agent action set-text s-abc123 ^a3 "user@example.com"
+uv run android-emu-agent action set-text s-abc123 ^a4 "hunter2"
+uv run android-emu-agent action tap s-abc123 ^a5
 ```
 
 When elements are missing

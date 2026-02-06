@@ -152,7 +152,7 @@ class ActionExecutor:
                     code="ERR_NO_LOCATOR",
                     message="Action requires a locator",
                     context={},
-                    remediation="Provide a valid @ref or selector",
+                    remediation="Provide a valid ^ref or selector",
                 )
             elif action == ActionType.TAP:
                 await self._tap(device, locator)
@@ -256,7 +256,7 @@ class ActionExecutor:
             code="ERR_NOT_FOUND",
             message=f"Element not found: {locator.ref}",
             context={"ref": locator.ref, "locator": locator.to_dict()},
-            remediation="Take a new snapshot and use a fresh @ref",
+            remediation="Take a new snapshot and use a fresh ^ref",
         )
 
 

@@ -14,7 +14,7 @@ class TestRefResolver:
 
         elements = [
             {
-                "ref": "@a1",
+                "ref": "^a1",
                 "resource_id": "com.test:id/button",
                 "content_desc": "Submit",
                 "text": "Submit",
@@ -24,10 +24,10 @@ class TestRefResolver:
         ]
 
         resolver.store_refs("s-1", generation=1, elements=elements)
-        bundle, is_stale = resolver.resolve_ref("s-1", "@a1", current_generation=1)
+        bundle, is_stale = resolver.resolve_ref("s-1", "^a1", current_generation=1)
 
         assert bundle is not None
-        assert bundle.ref == "@a1"
+        assert bundle.ref == "^a1"
         assert bundle.resource_id == "com.test:id/button"
         assert is_stale is False
 
@@ -35,10 +35,10 @@ class TestRefResolver:
         """Should mark refs from old generations as stale."""
         resolver = RefResolver()
 
-        elements = [{"ref": "@a1", "class": "Button", "bounds": [0, 0, 100, 100]}]
+        elements = [{"ref": "^a1", "class": "Button", "bounds": [0, 0, 100, 100]}]
         resolver.store_refs("s-1", generation=1, elements=elements)
 
-        bundle, is_stale = resolver.resolve_ref("s-1", "@a1", current_generation=5)
+        bundle, is_stale = resolver.resolve_ref("s-1", "^a1", current_generation=5)
 
         assert bundle is not None
         assert is_stale is True
@@ -47,7 +47,7 @@ class TestRefResolver:
         """Should return None for missing refs."""
         resolver = RefResolver()
 
-        bundle, is_stale = resolver.resolve_ref("s-1", "@a99", current_generation=1)
+        bundle, is_stale = resolver.resolve_ref("s-1", "^a99", current_generation=1)
 
         assert bundle is None
         assert is_stale is False
@@ -58,26 +58,26 @@ class TestRefResolver:
 
         # Store refs for multiple generations
         for gen in range(1, 6):
-            elements = [{"ref": f"@a{gen}", "class": "View", "bounds": [0, 0, 100, 100]}]
+            elements = [{"ref": f"^a{gen}", "class": "View", "bounds": [0, 0, 100, 100]}]
             resolver.store_refs("s-1", generation=gen, elements=elements)
 
         # After storing gen 5, gens 1 and 2 should be cleaned up
-        bundle, _ = resolver.resolve_ref("s-1", "@a1", current_generation=5)
+        bundle, _ = resolver.resolve_ref("s-1", "^a1", current_generation=5)
         assert bundle is None  # Gen 1 was cleaned up
 
-        bundle, _ = resolver.resolve_ref("s-1", "@a3", current_generation=5)
+        bundle, _ = resolver.resolve_ref("s-1", "^a3", current_generation=5)
         assert bundle is not None  # Gen 3 still exists
 
     def test_clear_session(self) -> None:
         """Should clear all refs for a session."""
         resolver = RefResolver()
 
-        elements = [{"ref": "@a1", "class": "View", "bounds": [0, 0, 100, 100]}]
+        elements = [{"ref": "^a1", "class": "View", "bounds": [0, 0, 100, 100]}]
         resolver.store_refs("s-1", generation=1, elements=elements)
 
         resolver.clear_session("s-1")
 
-        bundle, _ = resolver.resolve_ref("s-1", "@a1", current_generation=1)
+        bundle, _ = resolver.resolve_ref("s-1", "^a1", current_generation=1)
         assert bundle is None
 
 
@@ -90,7 +90,7 @@ class TestLocatorBundle:
 
         elements = [
             {
-                "ref": "@a1",
+                "ref": "^a1",
                 "resource_id": "com.test:id/btn",
                 "class": "Button",
                 "bounds": [100, 200, 300, 250],
@@ -98,7 +98,7 @@ class TestLocatorBundle:
         ]
 
         resolver.store_refs("s-1", generation=1, elements=elements)
-        bundle, _ = resolver.resolve_ref("s-1", "@a1", current_generation=1)
+        bundle, _ = resolver.resolve_ref("s-1", "^a1", current_generation=1)
 
         assert bundle is not None
         assert len(bundle.ancestry_hash) == 8  # MD5 truncated to 8 chars
@@ -109,7 +109,7 @@ class TestLocatorBundle:
 
         elements = [
             {
-                "ref": "@a1",
+                "ref": "^a1",
                 "resource_id": "com.test:id/btn",
                 "content_desc": "Submit button",
                 "text": "Submit",
@@ -119,12 +119,12 @@ class TestLocatorBundle:
         ]
 
         resolver.store_refs("s-1", generation=1, elements=elements)
-        bundle, _ = resolver.resolve_ref("s-1", "@a1", current_generation=1)
+        bundle, _ = resolver.resolve_ref("s-1", "^a1", current_generation=1)
 
         assert bundle is not None
         result = bundle.to_dict()
 
-        assert result["ref"] == "@a1"
+        assert result["ref"] == "^a1"
         assert result["generation"] == 1
         assert result["resource_id"] == "com.test:id/btn"
         assert result["bounds"] == [100, 200, 300, 250]
@@ -135,7 +135,7 @@ class TestLocatorBundle:
 
         elements = [
             {
-                "ref": "@a1",
+                "ref": "^a1",
                 "resource_id": "com.test:id/btn",
                 "class": "Button",
                 "bounds": [100, 200, 300, 250],
@@ -143,7 +143,7 @@ class TestLocatorBundle:
         ]
 
         resolver.store_refs("s-1", generation=1, elements=elements)
-        bundle, _ = resolver.resolve_ref("s-1", "@a1", current_generation=1)
+        bundle, _ = resolver.resolve_ref("s-1", "^a1", current_generation=1)
 
         assert bundle is not None
         # New fields should exist with default empty string values
@@ -158,7 +158,7 @@ class TestLocatorBundle:
 
         elements = [
             {
-                "ref": "@a1",
+                "ref": "^a1",
                 "resource_id": "com.test:id/btn",
                 "content_desc": "Submit button",
                 "text": "Submit",
@@ -168,7 +168,7 @@ class TestLocatorBundle:
         ]
 
         resolver.store_refs("s-1", generation=1, elements=elements)
-        bundle, _ = resolver.resolve_ref("s-1", "@a1", current_generation=1)
+        bundle, _ = resolver.resolve_ref("s-1", "^a1", current_generation=1)
 
         assert bundle is not None
         result = bundle.to_dict()

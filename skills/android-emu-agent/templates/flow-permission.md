@@ -10,10 +10,10 @@ uv run android-emu-agent wait idle <session_id> --timeout-ms 5000
 # Snapshot and detect permission dialog
 uv run android-emu-agent ui snapshot <session_id>
 # context.package = "com.google.android.permissioncontroller"
-# @a1 = "While using the app" (or "Allow")
+# ^a1 = "While using the app" (or "Allow")
 
 # Grant permission
-uv run android-emu-agent action tap <session_id> @a1
+uv run android-emu-agent action tap <session_id> ^a1
 uv run android-emu-agent wait idle <session_id>
 
 # Verify app resumed

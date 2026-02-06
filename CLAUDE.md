@@ -75,7 +75,7 @@ The system is organized into these layers:
    - `device/manager.py`: Device discovery and management (via adbutils)
    - `device/session.py`: Session lifecycle and state (`SessionManager`)
    - `ui/snapshotter.py`: UI hierarchy parsing and snapshot generation
-   - `ui/ref_resolver.py`: Ephemeral ref (`@a1`, `@a2`, etc.) to locator bundle mapping
+   - `ui/ref_resolver.py`: Ephemeral ref (`^a1`, `^a2`, etc.) to locator bundle mapping
    - `ui/context.py`: `ContextResolver` for activity/package/window/IME/dialog detection
    - `actions/executor.py`: Action dispatch (tap, swipe, text input)
    - `actions/wait.py`: Wait conditions (idle, text, element existence)
@@ -90,7 +90,7 @@ The system is organized into these layers:
 
 ### Key Architectural Concepts
 
-**Ephemeral Refs**: The system generates deterministic element handles like `@a1`, `@a2` for each
+**Ephemeral Refs**: The system generates deterministic element handles like `^a1`, `^a2` for each
 snapshot generation. These are stored in `RefResolver` which maintains a mapping of refs →
 `LocatorBundle` (containing multiple fallback locator strategies: resource_id, content_desc, text,
 bounds, ancestry_hash). Refs are generation-scoped and the system warns if you use a stale ref.

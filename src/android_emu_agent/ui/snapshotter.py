@@ -158,7 +158,7 @@ class UISnapshotter:
     def _node_to_element(self, node: etree._Element) -> ElementNode | None:
         """Convert XML node to ElementNode."""
         self._ref_counter += 1
-        ref = f"@a{self._ref_counter}"
+        ref = f"^a{self._ref_counter}"
 
         # Parse bounds "[left,top][right,bottom]"
         bounds_str = node.get("bounds", "[0,0][0,0]")

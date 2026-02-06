@@ -41,7 +41,7 @@ uv run android-emu-agent session start --device <serial>
 uv run android-emu-agent ui snapshot <session_id>
 
 # Act (one action)
-uv run android-emu-agent action tap <session_id> @a1
+uv run android-emu-agent action tap <session_id> ^a1
 
 # Verify
 uv run android-emu-agent ui snapshot <session_id>

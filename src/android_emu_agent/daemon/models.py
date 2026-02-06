@@ -38,7 +38,7 @@ class SessionRequest(BaseModel):
 
 class ActionRequest(BaseModel):
     session_id: str
-    ref: str  # Can be @ref, text:"...", id:..., desc:"...", or coords:x,y
+    ref: str  # Can be ^ref, text:"...", id:..., desc:"...", or coords:x,y
 
 
 class SetTextRequest(BaseModel):
@@ -132,7 +132,7 @@ class SwipeRequest(BaseModel):
 
     session_id: str
     direction: str  # up, down, left, right
-    container: str | None = None  # Optional @ref or selector
+    container: str | None = None  # Optional ^ref or selector
     distance: float = 0.8
     duration_ms: int = 300
 

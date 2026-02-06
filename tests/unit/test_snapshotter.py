@@ -32,8 +32,8 @@ class TestUISnapshotter:
 
         # Check refs are assigned
         refs = [e.ref for e in snapshot.elements]
-        assert "@a1" in refs
-        assert "@a2" in refs
+        assert "^a1" in refs
+        assert "^a2" in refs
 
     def test_parse_hierarchy_assigns_correct_roles(
         self,

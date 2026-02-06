@@ -8,7 +8,7 @@ Request a UI snapshot to see interactive elements:
 uv run android-emu-agent ui snapshot <session_id>
 ```
 
-The snapshot returns context and interactive elements with ephemeral `@ref` handles.
+The snapshot returns context and interactive elements with ephemeral `^ref` handles.
 
 Example snapshot output:
 
@@ -22,7 +22,7 @@ Example snapshot output:
   },
   "elements": [
     {
-      "ref": "@a1",
+      "ref": "^a1",
       "role": "button",
       "label": "Sign in",
       "resource_id": "com.example:id/login_btn",
@@ -45,7 +45,7 @@ Analyze the snapshot:
 - Classify the task intent — is this an inquiry (user asking for information) or an action (user
   asking you to do something)? If inquiry, use only read-only methods to answer. See
   `references/patterns.md` > Inquiry vs. Action Tasks.
-- Identify the target element by `@ref`, label, or role
+- Identify the target element by `^ref`, label, or role
 - Check for blockers (dialogs, overlays, loading states)
 - If blocked, handle with `action back`, a targeted tap, or a wait
 - Assess element confidence — if the target is unlabeled or its purpose is unknown, do not tap
@@ -56,11 +56,11 @@ Analyze the snapshot:
 
 ## Act
 
-Execute one action at a time using the `@ref` from the current snapshot:
+Execute one action at a time using the `^ref` from the current snapshot:
 
 ```bash
-uv run android-emu-agent action tap <session_id> @a1
-uv run android-emu-agent action set-text <session_id> @a2 "username"
+uv run android-emu-agent action tap <session_id> ^a1
+uv run android-emu-agent action set-text <session_id> ^a2 "username"
 uv run android-emu-agent action back <session_id>
 ```
 
@@ -90,7 +90,7 @@ not present, treat this as a potential action failure and enter the recovery pro
 uv run android-emu-agent ui snapshot s-abc123
 
 # Act
-uv run android-emu-agent action tap s-abc123 @a1
+uv run android-emu-agent action tap s-abc123 ^a1
 
 # Verify
 uv run android-emu-agent ui snapshot s-abc123

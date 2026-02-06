@@ -13,7 +13,7 @@ app = typer.Typer(help="Action execution commands")
 @app.command("tap")
 def action_tap(
     session_id: str = typer.Argument(..., help="Session ID"),
-    ref: str = typer.Argument(..., help="Element ref (@a1)"),
+    ref: str = typer.Argument(..., help="Element ref (^a1)"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Tap an element."""
@@ -26,7 +26,7 @@ def action_tap(
 @app.command("long-tap")
 def action_long_tap(
     session_id: str = typer.Argument(..., help="Session ID"),
-    ref: str = typer.Argument(..., help="Element ref (@a1)"),
+    ref: str = typer.Argument(..., help="Element ref (^a1)"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Long tap an element."""
@@ -41,7 +41,7 @@ def action_long_tap(
 @app.command("set-text")
 def action_set_text(
     session_id: str = typer.Argument(..., help="Session ID"),
-    ref: str = typer.Argument(..., help="Element ref (@a1)"),
+    ref: str = typer.Argument(..., help="Element ref (^a1)"),
     text: str = typer.Argument(..., help="Text to set"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
@@ -59,7 +59,7 @@ def action_set_text(
 @app.command("clear")
 def action_clear(
     session_id: str = typer.Argument(..., help="Session ID"),
-    ref: str = typer.Argument(..., help="Element ref (@a1)"),
+    ref: str = typer.Argument(..., help="Element ref (^a1)"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Clear text."""
@@ -111,7 +111,7 @@ def action_recents(
 def action_swipe(
     direction: str = typer.Argument(..., help="Direction: up, down, left, right"),
     session: str = typer.Option(..., "--session", "-s", help="Session ID"),
-    container: str | None = typer.Option(None, "--in", help="Container @ref or selector"),
+    container: str | None = typer.Option(None, "--in", help="Container ^ref or selector"),
     distance: float = typer.Option(0.8, "--distance", "-d", help="Swipe distance (0.0-1.0)"),
     duration: int = typer.Option(300, "--duration", help="Swipe duration in ms"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
@@ -137,7 +137,7 @@ def action_swipe(
 def action_scroll(
     direction: str = typer.Argument(..., help="Direction: up, down, left, right"),
     session: str = typer.Option(..., "--session", "-s", help="Session ID"),
-    container: str | None = typer.Option(None, "--in", help="Container @ref or selector"),
+    container: str | None = typer.Option(None, "--in", help="Container ^ref or selector"),
     distance: float = typer.Option(0.8, "--distance", "-d", help="Scroll distance (0.0-1.0)"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
