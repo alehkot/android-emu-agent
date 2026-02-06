@@ -1,0 +1,6 @@
+site_name: android-emu-agent
+plugins:
+  - mkdocs-typer2:
+      pretty: true
+nav:
+  - CLI Reference: reference.md

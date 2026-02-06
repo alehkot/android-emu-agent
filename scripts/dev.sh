@@ -422,6 +422,7 @@ case "${1:-help}" in
         uv run mypy src/
         uv run pyright
         uv run pytest tests/unit -q
+        uv run mkdocs build --strict
         if command -v npm >/dev/null 2>&1; then
             npm run lint:md
         else
@@ -473,6 +474,16 @@ case "${1:-help}" in
         install_skills "$codex_root/skills" "Codex"
         ;;
 
+    docs)
+        echo "Building docs..."
+        uv run mkdocs build --strict
+        ;;
+
+    docs-serve)
+        echo "Serving docs locally..."
+        uv run mkdocs serve
+        ;;
+
     skills-claude)
         ensure_supported_os
         echo "Installing skills for Claude..."
@@ -497,10 +508,12 @@ case "${1:-help}" in
         echo "  md               Format + lint Markdown"
         echo "  hooks            Install git hooks"
         echo "  typecheck        Run type checkers (mypy + pyright)"
-        echo "  check            Run all checks (lint + typecheck + unit tests)"
+        echo "  check            Run all checks (lint + typecheck + unit tests + docs)"
         echo "  daemon           Start the daemon server"
         echo "  bump-version     Interactively bump package version (patch/minor/major/custom),"
         echo "                   optionally refresh uv.lock, and optionally create a git tag"
+        echo "  docs             Build documentation (mkdocs)"
+        echo "  docs-serve       Serve documentation locally"
         echo "  skills [target]  Symlink skills into agent directories (codex|claude|all)"
         echo "  skills-codex     Symlink skills into Codex agent directory"
         echo "  skills-claude    Symlink skills into Claude agent directory"

@@ -308,7 +308,14 @@ For deeper guidance, see `skills/android-emu-agent/references/troubleshooting.md
 
 ## CLI Reference
 
-A concise command list lives at `skills/android-emu-agent/references/command-reference.md`.
+Full auto-generated CLI reference docs can be built locally:
+
+```bash
+./scripts/dev.sh docs          # Build to site/
+./scripts/dev.sh docs-serve    # Serve at http://127.0.0.1:8000
+```
+
+A concise command list also lives at `skills/android-emu-agent/references/command-reference.md`.
 
 If you prefer an interactive guide:
 
@@ -348,20 +355,22 @@ uv run android-emu-agent <group> --help
 The `./scripts/dev.sh` helper centralizes common development tasks. Make it executable with
 `chmod +x scripts/dev.sh` if needed.
 
-| Command                             | Description                                              |
-| ----------------------------------- | -------------------------------------------------------- |
-| `./scripts/dev.sh setup`            | Full setup (deps + markdown tooling + git hooks)         |
-| `./scripts/dev.sh check`            | Run all checks (lint + typecheck + unit tests + md lint) |
-| `./scripts/dev.sh test`             | Run all tests                                            |
-| `./scripts/dev.sh test-unit`        | Run unit tests only                                      |
-| `./scripts/dev.sh test-integration` | Run integration tests (requires emulator)                |
-| `./scripts/dev.sh lint`             | Lint only (ruff check, no format)                        |
-| `./scripts/dev.sh format`           | Format code (ruff format + fix)                          |
-| `./scripts/dev.sh typecheck`        | Type check (mypy + pyright)                              |
-| `./scripts/dev.sh daemon`           | Start daemon on Unix socket                              |
-| `./scripts/dev.sh skills`           | Symlink skills to agent dirs (codex, claude, all)        |
-| `./scripts/dev.sh hooks`            | Install git hooks                                        |
-| `./scripts/dev.sh md`               | Format + lint Markdown                                   |
+| Command                             | Description                                                     |
+| ----------------------------------- | --------------------------------------------------------------- |
+| `./scripts/dev.sh setup`            | Full setup (deps + markdown tooling + git hooks)                |
+| `./scripts/dev.sh check`            | Run all checks (lint + typecheck + unit tests + docs + md lint) |
+| `./scripts/dev.sh test`             | Run all tests                                                   |
+| `./scripts/dev.sh test-unit`        | Run unit tests only                                             |
+| `./scripts/dev.sh test-integration` | Run integration tests (requires emulator)                       |
+| `./scripts/dev.sh lint`             | Lint only (ruff check, no format)                               |
+| `./scripts/dev.sh format`           | Format code (ruff format + fix)                                 |
+| `./scripts/dev.sh typecheck`        | Type check (mypy + pyright)                                     |
+| `./scripts/dev.sh daemon`           | Start daemon on Unix socket                                     |
+| `./scripts/dev.sh skills`           | Symlink skills to agent dirs (codex, claude, all)               |
+| `./scripts/dev.sh docs`             | Build documentation (mkdocs)                                    |
+| `./scripts/dev.sh docs-serve`       | Serve documentation locally                                     |
+| `./scripts/dev.sh hooks`            | Install git hooks                                               |
+| `./scripts/dev.sh md`               | Format + lint Markdown                                          |
 
 ### Raw `uv run` commands
 

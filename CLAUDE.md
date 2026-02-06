@@ -37,7 +37,7 @@ uv run pyright             # Type check with pyright
 
 # Convenience script (./scripts/dev.sh)
 ./scripts/dev.sh setup            # Full setup (deps + markdown tooling + git hooks)
-./scripts/dev.sh check            # Run all checks (lint + typecheck + unit tests + md lint)
+./scripts/dev.sh check            # Run all checks (lint + typecheck + unit tests + docs + md lint)
 ./scripts/dev.sh test             # Run all tests
 ./scripts/dev.sh test-unit        # Run unit tests only
 ./scripts/dev.sh test-integration # Run integration tests (requires emulator)
@@ -49,6 +49,8 @@ uv run pyright             # Type check with pyright
 ./scripts/dev.sh format-md        # Format Markdown
 ./scripts/dev.sh lint-md          # Lint Markdown
 ./scripts/dev.sh md               # Format + lint Markdown
+./scripts/dev.sh docs             # Build documentation (mkdocs)
+./scripts/dev.sh docs-serve       # Serve documentation locally
 ./scripts/dev.sh skills [target]  # Symlink skills to agent dirs (codex|claude|all)
 ```
 
@@ -188,6 +190,7 @@ Dev-only:
 - `ruff`: Linting and formatting
 - `mypy` + `pyright`: Type checking
 - `lxml-stubs`: Type stubs for lxml
+- `mkdocs` + `mkdocs-typer2`: Documentation generation from Typer CLI
 
 ## Project Structure Conventions
 
@@ -196,6 +199,7 @@ Dev-only:
 - `tests/integration/`: Tests requiring real Android emulator
 - `scripts/`: Development helper scripts
 - `skills/android-emu-agent/`: Agent skill for Claude Code and other agent environments
+- `docs/`: MkDocs source files for auto-generated CLI reference
 - `AGENTS.md`: Companion guidelines (coding style, commit conventions, environment tips)
 
 ## Agent Skills Sync
