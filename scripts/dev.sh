@@ -146,6 +146,30 @@ render_init_with_version() {
     ' src/android_emu_agent/__init__.py > "$output_file"
 }
 
+maybe_update_uv_lock() {
+    if [ ! -f uv.lock ]; then
+        return 0
+    fi
+
+    local lock_confirm
+    read -r -p "Update uv.lock now with 'uv lock'? [Y/n]: " lock_confirm
+    case "$lock_confirm" in
+        n|N|no|NO)
+            echo "Skipped uv.lock update."
+            return 0
+            ;;
+    esac
+
+    echo "Updating uv.lock..."
+    if uv lock; then
+        echo "Updated uv.lock."
+        return 0
+    fi
+
+    echo "Failed to update uv.lock. Run 'uv lock' manually."
+    return 1
+}
+
 bump_version() {
     local current_version
     current_version="$(read_project_version)"
@@ -291,6 +315,10 @@ bump_version() {
     echo "Updated files:"
     echo "  pyproject.toml"
     echo "  src/android_emu_agent/__init__.py"
+
+    if ! maybe_update_uv_lock; then
+        return 1
+    fi
 }
 
 case "${1:-help}" in
@@ -455,6 +483,7 @@ case "${1:-help}" in
         echo "  check            Run all checks (lint + typecheck + unit tests)"
         echo "  daemon           Start the daemon server"
         echo "  bump-version     Interactively bump package version (patch/minor/major/custom)"
+        echo "                   and optionally refresh uv.lock"
         echo "  skills [target]  Symlink skills into agent directories (codex|claude|all)"
         echo "  skills-codex     Symlink skills into Codex agent directory"
         echo "  skills-claude    Symlink skills into Claude agent directory"
