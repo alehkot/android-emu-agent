@@ -1,7 +1,7 @@
 [project]
 name = "android-emu-agent"
 version = "0.1.6"
-description = "CLI + daemon for LLM-driven Android UI control on emulators and rooted devices"
+description = "CLI + daemon for LLM-driven Android UI control — ships with ready-to-use coding agent skills"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Oleg Kot", email = "kot.oleg@gmail.com" }]
