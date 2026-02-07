@@ -1,6 +1,6 @@
 [project]
 name = "android-emu-agent"
-version = "0.1.8"
+version = "0.1.9"
 description = "CLI + daemon for LLM-driven Android UI control — ships with ready-to-use coding agent skills"
 requires-python = ">=3.11"
 license = "MIT"

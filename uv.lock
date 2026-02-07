@@ -31,7 +31,7 @@ wheels = [
 
 [[package]]
 name = "android-emu-agent"
-version = "0.1.8"
+version = "0.1.9"
 source = { editable = "." }
 dependencies = [
     { name = "adbutils" },
