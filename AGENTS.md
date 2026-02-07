@@ -1,72 +1,119 @@
-# Repository Guidelines
+# Android Emu Agent - AGENTS.md
 
-## Project Structure & Module Organization
+This file is the coding-agent playbook for this repository.
 
-- `src/android_emu_agent/`: core package.
-  - `cli/`: CLI entrypoints and command wiring.
-  - `daemon/`: FastAPI server and daemon lifecycle.
-  - `device/`: device/session management (adb/uiautomator2).
-  - `ui/`: snapshotting and ref resolution.
-  - `actions/`: action execution and waits.
-  - `db/` + `artifacts/`: persistence and artifact handling.
-- `tests/`: pytest suites (`unit/` and `integration/`).
-- `scripts/dev.sh`: common dev workflows (lint, format, test, typecheck).
-- `README.md`, `CLAUDE.md`, `AGENTS.md`: usage and development guidance.
+Use it to make changes that are correct, testable, and aligned with project conventions.
 
-## Build, Test, and Development Commands
+## 1. What This Project Is
 
-- `uv sync`: install runtime deps.
-- `uv sync --all-extras`: install dev deps (ruff, mypy, pyright, pytest).
-- `./scripts/dev.sh setup`: bootstrap dev environment.
-- `./scripts/dev.sh lint`: run ruff linting.
-- `./scripts/dev.sh format`: format with ruff, then apply fixes.
-- `./scripts/dev.sh format-md`: format Markdown.
-- `./scripts/dev.sh lint-md`: lint Markdown.
-- `./scripts/dev.sh md`: format + lint Markdown.
-- `./scripts/dev.sh hooks`: install git hooks.
-- `./scripts/dev.sh typecheck`: run mypy + pyright.
-- `./scripts/dev.sh test-unit`: unit tests only.
-- `./scripts/dev.sh test-integration`: integration tests (requires emulator).
-- `./scripts/dev.sh daemon`: run daemon via Uvicorn on `/tmp/android-emu-agent.sock`.
-- After code edits, run `./scripts/dev.sh check` to execute lint + typecheck + unit tests.
-- Install git hooks with `./scripts/dev.sh hooks` to automatically format/lint Markdown on commit.
+Android Emu Agent is a daemon-first Android automation system:
 
-## Coding Style & Naming Conventions
+- CLI is a thin Typer client.
+- Daemon is FastAPI over Unix socket (`/tmp/android-emu-agent.sock`).
+- Device I/O uses `adbutils` and `uiautomator2`.
+- Workflow is observe -> act -> verify using snapshot refs (`^a1`, `^a2`, ...).
 
-- Python 3.11, type hints required (mypy `strict = true`) and checked with pyright.
-- Formatting and linting via ruff; line length is 100.
-- Prefer `pathlib` (ruff PTH rules are enabled).
-- Naming: `snake_case` for modules/functions/vars, `PascalCase` for classes, tests as `test_*.py`.
+## 2. Current Source Layout
 
-## Testing Guidelines
+- `src/android_emu_agent/cli/`: CLI entrypoint and command groups.
+- `src/android_emu_agent/daemon/`: API models, server routes, daemon lifecycle.
+- `src/android_emu_agent/device/`: device discovery, app/device controls, sessions.
+- `src/android_emu_agent/ui/`: snapshot parsing and ref resolution.
+- `src/android_emu_agent/actions/`: action dispatch, selectors, wait logic.
+- `src/android_emu_agent/files/`: file transfer logic.
+- `src/android_emu_agent/reliability/`: reliability/forensics helpers.
+- `src/android_emu_agent/db/`: async persistence.
+- `src/android_emu_agent/artifacts/`: screenshots/log bundles.
+- `tests/unit/`: fast, isolated tests.
+- `tests/integration/`: emulator/device-dependent tests.
+- `skills/android-emu-agent/`: agent skill docs/templates.
+- `docs/reference.md`: auto-generated CLI reference.
+- `scripts/dev.sh`: canonical dev workflow entrypoint.
 
-- Frameworks: `pytest` + `pytest-asyncio`.
-- Tests live under `tests/`; keep new tests in `tests/unit/` unless device/emulator access is
-  required.
-- Use `@pytest.mark.integration` for emulator/device-dependent tests; run with `-m integration` or
-  skip with `-m "not integration"`.
-- Coverage is configured for `src/android_emu_agent`; keep new code covered where practical.
+## 3. Canonical Commands
 
-## Commit & Pull Request Guidelines
+Setup:
 
-- Commit messages follow a Conventional Commits pattern seen in history: `feat:`, `fix:`, `docs:`
-  with short, imperative summaries.
-- PRs should include: a clear description, test commands run (and results), and any emulator/device
-  requirements or setup steps.
-- If behavior changes UI snapshot formats or device actions, include a brief before/after example or
-  sample output in the PR body.
+- `uv sync`
+- `uv sync --all-extras`
 
-## Environment & Configuration Tips
+Run/check:
 
-- Requires Android SDK + `adb` and an emulator or rooted device.
-- Verify connectivity with `uv run android-emu-agent device list` before running integration tests.
-- Prefer `uv run android-emu-agent ...` for CLI usage to ensure the correct environment.
+- `uv run android-emu-agent --help`
+- `./scripts/dev.sh check` (required after code edits)
+- `./scripts/dev.sh test-unit`
+- `./scripts/dev.sh test-integration` (when emulator/device is needed)
 
-## Local Agent Skills
+Docs/skills:
 
-- `skills/android-emu-agent/SKILL.md`: Android UI automation skill for emulators or rooted devices
-  using an observe-act-verify loop. Use for Android automation/testing requests; ensure the daemon
-  is running, a device is connected, and a session exists before acting.
-- When updating or adding CLI commands, update the corresponding docs in `skills/android-emu-agent/`
-  (especially `references/command-reference.md`) so coding agents stay in sync.
-- When asked about coding agent skills updates, check `skills/android-emu-agent/` first.
+- `./scripts/dev.sh docs-gen` (regenerate `docs/reference.md`)
+- `./scripts/dev.sh md` (format + lint Markdown)
+- `./scripts/dev.sh skills codex|claude|all`
+
+## 4. Coding Standards
+
+- Python 3.11+, strict typing (`mypy` strict + `pyright`).
+- Ruff for lint/format; max line length 100.
+- Prefer `pathlib` over `os.path`.
+- Use `snake_case` for functions/vars/modules, `PascalCase` for classes.
+- Keep daemon methods async; CLI command functions remain sync wrappers.
+- Return actionable errors via `AgentError` (with remediation).
+
+## 5. CLI/API Change Contract (Important)
+
+When adding or changing a CLI capability, update all relevant layers:
+
+1. CLI command handler in `src/android_emu_agent/cli/commands/`.
+2. Daemon request model in `src/android_emu_agent/daemon/models.py`.
+3. Daemon endpoint in `src/android_emu_agent/daemon/server.py`.
+4. Device/files/reliability manager implementation in the appropriate subsystem.
+5. Unit tests for payload wiring and subsystem behavior.
+6. Docs:
+   - `./scripts/dev.sh docs-gen` for `docs/reference.md`.
+   - Update skill docs in `skills/android-emu-agent/references/` (especially
+     `command-reference.md`).
+   - Update README examples if user-facing behavior changed.
+
+Do not ship CLI/API changes that skip docs sync.
+
+## 6. Testing Expectations
+
+- Put most tests in `tests/unit/`.
+- Use `@pytest.mark.integration` only for true emulator/device flows.
+- For new CLI commands, add command payload tests (mock `DaemonClient`).
+- For new manager logic, add behavior tests (mock adb/u2/device shell calls).
+- Run `./scripts/dev.sh check` before finalizing.
+
+## 7. Output and Error Conventions
+
+- Keep CLI human output concise.
+- Keep `--json` stable and machine-friendly.
+- Prefer existing response helpers in `cli/utils.py`.
+- When adding failures, include:
+  - specific error code,
+  - clear message,
+  - remediation hint.
+
+## 8. Device Reality and Safety
+
+- Primary target is emulator or rooted device.
+- Some commands are safe on non-root devices; root-only operations must enforce checks.
+- Emulator-only operations must return `ERR_NOT_EMULATOR` behavior consistently.
+- Validate package names/URIs through shared validators when applicable.
+
+## 9. Commits and PRs
+
+- Conventional commit style: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
+- PR should include:
+  - what changed and why,
+  - commands run and results,
+  - emulator/root requirements if relevant,
+  - before/after command examples when behavior changes.
+
+## 10. Agent Skill Synchronization
+
+- The local skill lives at `skills/android-emu-agent/SKILL.md`.
+- If command surface changes, update:
+  - `skills/android-emu-agent/references/command-reference.md`,
+  - any affected examples/troubleshooting docs.
+- If asked about skills work, inspect `skills/android-emu-agent/` first.

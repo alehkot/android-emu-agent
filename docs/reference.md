@@ -800,11 +800,37 @@ android-emu-agent app [OPTIONS] COMMAND [ARGS]...
 
 **Commands**:
 
+- `install`: Install an APK on the target device.
 - `reset`: Clear app data for a package.
 - `launch`: Launch an app.
 - `force-stop`: Force stop an app.
 - `deeplink`: Open a deeplink URI.
+- `intent`: Launch an explicit or implicit intent.
 - `list`: List installed packages.
+
+### `android-emu-agent app install`
+
+Install an APK on the target device.
+
+**Usage**:
+
+```console
+android-emu-agent app install [OPTIONS] APK_PATH
+```
+
+**Arguments**:
+
+- `APK_PATH`: Local APK path [required]
+
+**Options**:
+
+- `-d, --device TEXT`: Device serial
+- `-s, --session TEXT`: Session ID
+- `--replace / --no-replace`: Replace existing app [default: replace]
+- `--grant-permissions`: Grant all runtime permissions
+- `--allow-downgrade`: Allow version-code downgrade
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
 
 ### `android-emu-agent app reset`
 
@@ -844,6 +870,7 @@ android-emu-agent app launch [OPTIONS] SESSION_ID PACKAGE
 **Options**:
 
 - `-a, --activity TEXT`: Activity name
+- `--wait-debugger`: Start with -D and wait for debugger
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 
@@ -884,6 +911,31 @@ android-emu-agent app deeplink [OPTIONS] SESSION_ID URI
 
 **Options**:
 
+- `--wait-debugger`: Start with -D and wait for debugger
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent app intent`
+
+Launch an explicit or implicit intent.
+
+**Usage**:
+
+```console
+android-emu-agent app intent [OPTIONS] SESSION_ID
+```
+
+**Arguments**:
+
+- `SESSION_ID`: Session ID [required]
+
+**Options**:
+
+- `-a, --action TEXT`: Intent action
+- `--data TEXT`: Intent data URI
+- `-n, --component TEXT`: Explicit component (package/.Activity)
+- `-p, --package TEXT`: Target package
+- `--wait-debugger`: Start with -D and wait for debugger
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 
