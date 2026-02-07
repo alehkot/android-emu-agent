@@ -134,6 +134,20 @@ class AppIntentRequest(BaseModel):
         return self
 
 
+class AppResolveIntentRequest(BaseModel):
+    session_id: str
+    action: str | None = None
+    data_uri: str | None = None
+    component: str | None = None
+    package: str | None = None
+
+    @model_validator(mode="after")
+    def validate_intent_target(self) -> AppResolveIntentRequest:
+        if not any((self.action, self.data_uri, self.component, self.package)):
+            raise ValueError("Provide at least one of action, data_uri, component, or package")
+        return self
+
+
 class EmulatorSnapshotRequest(BaseModel):
     serial: str
     name: str
@@ -141,7 +155,10 @@ class EmulatorSnapshotRequest(BaseModel):
 
 class ArtifactLogsRequest(BaseModel):
     session_id: str
+    package: str | None = None
+    level: str | None = None
     since: str | None = None
+    follow: bool = False
 
 
 class SwipeRequest(BaseModel):

@@ -167,3 +167,103 @@ def test_app_intent_builds_payload() -> None:
         "package": "com.example.app",
         "wait_debugger": True,
     }
+
+
+def test_app_current_builds_payload_with_session_option() -> None:
+    """Should send current-app payload to the daemon."""
+    from android_emu_agent.cli.commands import app_cmd
+
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+            calls.append((method, path, json_body))
+            return DummyResponse({"status": "done", "output": "ok"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(app_cmd, "DaemonClient", DummyClient):
+        app_cmd.app_current(
+            session_id=None,
+            session="s-abc123",
+            json_output=False,
+        )
+
+    method, path, payload = calls[0]
+    assert method == "POST"
+    assert path == "/app/current"
+    assert payload == {"session_id": "s-abc123"}
+
+
+def test_app_task_stack_builds_payload_with_session_option() -> None:
+    """Should send task-stack payload to the daemon."""
+    from android_emu_agent.cli.commands import app_cmd
+
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+            calls.append((method, path, json_body))
+            return DummyResponse({"status": "done", "output": "ok"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(app_cmd, "DaemonClient", DummyClient):
+        app_cmd.app_task_stack(
+            session_id=None,
+            session="s-abc123",
+            json_output=False,
+        )
+
+    method, path, payload = calls[0]
+    assert method == "POST"
+    assert path == "/app/task_stack"
+    assert payload == {"session_id": "s-abc123"}
+
+
+def test_app_resolve_intent_builds_payload() -> None:
+    """Should send resolve-intent payload to the daemon."""
+    from android_emu_agent.cli.commands import app_cmd
+
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+            calls.append((method, path, json_body))
+            return DummyResponse({"status": "done", "output": "ok"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(app_cmd, "DaemonClient", DummyClient):
+        app_cmd.app_resolve_intent(
+            session_id=None,
+            session="s-abc123",
+            action="android.intent.action.VIEW",
+            data_uri="https://example.com/item",
+            component=None,
+            package="com.example.app",
+            json_output=False,
+        )
+
+    method, path, payload = calls[0]
+    assert method == "POST"
+    assert path == "/app/resolve_intent"
+    assert payload == {
+        "session_id": "s-abc123",
+        "action": "android.intent.action.VIEW",
+        "data_uri": "https://example.com/item",
+        "component": None,
+        "package": "com.example.app",
+    }

@@ -10,6 +10,7 @@ from android_emu_agent.cli.utils import (
     handle_output_response,
     handle_response,
     require_target,
+    resolve_session_id,
 )
 
 app = typer.Typer(help="App management commands")
@@ -173,5 +174,84 @@ def app_list(
     payload.update({"scope": scope})
     client = DaemonClient()
     resp = client.request("POST", "/app/list", json_body=payload)
+    client.close()
+    handle_output_response(resp, json_output=json_output)
+
+
+@app.command("current")
+def app_current(
+    session_id: str | None = typer.Argument(None, help="Session ID"),
+    session: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Show current foreground app/activity."""
+    try:
+        resolved_session = resolve_session_id(session_id, session)
+        if not resolved_session:
+            raise typer.BadParameter("Provide session ID as argument or --session")
+    except typer.BadParameter as exc:
+        typer.echo(f"Error: {exc}")
+        raise typer.Exit(code=1) from None
+
+    client = DaemonClient()
+    resp = client.request("POST", "/app/current", json_body={"session_id": resolved_session})
+    client.close()
+    handle_output_response(resp, json_output=json_output)
+
+
+@app.command("task-stack")
+def app_task_stack(
+    session_id: str | None = typer.Argument(None, help="Session ID"),
+    session: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Show current task stack."""
+    try:
+        resolved_session = resolve_session_id(session_id, session)
+        if not resolved_session:
+            raise typer.BadParameter("Provide session ID as argument or --session")
+    except typer.BadParameter as exc:
+        typer.echo(f"Error: {exc}")
+        raise typer.Exit(code=1) from None
+
+    client = DaemonClient()
+    resp = client.request("POST", "/app/task_stack", json_body={"session_id": resolved_session})
+    client.close()
+    handle_output_response(resp, json_output=json_output)
+
+
+@app.command("resolve-intent")
+def app_resolve_intent(
+    session_id: str | None = typer.Argument(None, help="Session ID"),
+    session: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
+    action: str | None = typer.Option(None, "--action", "-a", help="Intent action"),
+    data_uri: str | None = typer.Option(None, "--data", help="Intent data URI"),
+    component: str | None = typer.Option(
+        None, "--component", "-n", help="Explicit component (package/.Activity)"
+    ),
+    package: str | None = typer.Option(None, "--package", "-p", help="Target package"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Resolve an intent target without launching it."""
+    try:
+        resolved_session = resolve_session_id(session_id, session)
+        if not resolved_session:
+            raise typer.BadParameter("Provide session ID as argument or --session")
+    except typer.BadParameter as exc:
+        typer.echo(f"Error: {exc}")
+        raise typer.Exit(code=1) from None
+
+    client = DaemonClient()
+    resp = client.request(
+        "POST",
+        "/app/resolve_intent",
+        json_body={
+            "session_id": resolved_session,
+            "action": action,
+            "data_uri": data_uri,
+            "component": component,
+            "package": package,
+        },
+    )
     client.close()
     handle_output_response(resp, json_output=json_output)

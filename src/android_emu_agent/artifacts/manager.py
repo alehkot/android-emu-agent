@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import shlex
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -50,7 +51,10 @@ class ArtifactManager:
         self,
         device: u2.Device,
         session_id: str,
+        package: str | None = None,
+        level: str | None = None,
         since: str | None = None,
+        follow: bool = False,
         filename: str | None = None,
     ) -> Path:
         """Pull logcat logs from device."""
@@ -61,18 +65,80 @@ class ArtifactManager:
         output_path = self.output_dir / filename
 
         def _pull() -> str:
-            cmd = "logcat -d"
+            cmd_parts = ["logcat"]
+            if not follow:
+                cmd_parts.append("-d")
             if since:
-                cmd += f" -t '{since}'"
+                cmd_parts.extend(["-t", since])
+
+            normalized_level = self._normalize_log_level(level)
+            if normalized_level:
+                cmd_parts.append(f"*:{normalized_level}")
+
+            package_pid: str | None = None
+            pid_filter_used = False
+            if package:
+                pid_result = device.shell(f"pidof {shlex.quote(package)}")
+                pid_output = getattr(pid_result, "output", None)
+                pid_raw = pid_output if isinstance(pid_output, str) else str(pid_result)
+                first_pid = pid_raw.strip().split(" ")[0] if pid_raw.strip() else ""
+                if first_pid.isdigit():
+                    package_pid = first_pid
+                    pid_filter_used = True
+                    cmd_parts.append(f"--pid={package_pid}")
+
+            cmd = " ".join(shlex.quote(part) for part in cmd_parts)
             result = device.shell(cmd)
             output = getattr(result, "output", None)
-            return output if isinstance(output, str) else str(result)
+            raw_output = output if isinstance(output, str) else str(result)
+
+            # Some devices don't support --pid; retry without it.
+            if package_pid and "unknown option --pid" in raw_output.lower():
+                fallback_parts = [part for part in cmd_parts if not part.startswith("--pid=")]
+                fallback_cmd = " ".join(shlex.quote(part) for part in fallback_parts)
+                fallback_result = device.shell(fallback_cmd)
+                fallback_output = getattr(fallback_result, "output", None)
+                raw_output = (
+                    fallback_output if isinstance(fallback_output, str) else str(fallback_result)
+                )
+                pid_filter_used = False
+
+            if package and not pid_filter_used:
+                filtered = [line for line in raw_output.splitlines() if package in line]
+                return "\n".join(filtered)
+
+            return raw_output
 
         logs = await asyncio.to_thread(_pull)
         output_path.write_text(logs)
 
         logger.info("logs_pulled", path=str(output_path), size=len(logs))
         return output_path
+
+    @staticmethod
+    def _normalize_log_level(level: str | None) -> str | None:
+        if not level:
+            return None
+
+        value = level.strip().lower()
+        level_map = {
+            "v": "V",
+            "verbose": "V",
+            "d": "D",
+            "debug": "D",
+            "i": "I",
+            "info": "I",
+            "w": "W",
+            "warn": "W",
+            "warning": "W",
+            "e": "E",
+            "error": "E",
+            "f": "F",
+            "fatal": "F",
+            "s": "S",
+            "silent": "S",
+        }
+        return level_map.get(value)
 
     async def save_snapshot(
         self,

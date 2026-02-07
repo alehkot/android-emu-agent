@@ -54,16 +54,36 @@ def artifact_screenshot(
 
 @app.command("logs")
 def artifact_logs(
-    session_id: str = typer.Argument(..., help="Session ID"),
+    session_id: str | None = typer.Argument(None, help="Session ID"),
+    session: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
+    package: str | None = typer.Option(None, "--package", "-p", help="Filter by package"),
+    level: str | None = typer.Option(
+        None, "--level", help="Log level (v|d|i|w|e|f|s or verbose/debug/...)"
+    ),
     since: str | None = typer.Option(None, "--since", help="Logcat since timestamp"),
+    follow: bool = typer.Option(False, "--follow", help="Follow logs (live stream)"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Pull logcat logs."""
-    client = DaemonClient()
+    try:
+        resolved_session = resolve_session_id(session_id, session)
+        if not resolved_session:
+            raise typer.BadParameter("Provide session ID as argument or --session")
+    except typer.BadParameter as exc:
+        typer.echo(f"Error: {exc}")
+        raise typer.Exit(code=1) from None
+
+    client = DaemonClient(timeout=3600.0 if follow else 10.0)
     resp = client.request(
         "POST",
         "/artifacts/logs",
-        json_body={"session_id": session_id, "since": since},
+        json_body={
+            "session_id": resolved_session,
+            "package": package,
+            "level": level,
+            "since": since,
+            "follow": follow,
+        },
     )
     client.close()
     handle_response(resp, json_output=json_output)

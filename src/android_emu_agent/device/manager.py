@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import re
 import shlex
 import shutil
 import subprocess
@@ -51,6 +52,14 @@ class DeviceInfo:
     sdk_version: int
     is_rooted: bool
     is_emulator: bool
+
+
+@dataclass(frozen=True)
+class IntentResolution:
+    """Intent resolution output."""
+
+    output: str
+    component: str | None
 
 
 class DeviceManager:
@@ -411,6 +420,84 @@ class DeviceManager:
             device.shell(command)
 
         await asyncio.to_thread(_start)
+
+    async def app_current(self, serial: str) -> dict[str, str | None]:
+        """Get the current foreground app/activity."""
+        device = await self.get_adb_device(serial)
+        if not device:
+            raise RuntimeError(f"Device not found: {serial}")
+
+        def _current() -> dict[str, str | None]:
+            resumed = str(device.shell("dumpsys activity activities | grep -m 1 mResumedActivity"))
+            focused = str(device.shell("dumpsys activity activities | grep -m 1 mFocusedApp"))
+            raw = resumed.strip() or focused.strip()
+
+            component_match = re.search(r"([A-Za-z0-9._$]+/[A-Za-z0-9._$/$]+)", raw)
+            package: str | None = None
+            activity: str | None = None
+            component: str | None = None
+            if component_match:
+                component_value = component_match.group(1)
+                component = component_value
+                package, activity = component_value.split("/", maxsplit=1)
+
+            return {
+                "package": package,
+                "activity": activity,
+                "component": component,
+                "line": raw or None,
+            }
+
+        return await asyncio.to_thread(_current)
+
+    async def app_task_stack(self, serial: str) -> str:
+        """Return current task stack dump."""
+        device = await self.get_adb_device(serial)
+        if not device:
+            raise RuntimeError(f"Device not found: {serial}")
+
+        def _stack() -> str:
+            return str(device.shell("cmd activity tasks"))
+
+        return await asyncio.to_thread(_stack)
+
+    async def app_resolve_intent(
+        self,
+        serial: str,
+        *,
+        action: str | None = None,
+        data_uri: str | None = None,
+        component: str | None = None,
+        package: str | None = None,
+    ) -> IntentResolution:
+        """Resolve an intent without launching it."""
+        device = await self.get_adb_device(serial)
+        if not device:
+            raise RuntimeError(f"Device not found: {serial}")
+
+        def _resolve() -> IntentResolution:
+            command_parts = ["cmd", "package", "resolve-activity", "--brief"]
+            if action:
+                command_parts.extend(["-a", action])
+            if data_uri:
+                command_parts.extend(["-d", data_uri])
+            if component:
+                command_parts.extend(["-n", component])
+            if package:
+                command_parts.append(package)
+
+            command = " ".join(shlex.quote(part) for part in command_parts)
+            output = str(device.shell(command)).strip()
+            lines = [line.strip() for line in output.splitlines() if line.strip()]
+            resolved_component: str | None = None
+            if lines:
+                candidate = lines[-1]
+                if "/" in candidate and "No activity found" not in candidate:
+                    resolved_component = candidate
+
+            return IntentResolution(output=output, component=resolved_component)
+
+        return await asyncio.to_thread(_resolve)
 
     async def list_packages(self, serial: str, scope: str = "all") -> list[str]:
         """List installed packages.

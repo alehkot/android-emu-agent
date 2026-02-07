@@ -52,6 +52,14 @@ uv run android-emu-agent reliability dropbox print data_app_crash --device emula
 uv run android-emu-agent reliability background com.example.app --device emulator-5554
 ```
 
+### Process + Resource Snapshot
+
+```bash
+uv run android-emu-agent reliability process com.example.app --device emulator-5554
+uv run android-emu-agent reliability meminfo com.example.app --device emulator-5554
+uv run android-emu-agent reliability gfxinfo com.example.app --device emulator-5554
+```
+
 ## Rooted Devices / Emulators
 
 ### Pull Protected Artifacts (Root Required)

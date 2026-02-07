@@ -78,6 +78,10 @@ Advanced (when needed):
 - `app install <apk_path> --device <serial>` Install APK on target device.
 - `app launch <session_id> <package>` Launch an app.
 - `app intent <session_id> [--action <action>] [--data <uri>]` Launch an intent.
+- `app current --session <session_id>` Show current foreground app/activity.
+- `app task-stack --session <session_id>` Show activity task stack.
+- `app resolve-intent --session <session_id> [--action <action>] [--data <uri>]` Resolve an intent
+  without launching it.
 - `app force-stop <session_id> <package>` Force stop app.
 - `app reset <session_id> <package>` Clear app data.
 - `app deeplink <session_id> <uri>` Open a deep link.
@@ -96,6 +100,8 @@ Advanced (when needed):
 - `artifact screenshot [<session_id>] [--device <serial> | --session <session_id>]`
   `[--pull] [--output <path>]` Save screenshot (optionally copy to local path).
 - `artifact logs <session_id>` Capture logcat.
+- `artifact logs --session <session_id> --package <pkg> --level <lvl> [--since <t>] [--follow]`
+  Capture filtered logcat.
 - `artifact bundle <session_id>` Save debug bundle.
 
 When `--pull` is set, screenshots are copied to `--output` or the current working directory.
@@ -119,6 +125,9 @@ Advanced (when needed):
 - `reliability background <package> --device <serial>` Background restrictions.
 - `reliability last-anr --device <serial>` Last ANR summary.
 - `reliability jobscheduler <package> --device <serial>` JobScheduler constraints.
+- `reliability process <package> --device <serial>` Process snapshot (pid/oom/proc state).
+- `reliability meminfo <package> --device <serial>` Memory diagnostics (`dumpsys meminfo`).
+- `reliability gfxinfo <package> --device <serial>` Rendering diagnostics (`dumpsys gfxinfo`).
 - `reliability compile <package> --mode reset|speed --device <serial>` Compile/reset package.
 - `reliability always-finish <on_or_off> --device <serial>` Always-finish activities.
 - `reliability run-as-ls <package> --device <serial>` List app-private files (run-as).

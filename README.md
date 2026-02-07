@@ -231,6 +231,18 @@ Visual debug
 ```bash
 uv run android-emu-agent ui screenshot --device emulator-5554 --pull --output ./screen.png
 uv run android-emu-agent artifact bundle s-abc123
+uv run android-emu-agent artifact logs --session s-abc123 --package com.example.app --level error --since "10m"
+```
+
+App debug helpers
+
+```bash
+uv run android-emu-agent app current --session s-abc123
+uv run android-emu-agent app task-stack --session s-abc123
+uv run android-emu-agent app resolve-intent --session s-abc123 --action android.intent.action.VIEW --data "https://example.com/deep"
+uv run android-emu-agent reliability process com.example.app --device emulator-5554
+uv run android-emu-agent reliability meminfo com.example.app --device emulator-5554
+uv run android-emu-agent reliability gfxinfo com.example.app --device emulator-5554
 ```
 
 Emulator snapshots
@@ -309,6 +321,7 @@ For deeper guidance, see `skills/android-emu-agent/references/troubleshooting.md
 ## CLI Reference
 
 Full auto-generated CLI reference is available at [`docs/reference.md`](docs/reference.md).
+Daemon/API endpoint reference is available at [`docs/api.md`](docs/api.md).
 
 To regenerate or browse the docs locally:
 

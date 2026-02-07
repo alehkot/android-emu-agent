@@ -542,3 +542,93 @@ class TestEvictDevice:
         manager = DeviceManager()
         # Should not raise
         await manager.evict_device("nonexistent-device")
+
+
+class TestAppCurrent:
+    """Tests for app_current."""
+
+    @pytest.mark.asyncio
+    async def test_app_current_parses_component(self) -> None:
+        """Should parse foreground package/activity from dumpsys line."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        mock_device = MagicMock()
+        mock_device.shell.side_effect = [
+            "mResumedActivity: ActivityRecord{123 u0 com.example.app/.MainActivity t77}",
+            "",
+        ]
+
+        with patch.object(manager, "get_adb_device", return_value=mock_device):
+            result = await manager.app_current("emulator-5554")
+
+        assert result["package"] == "com.example.app"
+        assert result["activity"] == ".MainActivity"
+        assert result["component"] == "com.example.app/.MainActivity"
+
+
+class TestAppTaskStack:
+    """Tests for app_task_stack."""
+
+    @pytest.mark.asyncio
+    async def test_app_task_stack_runs_cmd_activity_tasks(self) -> None:
+        """Should query task stack using cmd activity tasks."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        mock_device = MagicMock()
+        mock_device.shell.return_value = "TASK 77: com.example.app/.MainActivity"
+
+        with patch.object(manager, "get_adb_device", return_value=mock_device):
+            output = await manager.app_task_stack("emulator-5554")
+
+        assert "TASK 77" in output
+        call_arg = mock_device.shell.call_args[0][0]
+        assert call_arg == "cmd activity tasks"
+
+
+class TestAppResolveIntent:
+    """Tests for app_resolve_intent."""
+
+    @pytest.mark.asyncio
+    async def test_app_resolve_intent_parses_component(self) -> None:
+        """Should parse resolved component from resolve-activity output."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        mock_device = MagicMock()
+        mock_device.shell.return_value = (
+            "priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true\n"
+            "com.example.app/.DeepLinkActivity"
+        )
+
+        with patch.object(manager, "get_adb_device", return_value=mock_device):
+            result = await manager.app_resolve_intent(
+                "emulator-5554",
+                action="android.intent.action.VIEW",
+                data_uri="https://example.com/item",
+                package="com.example.app",
+            )
+
+        assert result.component == "com.example.app/.DeepLinkActivity"
+        call_arg = mock_device.shell.call_args[0][0]
+        assert "cmd package resolve-activity --brief" in call_arg
+        assert "android.intent.action.VIEW" in call_arg
+        assert "https://example.com/item" in call_arg
+
+    @pytest.mark.asyncio
+    async def test_app_resolve_intent_handles_not_found(self) -> None:
+        """Should keep resolved component empty when nothing matches."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        mock_device = MagicMock()
+        mock_device.shell.return_value = "No activity found"
+
+        with patch.object(manager, "get_adb_device", return_value=mock_device):
+            result = await manager.app_resolve_intent(
+                "emulator-5554",
+                action="android.intent.action.VIEW",
+            )
+
+        assert result.component is None

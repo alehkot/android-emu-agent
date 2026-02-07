@@ -30,6 +30,7 @@ from android_emu_agent.daemon.models import (
     AppLaunchRequest,
     AppListRequest,
     AppResetRequest,
+    AppResolveIntentRequest,
     ArtifactLogsRequest,
     DeviceSettingRequest,
     DeviceTargetRequest,
@@ -796,11 +797,51 @@ async def pull_logs(req: ArtifactLogsRequest) -> EndpointResponse:
     if not session:
         return _error_response(session_expired_error(req.session_id), status_code=404)
 
+    if req.package:
+        try:
+            validate_package(req.package)
+        except AgentError as exc:
+            return _error_response(exc, status_code=400)
+
+    if req.level and req.level.strip().lower() not in {
+        "v",
+        "verbose",
+        "d",
+        "debug",
+        "i",
+        "info",
+        "w",
+        "warn",
+        "warning",
+        "e",
+        "error",
+        "f",
+        "fatal",
+        "s",
+        "silent",
+    }:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_LOG_LEVEL",
+                message=f"Invalid log level: {req.level}",
+                context={"level": req.level},
+                remediation="Use one of: v,d,i,w,e,f,s or verbose/debug/info/warn/error/fatal/silent",
+            ),
+            status_code=400,
+        )
+
     device = await core.device_manager.get_u2_device(session.device_serial)
     if not device:
         return _error_response(device_offline_error(session.device_serial), status_code=404)
 
-    path = await core.artifact_manager.pull_logs(device, req.session_id, since=req.since)
+    path = await core.artifact_manager.pull_logs(
+        device,
+        req.session_id,
+        package=req.package,
+        level=req.level,
+        since=req.since,
+        follow=req.follow,
+    )
     return {"status": "done", "path": str(path)}
 
 
@@ -1003,6 +1044,84 @@ async def reliability_jobscheduler(req: ReliabilityPackageRequest) -> EndpointRe
         "package": req.package,
         "output": output,
     }
+
+
+@app.post("/reliability/process", response_model=None)
+async def reliability_process(req: ReliabilityPackageRequest) -> EndpointResponse:
+    core: DaemonCore = app.state.core
+    try:
+        validate_package(req.package)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    resolved = await _resolve_device_target(core, req.session_id, req.serial)
+    if isinstance(resolved, JSONResponse):
+        return resolved
+    serial, device, _info = resolved
+
+    try:
+        data = await core.reliability_manager.process_info(device, req.package)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    output = (
+        f"PID: {data['pid']}\n"
+        f"OOM_SCORE_ADJ: {data['oom_score_adj']}\n\n"
+        f"PS:\n{data['ps']}\n\n"
+        f"PROCESS_STATE:\n{data['process_state']}"
+    )
+    return {
+        "status": "done",
+        "serial": serial,
+        "package": req.package,
+        "pid": data["pid"],
+        "oom_score_adj": data["oom_score_adj"],
+        "ps": data["ps"],
+        "process_state": data["process_state"],
+        "output": output,
+    }
+
+
+@app.post("/reliability/meminfo", response_model=None)
+async def reliability_meminfo(req: ReliabilityPackageRequest) -> EndpointResponse:
+    core: DaemonCore = app.state.core
+    try:
+        validate_package(req.package)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    resolved = await _resolve_device_target(core, req.session_id, req.serial)
+    if isinstance(resolved, JSONResponse):
+        return resolved
+    serial, device, _info = resolved
+
+    try:
+        output = await core.reliability_manager.meminfo(device, req.package)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", "serial": serial, "package": req.package, "output": output}
+
+
+@app.post("/reliability/gfxinfo", response_model=None)
+async def reliability_gfxinfo(req: ReliabilityPackageRequest) -> EndpointResponse:
+    core: DaemonCore = app.state.core
+    try:
+        validate_package(req.package)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    resolved = await _resolve_device_target(core, req.session_id, req.serial)
+    if isinstance(resolved, JSONResponse):
+        return resolved
+    serial, device, _info = resolved
+
+    try:
+        output = await core.reliability_manager.gfxinfo(device, req.package)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", "serial": serial, "package": req.package, "output": output}
 
 
 @app.post("/reliability/compile", response_model=None)
@@ -1433,6 +1552,87 @@ async def files_list(req: FileListRequest) -> EndpointResponse:
         "count": len(matches),
         "results": matches,
         "output": _format_file_matches(matches),
+    }
+
+
+@app.post("/app/current", response_model=None)
+async def app_current(req: SessionRequest) -> EndpointResponse:
+    """Get current foreground app/activity."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    try:
+        data = await core.device_manager.app_current(session.device_serial)
+    except Exception:
+        return _error_response(device_offline_error(session.device_serial), status_code=404)
+
+    output = data.get("line") or "No foreground activity found."
+    return {
+        "status": "done",
+        "session_id": req.session_id,
+        "package": data.get("package"),
+        "activity": data.get("activity"),
+        "component": data.get("component"),
+        "line": data.get("line"),
+        "output": output,
+    }
+
+
+@app.post("/app/task_stack", response_model=None)
+async def app_task_stack(req: SessionRequest) -> EndpointResponse:
+    """Get activity task stack."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    try:
+        output = await core.device_manager.app_task_stack(session.device_serial)
+    except Exception:
+        return _error_response(device_offline_error(session.device_serial), status_code=404)
+
+    return {"status": "done", "session_id": req.session_id, "output": output}
+
+
+@app.post("/app/resolve_intent", response_model=None)
+async def app_resolve_intent(req: AppResolveIntentRequest) -> EndpointResponse:
+    """Resolve an intent target without launching it."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    if req.data_uri:
+        try:
+            validate_uri(req.data_uri)
+        except AgentError as e:
+            return _error_response(e, status_code=400)
+
+    try:
+        result = await core.device_manager.app_resolve_intent(
+            session.device_serial,
+            action=req.action,
+            data_uri=req.data_uri,
+            component=req.component,
+            package=req.package,
+        )
+    except AgentError as e:
+        return _error_response(e, status_code=400)
+    except Exception:
+        return _error_response(device_offline_error(session.device_serial), status_code=404)
+
+    return {
+        "status": "done",
+        "session_id": req.session_id,
+        "action": req.action,
+        "data_uri": req.data_uri,
+        "component": req.component,
+        "package": req.package,
+        "resolved_component": result.component,
+        "resolved": result.component is not None,
+        "output": result.output,
     }
 
 

@@ -151,6 +151,54 @@ def reliability_jobscheduler(
     handle_output_response(resp, json_output=json_output)
 
 
+@app.command("process")
+def reliability_process(
+    package: str = typer.Argument(..., help="Package name"),
+    device: str | None = typer.Option(None, "--device", "-d", help="Device serial"),
+    session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Inspect process state for a package."""
+    payload = require_target(device, session_id)
+    payload.update({"package": package})
+    client = DaemonClient(timeout=RELIABILITY_TIMEOUT)
+    resp = client.request("POST", "/reliability/process", json_body=payload)
+    client.close()
+    handle_output_response(resp, json_output=json_output)
+
+
+@app.command("meminfo")
+def reliability_meminfo(
+    package: str = typer.Argument(..., help="Package name"),
+    device: str | None = typer.Option(None, "--device", "-d", help="Device serial"),
+    session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Dump memory info for a package."""
+    payload = require_target(device, session_id)
+    payload.update({"package": package})
+    client = DaemonClient(timeout=RELIABILITY_TIMEOUT)
+    resp = client.request("POST", "/reliability/meminfo", json_body=payload)
+    client.close()
+    handle_output_response(resp, json_output=json_output)
+
+
+@app.command("gfxinfo")
+def reliability_gfxinfo(
+    package: str = typer.Argument(..., help="Package name"),
+    device: str | None = typer.Option(None, "--device", "-d", help="Device serial"),
+    session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Dump graphics/frame timing info for a package."""
+    payload = require_target(device, session_id)
+    payload.update({"package": package})
+    client = DaemonClient(timeout=RELIABILITY_TIMEOUT)
+    resp = client.request("POST", "/reliability/gfxinfo", json_body=payload)
+    client.close()
+    handle_output_response(resp, json_output=json_output)
+
+
 @app.command("compile")
 def reliability_compile(
     package: str = typer.Argument(..., help="Package name"),

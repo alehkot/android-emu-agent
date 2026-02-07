@@ -807,6 +807,9 @@ android-emu-agent app [OPTIONS] COMMAND [ARGS]...
 - `deeplink`: Open a deeplink URI.
 - `intent`: Launch an explicit or implicit intent.
 - `list`: List installed packages.
+- `current`: Show current foreground app/activity.
+- `task-stack`: Show current task stack.
+- `resolve-intent`: Resolve an intent target without launching...
 
 ### `android-emu-agent app install`
 
@@ -957,6 +960,70 @@ android-emu-agent app list [OPTIONS]
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 
+### `android-emu-agent app current`
+
+Show current foreground app/activity.
+
+**Usage**:
+
+```console
+android-emu-agent app current [OPTIONS] [SESSION_ID]
+```
+
+**Arguments**:
+
+- `[SESSION_ID]`: Session ID
+
+**Options**:
+
+- `-s, --session TEXT`: Session ID
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent app task-stack`
+
+Show current task stack.
+
+**Usage**:
+
+```console
+android-emu-agent app task-stack [OPTIONS] [SESSION_ID]
+```
+
+**Arguments**:
+
+- `[SESSION_ID]`: Session ID
+
+**Options**:
+
+- `-s, --session TEXT`: Session ID
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent app resolve-intent`
+
+Resolve an intent target without launching it.
+
+**Usage**:
+
+```console
+android-emu-agent app resolve-intent [OPTIONS] [SESSION_ID]
+```
+
+**Arguments**:
+
+- `[SESSION_ID]`: Session ID
+
+**Options**:
+
+- `-s, --session TEXT`: Session ID
+- `-a, --action TEXT`: Intent action
+- `--data TEXT`: Intent data URI
+- `-n, --component TEXT`: Explicit component (package/.Activity)
+- `-p, --package TEXT`: Target package
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
 ## `android-emu-agent artifact`
 
 Artifact and debugging commands
@@ -1027,16 +1094,20 @@ Pull logcat logs.
 **Usage**:
 
 ```console
-android-emu-agent artifact logs [OPTIONS] SESSION_ID
+android-emu-agent artifact logs [OPTIONS] [SESSION_ID]
 ```
 
 **Arguments**:
 
-- `SESSION_ID`: Session ID [required]
+- `[SESSION_ID]`: Session ID
 
 **Options**:
 
+- `-s, --session TEXT`: Session ID
+- `-p, --package TEXT`: Filter by package
+- `--level TEXT`: Log level (v|d|i|w|e|f|s or verbose/debug/...)
 - `--since TEXT`: Logcat since timestamp
+- `--follow`: Follow logs (live stream)
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 
@@ -1158,6 +1229,9 @@ android-emu-agent reliability [OPTIONS] COMMAND [ARGS]...
 - `background`: Check background restrictions and standby...
 - `last-anr`: Show the last ANR summary from...
 - `jobscheduler`: Inspect JobScheduler constraints for a...
+- `process`: Inspect process state for a package.
+- `meminfo`: Dump memory info for a package.
+- `gfxinfo`: Dump graphics/frame timing info for a...
 - `compile`: Reset or force package compilation.
 - `always-finish`: Toggle always-finish-activities developer...
 - `run-as-ls`: List app-private files for debuggable apps...
@@ -1274,6 +1348,69 @@ Inspect JobScheduler constraints for a package.
 
 ```console
 android-emu-agent reliability jobscheduler [OPTIONS] PACKAGE
+```
+
+**Arguments**:
+
+- `PACKAGE`: Package name [required]
+
+**Options**:
+
+- `-d, --device TEXT`: Device serial
+- `-s, --session TEXT`: Session ID
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent reliability process`
+
+Inspect process state for a package.
+
+**Usage**:
+
+```console
+android-emu-agent reliability process [OPTIONS] PACKAGE
+```
+
+**Arguments**:
+
+- `PACKAGE`: Package name [required]
+
+**Options**:
+
+- `-d, --device TEXT`: Device serial
+- `-s, --session TEXT`: Session ID
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent reliability meminfo`
+
+Dump memory info for a package.
+
+**Usage**:
+
+```console
+android-emu-agent reliability meminfo [OPTIONS] PACKAGE
+```
+
+**Arguments**:
+
+- `PACKAGE`: Package name [required]
+
+**Options**:
+
+- `-d, --device TEXT`: Device serial
+- `-s, --session TEXT`: Session ID
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent reliability gfxinfo`
+
+Dump graphics/frame timing info for a package.
+
+**Usage**:
+
+```console
+android-emu-agent reliability gfxinfo [OPTIONS] PACKAGE
 ```
 
 **Arguments**:

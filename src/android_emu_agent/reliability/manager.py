@@ -119,6 +119,27 @@ class ReliabilityManager:
     async def jobscheduler(self, device: AdbDevice, package: str) -> str:
         return await self._shell(device, f"dumpsys jobscheduler {package}")
 
+    async def process_info(self, device: AdbDevice, package: str) -> dict[str, str | int]:
+        pid = await self._pidof(device, package)
+        pid_str = str(pid)
+        ps = await self._shell(device, f"ps -A | grep -F {shlex.quote(package)}")
+        oom_adj = await self._shell(device, f"cat /proc/{pid_str}/oom_score_adj")
+        proc_state = await self._shell(
+            device, f"dumpsys activity processes | grep -m 20 -A 3 -F {shlex.quote(package)}"
+        )
+        return {
+            "pid": pid,
+            "oom_score_adj": oom_adj.strip(),
+            "ps": ps,
+            "process_state": proc_state,
+        }
+
+    async def meminfo(self, device: AdbDevice, package: str) -> str:
+        return await self._shell(device, f"dumpsys meminfo {package}")
+
+    async def gfxinfo(self, device: AdbDevice, package: str) -> str:
+        return await self._shell(device, f"dumpsys gfxinfo {package}")
+
     async def compile_package(self, device: AdbDevice, package: str, mode: str) -> str:
         if mode == "reset":
             return await self._shell(device, f"cmd package compile --reset {package}")
