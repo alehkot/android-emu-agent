@@ -16,6 +16,11 @@ uv run android-emu-agent reliability exit-info <package> --device <serial>
 # 2) Timeline reconstruction
 uv run android-emu-agent reliability events --device <serial> --package <package>
 
+# 2.5) Live process/resources snapshot (quick signal for dev loops)
+uv run android-emu-agent reliability process <package> --device <serial>
+uv run android-emu-agent reliability meminfo <package> --device <serial>
+uv run android-emu-agent reliability gfxinfo <package> --device <serial>
+
 # 3) Persistent crash/ANR summaries
 uv run android-emu-agent reliability dropbox list --device <serial> --package <package>
 uv run android-emu-agent reliability dropbox print data_app_crash --device <serial>

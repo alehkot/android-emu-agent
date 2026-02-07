@@ -78,6 +78,8 @@ uv run android-emu-agent ui snapshot <session_id>
 
 - Need snapshot format or loop details: `references/core-loop.md`
 - Need full command/selector reference: `references/command-reference.md`
+- Need app state / routing debug (`app current`, `app task-stack`, `app resolve-intent`):
+  `references/command-reference.md`
 - Need patterns (permissions, dialogs, login, onboarding, navigation, forms, scrolling):
   `references/patterns.md`
 - Need error handling or debug playbooks: `references/troubleshooting.md`

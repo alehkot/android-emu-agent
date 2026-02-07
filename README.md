@@ -321,7 +321,6 @@ For deeper guidance, see `skills/android-emu-agent/references/troubleshooting.md
 ## CLI Reference
 
 Full auto-generated CLI reference is available at [`docs/reference.md`](docs/reference.md).
-Daemon/API endpoint reference is available at [`docs/api.md`](docs/api.md).
 
 To regenerate or browse the docs locally:
 
