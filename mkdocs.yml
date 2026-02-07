@@ -1,3 +1,4 @@
 site_name: android-emu-agent
 nav:
+  - Home: index.md
   - CLI Reference: reference.md
