@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -152,6 +153,72 @@ class TestSetDoze:
         assert "deviceidle unforce" in call_arg
 
 
+class TestAppInstall:
+    """Tests for app_install."""
+
+    @pytest.mark.asyncio
+    async def test_install_default_flags(self, tmp_path) -> None:
+        """Should install APK with replace enabled by default."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        mock_device = MagicMock()
+        apk = tmp_path / "app-debug.apk"
+        apk.write_text("fake-apk", encoding="utf-8")
+        run_adb = AsyncMock(
+            return_value=subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout="Success\n",
+                stderr="",
+            )
+        )
+
+        with (
+            patch.object(manager, "get_adb_device", return_value=mock_device),
+            patch.object(manager, "_run_adb", run_adb),
+        ):
+            output = await manager.app_install("emulator-5554", str(apk))
+
+        assert output == "Success"
+        run_adb.assert_awaited_once_with("emulator-5554", ["install", "-r", str(apk)])
+
+    @pytest.mark.asyncio
+    async def test_install_optional_flags(self, tmp_path) -> None:
+        """Should include optional install flags when requested."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        mock_device = MagicMock()
+        apk = tmp_path / "app-release.apk"
+        apk.write_text("fake-apk", encoding="utf-8")
+        run_adb = AsyncMock(
+            return_value=subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout="Success\n",
+                stderr="",
+            )
+        )
+
+        with (
+            patch.object(manager, "get_adb_device", return_value=mock_device),
+            patch.object(manager, "_run_adb", run_adb),
+        ):
+            await manager.app_install(
+                "emulator-5554",
+                str(apk),
+                replace=False,
+                grant_permissions=True,
+                allow_downgrade=True,
+            )
+
+        run_adb.assert_awaited_once_with(
+            "emulator-5554",
+            ["install", "-g", "-d", str(apk)],
+        )
+
+
 class TestAppLaunch:
     """Tests for app_launch."""
 
@@ -173,6 +240,26 @@ class TestAppLaunch:
         assert "am start" in call_arg
         assert "com.example.app/.MainActivity" in call_arg
         assert result == ".MainActivity"
+
+    @pytest.mark.asyncio
+    async def test_launch_wait_for_debugger(self) -> None:
+        """Should add -D when debugger wait is requested."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        mock_device = MagicMock()
+        mock_device.shell.return_value = "Starting: Intent { ... }"
+
+        with patch.object(manager, "get_adb_device", return_value=mock_device):
+            await manager.app_launch(
+                "emulator-5554",
+                "com.example.app",
+                activity=".MainActivity",
+                wait_for_debugger=True,
+            )
+
+        call_arg = mock_device.shell.call_args[0][0]
+        assert "am start -D -n" in call_arg
 
     @pytest.mark.asyncio
     async def test_launch_resolve_activity(self) -> None:
@@ -246,6 +333,51 @@ class TestAppDeeplink:
 
         call_arg = mock_device.shell.call_args[0][0]
         assert "https://example.com/path" in call_arg
+
+    @pytest.mark.asyncio
+    async def test_deeplink_wait_for_debugger(self) -> None:
+        """Should include debugger wait flag for deeplink launch."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        mock_device = MagicMock()
+        mock_device.shell.return_value = "Starting: Intent { ... }"
+
+        with patch.object(manager, "get_adb_device", return_value=mock_device):
+            await manager.app_deeplink(
+                "emulator-5554",
+                "https://example.com/path",
+                wait_for_debugger=True,
+            )
+
+        call_arg = mock_device.shell.call_args[0][0]
+        assert "am start -D" in call_arg
+
+
+class TestAppIntent:
+    """Tests for app_start_intent."""
+
+    @pytest.mark.asyncio
+    async def test_start_intent_with_component_and_action(self) -> None:
+        """Should start explicit intent command."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        mock_device = MagicMock()
+        mock_device.shell.return_value = "Starting: Intent { ... }"
+
+        with patch.object(manager, "get_adb_device", return_value=mock_device):
+            await manager.app_start_intent(
+                "emulator-5554",
+                action="android.intent.action.MAIN",
+                component="com.example.app/.MainActivity",
+                package="com.example.app",
+            )
+
+        call_arg = mock_device.shell.call_args[0][0]
+        assert "android.intent.action.MAIN" in call_arg
+        assert "com.example.app/.MainActivity" in call_arg
+        assert call_arg.endswith("com.example.app")
 
 
 class TestListPackages:

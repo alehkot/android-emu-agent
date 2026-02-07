@@ -25,6 +25,8 @@ from android_emu_agent.daemon.models import (
     ActionRequest,
     AppDeeplinkRequest,
     AppForceStopRequest,
+    AppInstallRequest,
+    AppIntentRequest,
     AppLaunchRequest,
     AppListRequest,
     AppResetRequest,
@@ -1490,6 +1492,39 @@ async def app_list(req: AppListRequest) -> EndpointResponse:
     }
 
 
+@app.post("/app/install", response_model=None)
+async def app_install(req: AppInstallRequest) -> EndpointResponse:
+    """Install an APK on a device."""
+    core: DaemonCore = app.state.core
+    resolved = await _resolve_device_target(core, req.session_id, req.serial)
+    if isinstance(resolved, JSONResponse):
+        return resolved
+    serial, _, _ = resolved
+
+    try:
+        output = await core.device_manager.app_install(
+            serial,
+            req.apk_path,
+            replace=req.replace,
+            grant_permissions=req.grant_permissions,
+            allow_downgrade=req.allow_downgrade,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+    except Exception:
+        return _error_response(device_offline_error(serial), status_code=404)
+
+    return {
+        "status": "done",
+        "serial": serial,
+        "apk_path": req.apk_path,
+        "replace": req.replace,
+        "grant_permissions": req.grant_permissions,
+        "allow_downgrade": req.allow_downgrade,
+        "output": output,
+    }
+
+
 @app.post("/app/reset", response_model=None)
 async def app_reset(req: AppResetRequest) -> EndpointResponse:
     core: DaemonCore = app.state.core
@@ -1520,7 +1555,10 @@ async def app_launch(req: AppLaunchRequest) -> EndpointResponse:
 
     try:
         activity = await core.device_manager.app_launch(
-            session.device_serial, req.package, req.activity
+            session.device_serial,
+            req.package,
+            req.activity,
+            wait_for_debugger=req.wait_debugger,
         )
     except Exception as e:
         return _error_response(
@@ -1533,7 +1571,12 @@ async def app_launch(req: AppLaunchRequest) -> EndpointResponse:
             status_code=500,
         )
 
-    return {"status": "done", "package": req.package, "activity": activity}
+    return {
+        "status": "done",
+        "package": req.package,
+        "activity": activity,
+        "wait_debugger": req.wait_debugger,
+    }
 
 
 @app.post("/app/force_stop", response_model=None)
@@ -1571,11 +1614,51 @@ async def app_deeplink(req: AppDeeplinkRequest) -> EndpointResponse:
         return _error_response(e, status_code=400)
 
     try:
-        await core.device_manager.app_deeplink(session.device_serial, req.uri)
+        await core.device_manager.app_deeplink(
+            session.device_serial, req.uri, wait_for_debugger=req.wait_debugger
+        )
     except Exception:
         return _error_response(device_offline_error(session.device_serial), status_code=404)
 
-    return {"status": "done", "uri": req.uri}
+    return {"status": "done", "uri": req.uri, "wait_debugger": req.wait_debugger}
+
+
+@app.post("/app/intent", response_model=None)
+async def app_intent(req: AppIntentRequest) -> EndpointResponse:
+    """Start an explicit or implicit intent."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    if req.data_uri:
+        try:
+            validate_uri(req.data_uri)
+        except AgentError as e:
+            return _error_response(e, status_code=400)
+
+    try:
+        await core.device_manager.app_start_intent(
+            session.device_serial,
+            action=req.action,
+            data_uri=req.data_uri,
+            component=req.component,
+            package=req.package,
+            wait_for_debugger=req.wait_debugger,
+        )
+    except AgentError as e:
+        return _error_response(e, status_code=400)
+    except Exception:
+        return _error_response(device_offline_error(session.device_serial), status_code=404)
+
+    return {
+        "status": "done",
+        "action": req.action,
+        "data_uri": req.data_uri,
+        "component": req.component,
+        "package": req.package,
+        "wait_debugger": req.wait_debugger,
+    }
 
 
 @app.post("/emulator/snapshot_save", response_model=None)

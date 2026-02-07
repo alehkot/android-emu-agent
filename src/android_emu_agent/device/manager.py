@@ -4,13 +4,24 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import shlex
+import shutil
+import subprocess
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from android_emu_agent.errors import console_connect_error, snapshot_failed_error
+from android_emu_agent.errors import (
+    AgentError,
+    adb_command_error,
+    adb_not_found_error,
+    console_connect_error,
+    file_not_found_error,
+    snapshot_failed_error,
+)
 from android_emu_agent.validation import get_console_port
 
 
@@ -179,6 +190,37 @@ class DeviceManager:
 
         await asyncio.to_thread(_apply)
 
+    async def app_install(
+        self,
+        serial: str,
+        apk_path: str,
+        *,
+        replace: bool = True,
+        grant_permissions: bool = False,
+        allow_downgrade: bool = False,
+    ) -> str:
+        """Install an APK on a connected device."""
+        device = await self.get_adb_device(serial)
+        if not device:
+            raise RuntimeError(f"Device not found: {serial}")
+
+        local_apk = Path(apk_path).expanduser()
+        if not local_apk.exists() or not local_apk.is_file():
+            raise file_not_found_error(str(local_apk))
+
+        args = ["install"]
+        if replace:
+            args.append("-r")
+        if grant_permissions:
+            args.append("-g")
+        if allow_downgrade:
+            args.append("-d")
+        args.append(str(local_apk))
+
+        result = await self._run_adb(serial, args)
+        output = (result.stdout or result.stderr or "").strip()
+        return output or "Success"
+
     async def set_rotation(self, serial: str, orientation: Orientation) -> None:
         """Set screen rotation.
 
@@ -256,7 +298,14 @@ class DeviceManager:
 
         await asyncio.to_thread(_apply)
 
-    async def app_launch(self, serial: str, package: str, activity: str | None = None) -> str:
+    async def app_launch(
+        self,
+        serial: str,
+        package: str,
+        activity: str | None = None,
+        *,
+        wait_for_debugger: bool = False,
+    ) -> str:
         """Launch an app.
 
         Args:
@@ -294,7 +343,8 @@ class DeviceManager:
                 target_activity = f".{target_activity}"
 
             component = f"{package}/{target_activity}"
-            device.shell(f"am start -n {component}")
+            command = f"am start {'-D ' if wait_for_debugger else ''}-n {component}"
+            device.shell(command)
             return target_activity
 
         return await asyncio.to_thread(_launch)
@@ -315,21 +365,52 @@ class DeviceManager:
 
         await asyncio.to_thread(_stop)
 
-    async def app_deeplink(self, serial: str, uri: str) -> None:
+    async def app_deeplink(self, serial: str, uri: str, *, wait_for_debugger: bool = False) -> None:
         """Open a deeplink URI.
 
         Args:
             serial: Device serial
             uri: URI to open (e.g., 'myapp://path' or 'https://example.com')
         """
+        await self.app_start_intent(
+            serial,
+            action="android.intent.action.VIEW",
+            data_uri=uri,
+            wait_for_debugger=wait_for_debugger,
+        )
+
+    async def app_start_intent(
+        self,
+        serial: str,
+        *,
+        action: str | None = None,
+        data_uri: str | None = None,
+        component: str | None = None,
+        package: str | None = None,
+        wait_for_debugger: bool = False,
+    ) -> None:
+        """Start an intent via ActivityManager."""
         device = await self.get_adb_device(serial)
         if not device:
             raise RuntimeError(f"Device not found: {serial}")
 
-        def _open() -> None:
-            device.shell(f'am start -a android.intent.action.VIEW -d "{uri}"')
+        def _start() -> None:
+            command_parts = ["am", "start"]
+            if wait_for_debugger:
+                command_parts.append("-D")
+            if action:
+                command_parts.extend(["-a", action])
+            if data_uri:
+                command_parts.extend(["-d", data_uri])
+            if component:
+                command_parts.extend(["-n", component])
+            if package:
+                command_parts.append(package)
 
-        await asyncio.to_thread(_open)
+            command = " ".join(shlex.quote(part) for part in command_parts)
+            device.shell(command)
+
+        await asyncio.to_thread(_start)
 
     async def list_packages(self, serial: str, scope: str = "all") -> list[str]:
         """List installed packages.
@@ -363,6 +444,28 @@ class DeviceManager:
             if line.startswith("package:"):
                 packages.append(line.removeprefix("package:"))
         return packages
+
+    async def _run_adb(self, serial: str, args: list[str]) -> subprocess.CompletedProcess[str]:
+        def _run() -> subprocess.CompletedProcess[str]:
+            adb_path = shutil.which("adb")
+            if not adb_path:
+                raise adb_not_found_error()
+            return subprocess.run(
+                [adb_path, "-s", serial, *args],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+        try:
+            return await asyncio.to_thread(_run)
+        except AgentError:
+            raise
+        except FileNotFoundError as exc:
+            raise adb_not_found_error() from exc
+        except subprocess.CalledProcessError as exc:
+            reason = (exc.stderr or exc.stdout or str(exc)).strip()
+            raise adb_command_error(" ".join(args), reason) from exc
 
     async def _discover_devices(self) -> None:
         """Discover connected ADB devices."""

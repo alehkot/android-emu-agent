@@ -105,6 +105,7 @@ class AppLaunchRequest(BaseModel):
     session_id: str
     package: str
     activity: str | None = None
+    wait_debugger: bool = False
 
 
 class AppForceStopRequest(BaseModel):
@@ -115,6 +116,22 @@ class AppForceStopRequest(BaseModel):
 class AppDeeplinkRequest(BaseModel):
     session_id: str
     uri: str
+    wait_debugger: bool = False
+
+
+class AppIntentRequest(BaseModel):
+    session_id: str
+    action: str | None = None
+    data_uri: str | None = None
+    component: str | None = None
+    package: str | None = None
+    wait_debugger: bool = False
+
+    @model_validator(mode="after")
+    def validate_intent_target(self) -> AppIntentRequest:
+        if not any((self.action, self.data_uri, self.component, self.package)):
+            raise ValueError("Provide at least one of action, data_uri, component, or package")
+        return self
 
 
 class EmulatorSnapshotRequest(BaseModel):
@@ -150,6 +167,13 @@ class DeviceTargetRequest(BaseModel):
 
 class AppListRequest(DeviceTargetRequest):
     scope: str = "all"
+
+
+class AppInstallRequest(DeviceTargetRequest):
+    apk_path: str
+    replace: bool = True
+    grant_permissions: bool = False
+    allow_downgrade: bool = False
 
 
 class ReliabilityPackageRequest(DeviceTargetRequest):
