@@ -1,5 +1,8 @@
 # Action Failure Recovery Protocol
 
+> **Read this file when** an action fails (tap, set-text, etc. returns an error). Follow the 3-level
+> escalation to recover.
+
 Structured 3-level escalation when an action fails. Each level is progressively more expensive.
 
 ## When to Trigger
@@ -39,7 +42,7 @@ Max attempts: **2** (initial attempt + 1 retry). If both fail → escalate to Le
 uv run android-emu-agent wait idle <session_id> --timeout-ms 5000
 uv run android-emu-agent ui snapshot <session_id>
 # Find target again by text/desc/role, get new ^ref
-uv run android-emu-agent action tap <session_id> @<new_ref>
+uv run android-emu-agent action tap <session_id> ^<new_ref>
 ```
 
 ## Level 2: Visual / Screenshot Recovery (Automatic)
@@ -71,7 +74,7 @@ uv run android-emu-agent action scroll down -s <session_id>
 uv run android-emu-agent wait idle <session_id>
 uv run android-emu-agent ui snapshot <session_id>
 # Find target, retry action
-uv run android-emu-agent action tap <session_id> @<new_ref>
+uv run android-emu-agent action tap <session_id> ^<new_ref>
 ```
 
 ## Level 3: User Guidance (Interactive)

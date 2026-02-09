@@ -1,5 +1,8 @@
 # Core Loop Deep Dive
 
+> **Read this file when** you need to understand the observe-act-verify loop, snapshot format, or
+> the decision process between observing and acting.
+
 ## Observe
 
 Request a UI snapshot to see interactive elements:
@@ -33,26 +36,29 @@ Example snapshot output:
 }
 ```
 
-Use `--format text` for a compact line-oriented summary. Use `--full` when you need all nodes, not
-just interactive ones.
-
-Advanced (when needed): `--raw` returns the raw XML hierarchy for low-level debugging.
+Use `--format text` for a compact line-oriented summary. Use `--full` when the target element is not
+in the default interactive-only snapshot (e.g., labels, images, non-clickable containers). Use
+`--raw` for the raw XML hierarchy when debugging the UI tree structure.
 
 ## Decide
 
-Analyze the snapshot:
+Quick decision checklist (work through in order):
 
-- Classify the task intent — is this an inquiry (user asking for information) or an action (user
-  asking you to do something)? If inquiry, use only read-only methods to answer. See
-  `references/patterns.md` > Inquiry vs. Action Tasks.
-- Identify the target element by `^ref`, label, or role
-- Check for blockers (dialogs, overlays, loading states)
-- If blocked, handle with `action back`, a targeted tap, or a wait
-- Assess element confidence — if the target is unlabeled or its purpose is unknown, do not tap
-  without user confirmation. See `references/patterns.md` > Unknown and Unlabeled Elements.
-- Classify the action: Is this a write/destructive action? If so, check whether the user explicitly
-  requested it. If not, confirm before proceeding (see `references/patterns.md` > Write-Action
-  Confirmation Protocol)
+1. **Blocker check** — Is `context.package` a system package (`android`,
+   `com.google.android.permissioncontroller`, `com.android.systemui`)? If yes, handle the dialog
+   first (see
+   `references/ui-automation-patterns.md > Handling Permission Dialogs / System Dialogs`).
+2. **Task intent** — Is the user asking for information (inquiry) or requesting an action? If
+   inquiry, use only read-only methods (snapshot, screenshot, scroll). If ambiguous, default to
+   inquiry. (Full protocol: `references/behavioral-protocols.md > Inquiry vs. Action Tasks`.)
+3. **Target identification** — Find the target element by `^ref`, label, or role. If the element is
+   unlabeled or its purpose is unclear, do not tap without user confirmation. (Full protocol:
+   `references/behavioral-protocols.md > Unknown and Unlabeled Elements`.)
+4. **Risk classification** — Is this a write/destructive action (delete, submit, purchase, reset)?
+   If the agent is choosing to do it autonomously (not explicitly requested by user), confirm first.
+   (Full protocol: `references/behavioral-protocols.md > Write-Action Confirmation Protocol`.)
+5. **Proceed** — If no blockers, task is an action, target is identified, and risk is acceptable,
+   execute the action.
 
 ## Act
 
@@ -82,16 +88,3 @@ uv run android-emu-agent ui snapshot <session_id>
 Verify that the expected UI change occurred and no error dialogs appeared. If the expected state is
 not present, treat this as a potential action failure and enter the recovery protocol at Level 1
 (see `references/recovery.md`).
-
-## Example Loop
-
-```bash
-# Observe
-uv run android-emu-agent ui snapshot s-abc123
-
-# Act
-uv run android-emu-agent action tap s-abc123 ^a1
-
-# Verify
-uv run android-emu-agent ui snapshot s-abc123
-```

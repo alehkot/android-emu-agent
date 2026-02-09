@@ -1,8 +1,19 @@
 # Complete Examples
 
+> **Read this file when** you need a complete end-to-end walkthrough of a multi-step task (launch,
+> login, navigate, recover from errors).
+
+End-to-end task walkthroughs that compose multiple patterns. For individual pattern details (e.g.,
+permission handling, login fields, form filling), see `references/ui-automation-patterns.md`. For
+behavioral protocols (write-action confirmation, inquiry vs. action), see
+`references/behavioral-protocols.md`.
+
 ## Example 1: Launch App and Handle Permissions
 
 Goal: Launch an app that requests camera permission and grant it.
+
+Patterns used: permission dialog handling
+(`ui-automation-patterns.md > Handling Permission Dialogs`).
 
 ```bash
 # 1. Start session
@@ -33,6 +44,8 @@ uv run android-emu-agent ui snapshot s-abc123
 ## Example 2: Login Flow
 
 Goal: Log into an app with email and password.
+
+Patterns used: login flow (`ui-automation-patterns.md > Login and Authentication Flows`).
 
 ```bash
 uv run android-emu-agent ui snapshot s-abc123
@@ -145,6 +158,8 @@ uv run android-emu-agent ui snapshot s-abc123
 
 Goal: Full end-to-end test - launch app, skip onboarding, login, verify home screen.
 
+Patterns used: onboarding skip, login flow, permission handling (`ui-automation-patterns.md`).
+
 ```bash
 uv run android-emu-agent daemon status
 uv run android-emu-agent session start --device emulator-5554
@@ -188,7 +203,9 @@ uv run android-emu-agent session stop s-test01
 
 ## Example 7: Action Failure Recovery Escalation
 
-Goal: Tap "Confirm Purchase" but the action fails. Recover through Level 1 → Level 2.
+Goal: Tap "Confirm Purchase" but the action fails. Recover through Level 1 then Level 2.
+
+For the full recovery protocol (limits, decision flowchart), see `references/recovery.md`.
 
 ```bash
 # Observe
@@ -233,133 +250,4 @@ uv run android-emu-agent wait idle s-abc123
 # Verify
 uv run android-emu-agent ui snapshot s-abc123
 # context.activity = ".OrderConfirmationActivity"
-```
-
-## Example 8: Write-Action Confirmation
-
-Goal: Agent is navigating a checkout flow and reaches the "Place Order" button. The user's original
-request was "show me the checkout page", not "place the order".
-
-```bash
-# User said: "show me the checkout page"
-
-# Agent navigated to checkout
-uv run android-emu-agent ui snapshot s-abc123
-# context.activity = ".CheckoutActivity"
-# ^a1 = "Edit Cart"
-# ^a2 = "Promo Code" text field
-# ^a3 = "Place Order" button ($49.99)
-# ^a4 = "Back"
-
-# Agent has reached the checkout page as requested.
-# The user asked to "show" the page, not to place the order.
-# "Place Order" is a high-risk destructive action.
-
-# ✓ Report to user instead of tapping:
-# "You're on the checkout page. Total is $49.99. Items: ...
-#  Would you like me to place the order, or do something else?"
-
-# User responds: "Yes, place the order"
-
-# Now the user explicitly requested it — proceed without confirmation
-uv run android-emu-agent action tap s-abc123 ^a3
-uv run android-emu-agent wait idle s-abc123 --timeout-ms 10000
-
-# Verify
-uv run android-emu-agent ui snapshot s-abc123
-# context.activity = ".OrderConfirmationActivity"
-# Text: "Order placed successfully"
-```
-
-## Example 9: Session Start — Readiness Only
-
-Goal: User says they want to use their emulator. Agent ensures readiness and waits.
-
-```bash
-# User: "Hey, I'm going to use my Android emulator"
-
-# ✓ Check daemon
-uv run android-emu-agent daemon status
-# Daemon is not running → start it
-uv run android-emu-agent daemon start
-
-# ✓ Check device
-uv run android-emu-agent device list
-# emulator-5554 | online
-
-# ✓ Ensure session
-uv run android-emu-agent session start --device emulator-5554
-# session_id = s-abc123
-
-# ✓ Report to user:
-# "Ready. Daemon running, emulator-5554 connected, session s-abc123 active.
-#  What would you like to do?"
-
-# ✗ Do NOT take a snapshot
-# ✗ Do NOT launch any app
-# ✗ Do NOT tap, swipe, or type anything
-# ✗ Do NOT assume the user wants to test a specific app
-
-# Wait for the user's next request.
-```
-
-## Example 10: Inquiry Task — Identifying Unknown Buttons (Read-Only)
-
-Goal: User asks "check if there is a button to play music." The agent must answer using only
-read-only methods and must NOT tap any buttons to discover their purpose.
-
-```bash
-# User said: "check if there is a button to play music"
-# This is an INQUIRY task — the user wants information, not an action.
-
-# Step 1: Take a snapshot to inspect elements
-uv run android-emu-agent ui snapshot s-abc123
-# context.package = "com.example.musicplayer"
-# context.activity = ".NowPlayingActivity"
-# ^a1 = ImageButton, no text, no content_desc, resource_id: "btn_prev"
-# ^a2 = ImageButton, no text, no content_desc, resource_id: "btn_play_pause"
-# ^a3 = ImageButton, no text, no content_desc, resource_id: "btn_next"
-# ^a4 = TextView, text: "Song Title - Artist Name"
-# ^a5 = SeekBar, resource_id: "seekbar_progress"
-
-# Observation: Three unlabeled ImageButtons found. resource_ids suggest
-# prev/play_pause/next but there is no text or content_desc to confirm.
-
-# Step 2: Take a screenshot for visual identification
-uv run android-emu-agent artifact screenshot s-abc123 --pull --output ./debug-music.png
-# Screenshot reveals: Three icons in a horizontal transport bar.
-# Left icon: skip-back (|◁), Center icon: play triangle (▶), Right icon: skip-forward (▷|)
-
-# Step 3: Take a full snapshot for additional context
-uv run android-emu-agent ui snapshot s-abc123 --full
-# Full tree confirms: The three ImageButtons are inside a LinearLayout
-# with resource_id "media_controls". SeekBar and song title are siblings.
-
-# Step 4: Report findings to user
-# "Yes, there appears to be a play button. I found three unlabeled ImageButtons
-#  in a media transport bar:
-#  - ^a1: skip-back icon (resource_id: btn_prev) — high confidence
-#  - ^a2: play/pause icon (resource_id: btn_play_pause) — high confidence
-#  - ^a3: skip-forward icon (resource_id: btn_next) — high confidence
-#
-#  The center button ^a2 shows a play triangle (▶) in the screenshot and has
-#  resource_id 'btn_play_pause'. This is very likely the play button.
-#
-#  Would you like me to tap it?"
-
-# Step 5: Wait for user response
-# User: "Yes, tap the play button"
-
-# NOW this is an action task with explicit user authorization — proceed
-uv run android-emu-agent action tap s-abc123 ^a2
-uv run android-emu-agent wait idle s-abc123
-
-# Verify
-uv run android-emu-agent ui snapshot s-abc123
-# ^a2 icon changed to pause (❚❚) — confirms it was the play button
-
-# ✗ Do NOT tap ^a2 autonomously to "confirm" it is the play button
-# ✗ Do NOT tap any unlabeled button to discover its function
-# ✗ Do NOT escalate from read-only to state-modifying during an inquiry
-# ✗ Do NOT assume a button's purpose and act on it without user permission
 ```

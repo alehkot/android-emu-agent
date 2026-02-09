@@ -206,11 +206,91 @@ Dev-only:
 - `docs/`: MkDocs source files for auto-generated CLI reference
 - `AGENTS.md`: Companion guidelines (coding style, commit conventions, environment tips)
 
-## Agent Skills Sync
+## Agent Skills Guidelines
 
-- When asked about coding agent skills updates, check `skills/android-emu-agent/` first.
-- When adding or modifying CLI commands, update `skills/android-emu-agent/` references (especially
-  `references/command-reference.md`) so skills stay aligned with the CLI.
+Skills live in `skills/android-emu-agent/` and are consumed by coding agents (Claude Code, Codex,
+etc.). Every line costs tokens and competes for the agent's context window. Write skills for agent
+consumption, not human marketing.
+
+### Current Structure
+
+```text
+skills/android-emu-agent/
+  SKILL.md                              # Entry point, quick start, decision guide
+  references/
+    command-reference.md                # CLI command syntax and selectors
+    core-loop.md                        # Observe-Act-Verify loop
+    ui-automation-patterns.md           # UI interaction patterns (permissions, login, forms, etc.)
+    behavioral-protocols.md             # Agent decision protocols (confirmation, inquiry vs. action)
+    recovery.md                         # 3-level action failure recovery
+    reliability.md                      # Crash/ANR triage workflows
+    troubleshooting.md                  # Error reference and debug tips
+    examples.md                         # End-to-end task walkthroughs
+    files.md                            # File transfer workflows
+```
+
+### Keeping Skills in Sync
+
+- When adding or modifying CLI commands, update `references/command-reference.md`.
+- When adding new UI patterns (e.g., handling a new dialog type), add to
+  `references/ui-automation-patterns.md`.
+- When adding new behavioral rules, add to `references/behavioral-protocols.md`.
+- When adding new reliability commands, update both `references/command-reference.md` (syntax) and
+  `references/reliability.md` (triage workflows with output interpretation).
+- Update `SKILL.md` decision guide if a new file is added or an existing file's scope changes.
+
+### Writing Principles
+
+These principles prevent the problems that required a full skills audit to fix:
+
+**Write for agent retrieval, not human reading.**
+
+- Every reference file must start with a `> **Read this file when**` header that tells the agent
+  exactly when to load it.
+- Section names must be descriptive and searchable. Use "Exit Info (Process Death Reasons)", not
+  "Why Did It Die?". Use "Memory Pressure Simulation", not "Chaos Testing". Avoid marketing labels
+  ("Hidden Gems"), conversational names, poetic names, or dramatic names.
+- File names must signal content clearly. Use `ui-automation-patterns.md`, not `patterns.md`.
+
+**One canonical location per concept.**
+
+- Each piece of knowledge lives in exactly one file. Other files cross-reference it.
+- `command-reference.md` owns command syntax. `reliability.md` owns triage workflows. Don't
+  duplicate command syntax in workflow files.
+- `ui-automation-patterns.md` owns UI interaction patterns. `examples.md` shows composed multi-step
+  flows that use those patterns — it cross-references patterns, not copies them.
+- If content appears in 2+ places, pick the canonical source and replace the others with a
+  cross-reference line.
+
+**No template files.**
+
+- Templates (copy-pasteable flows with placeholders) are pure redundancy when the reference file
+  already contains the same flow with concrete examples. Agents substitute values regardless.
+- Instead, put the pattern in the reference file with a concrete example. The agent will adapt it.
+
+**Provide decision context, not just command syntax.**
+
+- For every group of commands, include _when_ to use them — not just _how_.
+- For diagnostic commands (reliability, troubleshooting), provide a triage decision tree or ordered
+  steps so the agent knows which command to run first.
+- For commands with non-obvious output, add "Output interpretation" notes explaining what the key
+  fields mean and what to do based on them.
+- Replace vague labels like "Advanced (when needed)" with specific trigger conditions: "Use `--full`
+  when the target element is not in the default interactive-only snapshot."
+
+**Separate concerns into focused files.**
+
+- Each file should serve one agent need. Don't mix UI interaction patterns with behavioral decision
+  protocols in one file — an agent loading "how to handle a permission dialog" doesn't need 200
+  lines about write-action confirmation.
+- `examples.md` is for composed multi-step E2E walkthroughs only. Don't put behavioral protocol
+  demonstrations there — those belong in `behavioral-protocols.md`.
+
+**Use consistent syntax in all examples.**
+
+- Refs always use the `^` prefix: `^a1`, `^<new_ref>`. Never `@ref` or `@submit`.
+- Ordered lists use `1.` for every item (markdownlint MD029 rule in this repo).
+- Run `./scripts/dev.sh md` after editing skills files to catch formatting issues.
 
 ## Important Notes
 

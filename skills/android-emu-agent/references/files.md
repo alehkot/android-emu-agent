@@ -1,5 +1,9 @@
 # File Transfer
 
+> **Read this file when** you need to push or pull files to/from a device (shared storage or
+> app-private storage). Use shared storage for files accessible to all apps. Use app-private storage
+> for config/data within a specific app's sandbox (requires root or emulator).
+
 Commands to push/pull files to shared storage (sdcard) and app-private storage (rooted/emulator).
 All commands accept **either** `--device <serial>` **or** `--session <session_id>`.
 

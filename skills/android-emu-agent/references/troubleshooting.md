@@ -1,5 +1,17 @@
 # Troubleshooting
 
+> **Read this file when** you hit an error code, unexpected behavior, or need debug tips.
+
+## Quick Triage
+
+Match your symptom to the right section:
+
+- **Got an error code** (e.g., `ERR_STALE_REF`) → see Error Reference table below
+- **Action failed mid-flow** → see `references/recovery.md` for the 3-level recovery protocol
+- **No error but wrong behavior** (elements missing, actions not working) → see Common Issues below
+- **App crashing or dying** → see `references/reliability.md` for crash/ANR triage workflows
+- **Daemon or device problems** → see Common Issues > Daemon Won't Start / Device Not Appearing
+
 ## Error Reference
 
 | Error                 | Cause                        | Solution                                               | Recovery        |
@@ -107,13 +119,5 @@ uv run android-emu-agent artifact bundle <session_id>
 
 ## Reliability Forensics
 
-```bash
-# Why did the app die? (Android 11+)
-uv run android-emu-agent reliability exit-info com.example.app --device <serial>
-
-# Timeline of process deaths / ANRs
-uv run android-emu-agent reliability events --device <serial> --package com.example.app
-
-# System bugreport (captures /data/anr, /data/tombstones)
-uv run android-emu-agent reliability bugreport --device <serial>
-```
+For crash, ANR, and process death diagnosis, see `references/reliability.md` which provides a triage
+decision tree and step-by-step workflows with output interpretation.

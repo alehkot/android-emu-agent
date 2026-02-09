@@ -1,11 +1,14 @@
 # Command Reference
 
-## Essential Commands
+> **Read this file when** you need to look up a command, its arguments, or selector syntax.
+
+## Commands
 
 Examples in this repo assume `uv run android-emu-agent <command>`. If you installed the CLI
 globally, replace with `android-emu-agent <command>`.
 
-Optional output (when scripting): most commands accept `--json` for machine-readable output.
+Most commands accept `--json` for machine-readable JSON output (useful for scripting or when you
+need to parse structured results programmatically).
 
 ### CLI
 
@@ -42,10 +45,12 @@ Optional output (when scripting): most commands accept `--json` for machine-read
 - `ui screenshot [<session_id>] [--device <serial> | --session <session_id>] [--pull] [--output <path>]`
   Capture screen image (optionally copy to local path).
 
-Advanced (when needed):
+Use `--full` when the target element is not in the default interactive-only snapshot (e.g., labels,
+images, non-clickable containers):
 
 - `ui snapshot <session_id> --full` Include all nodes (not just interactive).
-- `ui snapshot <session_id> --raw` Return raw XML hierarchy.
+- `ui snapshot <session_id> --raw` Return raw XML hierarchy (for low-level debugging of the UI
+  tree).
 
 ### Action
 
@@ -67,7 +72,8 @@ Advanced (when needed):
 - `wait exists <session_id> --text <text>` Wait for element.
 - `wait gone <session_id> --text <text>` Wait for element to disappear.
 
-Advanced (when needed):
+Use alternate selectors when the element has no visible text but has a resource ID or content
+description:
 
 - `wait exists <session_id> --id <id> | --desc <desc> | --ref <ref>` Alternate selectors.
 - `wait gone <session_id> --id <id> | --desc <desc> | --ref <ref>` Alternate selectors.
@@ -86,7 +92,8 @@ Advanced (when needed):
 - `app reset <session_id> <package>` Clear app data.
 - `app deeplink <session_id> <uri>` Open a deep link.
 
-Advanced (when needed):
+Use `--activity` to launch a specific screen directly. Use `--wait-debugger` when attaching a
+debugger to the app at startup:
 
 - `app list --session <session_id>` List packages via an active session.
 - `app launch <session_id> <package> --activity <activity>` Launch a specific activity.
@@ -106,7 +113,7 @@ Advanced (when needed):
 
 When `--pull` is set, screenshots are copied to `--output` or the current working directory.
 
-Advanced (when needed):
+Use `--since` to limit logcat to a time window (e.g., `--since "5m"` for last 5 minutes):
 
 - `artifact logs <session_id> --since <timestamp>` Limit logcat by time (logcat `-t` value).
 
@@ -139,7 +146,8 @@ Advanced (when needed):
 - `reliability pull tombstones --device <serial>` Pull /data/tombstones (root).
 - `reliability pull dropbox --device <serial>` Pull /data/system/dropbox (root).
 
-Advanced (when needed):
+Use `--output` to control bugreport destination, `--since` to limit events by time, `--keep-remote`
+to preserve heap files on-device after pulling:
 
 - `reliability bugreport --device <serial> --output <path>` Choose output filename.
 - `reliability events --device <serial> --since <timestamp>` Limit events by time.
@@ -154,7 +162,7 @@ Advanced (when needed):
 - `file app push <pkg> <local> --device <serial>` Push to app-private storage.
 - `file app pull <pkg> <remote> --device <serial>` Pull from app-private storage.
 
-See `references/reliability.md` for the full reliability command set and workflows. See
+See `references/reliability.md` for reliability triage workflows and output interpretation. See
 `references/files.md` for file transfer workflows.
 
 ## Target Selectors

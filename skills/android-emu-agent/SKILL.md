@@ -60,7 +60,7 @@ uv run android-emu-agent ui snapshot <session_id>
 - **Never act without a user request.** When the user starts a session (e.g. "I'm going to use my
   emulator"), only ensure readiness (daemon up, device connected, session active). Do not tap,
   swipe, type, launch apps, or take any UI action until the user explicitly asks. See
-  `references/patterns.md` > Session Readiness Check.
+  `references/behavioral-protocols.md` > Session Readiness Check.
 - One action per snapshot. Refs are ephemeral.
 - Re-snapshot after any action or wait.
 - Verify state changes after each action.
@@ -68,36 +68,24 @@ uv run android-emu-agent ui snapshot <session_id>
 - When an action fails, follow the recovery protocol (re-snapshot, visual analysis, then ask user).
   Do not blindly retry. See `references/recovery.md`.
 - Confirm before write/destructive actions unless the user explicitly requested them. See
-  `references/patterns.md` > Write-Action Confirmation Protocol.
+  `references/behavioral-protocols.md` > Write-Action Confirmation Protocol.
 - **Read-only first for informational tasks.** When the user asks a question about the UI (e.g. "is
   there a button for...", "what does this screen show", "check if..."), use only read-only methods
   (snapshots, screenshots, scrolling) to answer. Do not tap, type, or otherwise modify UI state to
-  investigate. See `references/patterns.md` > Inquiry vs. Action Tasks.
+  investigate. See `references/behavioral-protocols.md` > Inquiry vs. Action Tasks.
 
 ## Decision Guide
 
-- Need snapshot format or loop details: `references/core-loop.md`
-- Need full command/selector reference: `references/command-reference.md`
-- Need app state / routing debug (`app current`, `app task-stack`, `app resolve-intent`):
-  `references/command-reference.md`
-- Need patterns (permissions, dialogs, login, onboarding, navigation, forms, scrolling):
-  `references/patterns.md`
-- Need error handling or debug playbooks: `references/troubleshooting.md`
-- Need end-to-end examples: `references/examples.md`
-- Need reliability and forensics workflows: `references/reliability.md`
-- Need file transfer workflows: `references/files.md`
-- Need action failure recovery: `references/recovery.md`
-- Need write-action confirmation rules: `references/patterns.md` > Write-Action Confirmation
-  Protocol
-- Need inquiry vs. action task rules: `references/patterns.md` > Inquiry vs. Action Tasks
+Match your situation to the right file:
 
-## Templates (Ready-to-Use)
-
-Templates are copy-pasteable flows with placeholders like `<session_id>` and `<package>`.
-
-- `templates/flow-permission.md` - handle runtime permission dialogs
-- `templates/flow-login.md` - login with email/password
-- `templates/flow-onboarding.md` - skip onboarding or tap-through tutorial
-- `templates/flow-e2e.md` - full E2E flow (reset, onboarding, login, verify)
-- `templates/flow-reliability-triage.md` - crash/ANR reliability triage
-- `templates/flow-recovery.md` - action failure recovery escalation (L1/L2/L3)
+- **Starting a session or understanding the loop** → `references/core-loop.md`
+- **Looking up a command or selector syntax** → `references/command-reference.md`
+- **Handling a UI scenario** (permissions, dialogs, login, onboarding, navigation, forms, scrolling)
+  → `references/ui-automation-patterns.md`
+- **Deciding whether to act or confirm first** (inquiry vs. action, write-action confirmation,
+  unknown elements) → `references/behavioral-protocols.md`
+- **Action failed with an error** → `references/recovery.md`
+- **Hit an error or unexpected behavior** → `references/troubleshooting.md`
+- **Need a complete end-to-end walkthrough** → `references/examples.md`
+- **Diagnosing a crash, ANR, or process death** → `references/reliability.md`
+- **Pushing or pulling files to/from device** → `references/files.md`
