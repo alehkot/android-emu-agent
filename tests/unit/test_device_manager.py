@@ -571,8 +571,8 @@ class TestAppTaskStack:
     """Tests for app_task_stack."""
 
     @pytest.mark.asyncio
-    async def test_app_task_stack_runs_cmd_activity_tasks(self) -> None:
-        """Should query task stack using cmd activity tasks."""
+    async def test_app_task_stack_runs_dumpsys_activity_activities(self) -> None:
+        """Should query task stack using dumpsys activity activities."""
         from android_emu_agent.device.manager import DeviceManager
 
         manager = DeviceManager()
@@ -584,7 +584,7 @@ class TestAppTaskStack:
 
         assert "TASK 77" in output
         call_arg = mock_device.shell.call_args[0][0]
-        assert call_arg == "cmd activity tasks"
+        assert call_arg == "dumpsys activity activities"
 
 
 class TestAppResolveIntent:

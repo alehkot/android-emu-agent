@@ -431,6 +431,8 @@ class DeviceManager:
             resumed = str(device.shell("dumpsys activity activities | grep -m 1 mResumedActivity"))
             focused = str(device.shell("dumpsys activity activities | grep -m 1 mFocusedApp"))
             raw = resumed.strip() or focused.strip()
+            if not raw:
+                logger.warning("current_activity_empty", hint="grep returned no match for mResumedActivity/mFocusedApp — field name may have changed in this Android version")
 
             component_match = re.search(r"([A-Za-z0-9._$]+/[A-Za-z0-9._$/$]+)", raw)
             package: str | None = None
@@ -457,7 +459,7 @@ class DeviceManager:
             raise RuntimeError(f"Device not found: {serial}")
 
         def _stack() -> str:
-            return str(device.shell("cmd activity tasks"))
+            return str(device.shell("dumpsys activity activities"))
 
         return await asyncio.to_thread(_stack)
 

@@ -878,7 +878,7 @@ async def reliability_exit_info(req: ReliabilityExitInfoRequest) -> EndpointResp
     serial, device, _info = resolved
 
     try:
-        output = await core.reliability_manager.exit_info(device, req.package, req.list_only)
+        output = await core.reliability_manager.exit_info(device, req.package)
     except AgentError as exc:
         return _error_response(exc, status_code=400)
 

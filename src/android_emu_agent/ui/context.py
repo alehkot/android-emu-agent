@@ -72,6 +72,8 @@ class ContextResolver:
             )
 
         output = await asyncio.to_thread(_run)
+        if not output.strip():
+            logger.warning("focused_activity_empty", hint="grep returned no match for mResumedActivity/mFocusedActivity — field name may have changed in this Android version")
         result: dict[str, str] = {}
 
         # Parse mResumedActivity: ActivityRecord{... com.foo/.MainActivity ...}
@@ -90,11 +92,13 @@ class ContextResolver:
         """Get window focus and orientation info."""
 
         def _run() -> str:
-            focus = device.shell("dumpsys window windows | grep -E 'mCurrentFocus|mFocusedApp'")
+            focus = device.shell("dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'")
             orientation = device.shell("dumpsys input | grep -E 'SurfaceOrientation'")
             return f"{focus}\n{orientation}"
 
         output = await asyncio.to_thread(_run)
+        if not output.strip():
+            logger.warning("window_info_empty", hint="grep returned no match for mCurrentFocus/mFocusedApp/SurfaceOrientation — field name may have changed in this Android version")
         result: dict[str, str | bool] = {"focused": True}
 
         focus_match = re.search(r"mCurrentFocus=Window\{([^}]+)\}", output)

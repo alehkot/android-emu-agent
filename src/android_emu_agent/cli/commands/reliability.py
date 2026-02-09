@@ -27,12 +27,11 @@ def reliability_exit_info(
     package: str = typer.Argument(..., help="Package name"),
     device: str | None = typer.Option(None, "--device", "-d", help="Device serial"),
     session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
-    list_only: bool = typer.Option(False, "--list", help="List exit-info entries only"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Show ApplicationExitInfo for a package."""
     payload = require_target(device, session_id)
-    payload.update({"package": package, "list_only": list_only})
+    payload.update({"package": package})
     client = DaemonClient(timeout=RELIABILITY_TIMEOUT)
     resp = client.request("POST", "/reliability/exit_info", json_body=payload)
     client.close()
@@ -61,7 +60,9 @@ def reliability_events(
     session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
     pattern: str | None = typer.Option(None, "--pattern", help="Regex filter for events"),
     package: str | None = typer.Option(None, "--package", help="Filter for package name"),
-    since: str | None = typer.Option(None, "--since", help="Logcat -t value"),
+    since: str | None = typer.Option(
+        None, "--since", help="Logcat -t value: timestamp (MM-DD HH:MM:SS.mmm) or line count"
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Dump ActivityManager events log."""

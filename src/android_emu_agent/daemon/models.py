@@ -198,7 +198,7 @@ class ReliabilityPackageRequest(DeviceTargetRequest):
 
 
 class ReliabilityExitInfoRequest(ReliabilityPackageRequest):
-    list_only: bool = False
+    pass
 
 
 class ReliabilityEventsRequest(DeviceTargetRequest):

@@ -60,7 +60,9 @@ def artifact_logs(
     level: str | None = typer.Option(
         None, "--level", help="Log level (v|d|i|w|e|f|s or verbose/debug/...)"
     ),
-    since: str | None = typer.Option(None, "--since", help="Logcat since timestamp"),
+    since: str | None = typer.Option(
+        None, "--since", help="Logcat -t value: timestamp (MM-DD HH:MM:SS.mmm) or line count"
+    ),
     follow: bool = typer.Option(False, "--follow", help="Follow logs (live stream)"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:

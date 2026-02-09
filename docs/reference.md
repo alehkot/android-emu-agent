@@ -1106,7 +1106,7 @@ android-emu-agent artifact logs [OPTIONS] [SESSION_ID]
 - `-s, --session TEXT`: Session ID
 - `-p, --package TEXT`: Filter by package
 - `--level TEXT`: Log level (v|d|i|w|e|f|s or verbose/debug/...)
-- `--since TEXT`: Logcat since timestamp
+- `--since TEXT`: Logcat -t value: timestamp or line count
 - `--follow`: Follow logs (live stream)
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
@@ -1260,7 +1260,6 @@ android-emu-agent reliability exit-info [OPTIONS] PACKAGE
 
 - `-d, --device TEXT`: Device serial
 - `-s, --session TEXT`: Session ID
-- `--list`: List exit-info entries only
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 
@@ -1298,7 +1297,7 @@ android-emu-agent reliability events [OPTIONS]
 - `-s, --session TEXT`: Session ID
 - `--pattern TEXT`: Regex filter for events
 - `--package TEXT`: Filter for package name
-- `--since TEXT`: Logcat -t value
+- `--since TEXT`: Logcat -t value: timestamp (MM-DD HH:MM:SS.mmm) or line count
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 

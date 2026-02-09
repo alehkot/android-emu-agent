@@ -231,7 +231,7 @@ Visual debug
 ```bash
 uv run android-emu-agent ui screenshot --device emulator-5554 --pull --output ./screen.png
 uv run android-emu-agent artifact bundle s-abc123
-uv run android-emu-agent artifact logs --session s-abc123 --package com.example.app --level error --since "10m"
+uv run android-emu-agent artifact logs --session s-abc123 --package com.example.app --level error --since 100
 ```
 
 App debug helpers

@@ -51,7 +51,6 @@ Shows why the system killed the app. Available on Android 11+.
 
 ```bash
 uv run android-emu-agent reliability exit-info com.example.app --device emulator-5554
-uv run android-emu-agent reliability exit-info com.example.app --device emulator-5554 --list
 ```
 
 **Output interpretation:** Look for `reason` field — common values: `REASON_CRASH` (unhandled
@@ -67,10 +66,11 @@ uv run android-emu-agent reliability events --device emulator-5554 --package com
 uv run android-emu-agent reliability events --device emulator-5554 --pattern "am_proc_died|am_anr"
 ```
 
-Use `--since` to limit by time (e.g., `--since "10m"` for last 10 minutes):
+Use `--since` to limit by time (timestamp in `MM-DD HH:MM:SS.mmm` format) or line count:
 
 ```bash
-uv run android-emu-agent reliability events --device emulator-5554 --since "10m"
+uv run android-emu-agent reliability events --device emulator-5554 --since "01-15 14:30:00.000"
+uv run android-emu-agent reliability events --device emulator-5554 --since 100
 ```
 
 **Output interpretation:** Look for `am_proc_died` entries (process killed), `am_anr` (ANR trigger),

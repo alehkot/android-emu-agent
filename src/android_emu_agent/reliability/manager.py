@@ -55,11 +55,8 @@ class ReliabilityManager:
         self.output_dir = output_dir or default_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    async def exit_info(self, device: AdbDevice, package: str, list_only: bool) -> str:
-        cmd = f"dumpsys activity exit-info {package}"
-        if list_only:
-            cmd += " list"
-        return await self._shell(device, cmd)
+    async def exit_info(self, device: AdbDevice, package: str) -> str:
+        return await self._shell(device, f"dumpsys activity exit-info {package}")
 
     async def bugreport(self, serial: str, filename: str | None = None) -> Path:
         timestamp = self._timestamp()
@@ -114,7 +111,10 @@ class ReliabilityManager:
         return {"appops": appops, "standby_bucket": standby}
 
     async def last_anr(self, device: AdbDevice) -> str:
-        return await self._shell(device, "dumpsys activity lastanr")
+        output = await self._shell(device, "dumpsys activity lastanr")
+        if not output.strip() or "Unknown command" in output:
+            output = await self._shell(device, "dumpsys activity anr")
+        return output
 
     async def jobscheduler(self, device: AdbDevice, package: str) -> str:
         return await self._shell(device, f"dumpsys jobscheduler {package}")

@@ -113,9 +113,10 @@ debugger to the app at startup:
 
 When `--pull` is set, screenshots are copied to `--output` or the current working directory.
 
-Use `--since` to limit logcat to a time window (e.g., `--since "5m"` for last 5 minutes):
+Use `--since` to limit logcat by timestamp (`MM-DD HH:MM:SS.mmm`) or line count (integer):
 
-- `artifact logs <session_id> --since <timestamp>` Limit logcat by time (logcat `-t` value).
+- `artifact logs <session_id> --since "01-15 14:30:00.000"` Limit logcat by timestamp.
+- `artifact logs <session_id> --since 100` Show last 100 lines.
 
 ### Emulator
 
