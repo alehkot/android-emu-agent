@@ -332,21 +332,21 @@ uv run android-emu-agent daemon status --json
 
 Common errors
 
-| Error Code            | Meaning                  | Fix                                             |
-| --------------------- | ------------------------ | ----------------------------------------------- |
-| `ERR_STALE_REF`       | Ref from an old snapshot | Take a new snapshot                             |
-| `ERR_NOT_FOUND`       | Element not found        | Verify screen, use `--full` or a selector       |
-| `ERR_BLOCKED_INPUT`   | Dialog/IME blocking      | `wait idle` or `back`                           |
-| `ERR_TIMEOUT`         | Wait condition not met   | Increase `--timeout-ms` or check condition      |
-| `ERR_DEVICE_OFFLINE`  | Device disconnected      | Reconnect and re-run `device list`              |
-| `ERR_SESSION_EXPIRED` | Session is gone          | Start a new session                             |
-| `ERR_PERMISSION`      | Root required            | Use a rooted device/emulator                    |
-| `ERR_ADB_NOT_FOUND`   | `adb` not on PATH        | Install Android SDK and ensure `adb` is on PATH |
-| `ERR_ADB_COMMAND`     | ADB command failed       | Check device connectivity and retry             |
-| `ERR_ALREADY_ATTACHED` | Debug session exists    | Detach first with `debug detach`                |
-| `ERR_DEBUG_NOT_ATTACHED` | No debug session      | Attach first with `debug attach`                |
-| `ERR_JDK_NOT_FOUND`   | Java not found           | Install JDK 17+ or set `JAVA_HOME`              |
-| `ERR_VM_DISCONNECTED` | Target VM exited         | Re-launch the app and re-attach                 |
+| Error Code               | Meaning                  | Fix                                             |
+| ------------------------ | ------------------------ | ----------------------------------------------- |
+| `ERR_STALE_REF`          | Ref from an old snapshot | Take a new snapshot                             |
+| `ERR_NOT_FOUND`          | Element not found        | Verify screen, use `--full` or a selector       |
+| `ERR_BLOCKED_INPUT`      | Dialog/IME blocking      | `wait idle` or `back`                           |
+| `ERR_TIMEOUT`            | Wait condition not met   | Increase `--timeout-ms` or check condition      |
+| `ERR_DEVICE_OFFLINE`     | Device disconnected      | Reconnect and re-run `device list`              |
+| `ERR_SESSION_EXPIRED`    | Session is gone          | Start a new session                             |
+| `ERR_PERMISSION`         | Root required            | Use a rooted device/emulator                    |
+| `ERR_ADB_NOT_FOUND`      | `adb` not on PATH        | Install Android SDK and ensure `adb` is on PATH |
+| `ERR_ADB_COMMAND`        | ADB command failed       | Check device connectivity and retry             |
+| `ERR_ALREADY_ATTACHED`   | Debug session exists     | Detach first with `debug detach`                |
+| `ERR_DEBUG_NOT_ATTACHED` | No debug session         | Attach first with `debug attach`                |
+| `ERR_JDK_NOT_FOUND`      | Java not found           | Install JDK 17+ or set `JAVA_HOME`              |
+| `ERR_VM_DISCONNECTED`    | Target VM exited         | Re-launch the app and re-attach                 |
 
 For deeper guidance, see `skills/android-emu-agent/references/troubleshooting.md`.
 
