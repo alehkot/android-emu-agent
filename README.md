@@ -31,6 +31,7 @@ automation CLI for AI agents.
 - `uv` package manager
 - Android SDK with `adb` on PATH
 - Android emulator or rooted device (primary target)
+- JDK 17+ (only for debugger commands; set `JAVA_HOME` or have `java` on PATH)
 
 ## Install
 
@@ -245,6 +246,33 @@ uv run android-emu-agent reliability meminfo com.example.app --device emulator-5
 uv run android-emu-agent reliability gfxinfo com.example.app --device emulator-5554
 ```
 
+Debugger (JDI Bridge)
+
+Attach a JDWP debugger to a running Android app's JVM. This requires JDK 17+ and a debuggable app
+(built with `android:debuggable=true` or running on a userdebug/eng device).
+
+```bash
+# Launch the app in wait-for-debugger mode
+uv run android-emu-agent app launch s-abc123 com.example.app --wait-debugger
+
+# Attach the debugger (finds PID, sets up ADB forward, connects via JDI)
+uv run android-emu-agent debug attach --session s-abc123 --package com.example.app
+
+# Check debug session status (VM name, version, thread count)
+uv run android-emu-agent debug status --session s-abc123
+
+# Detach when done (cleans up ADB forward and bridge process)
+uv run android-emu-agent debug detach --session s-abc123
+```
+
+Under the hood, the daemon spawns a **JDI Bridge** sidecar (a Kotlin/JVM subprocess in
+`jdi-bridge/`) that speaks JSON-RPC over stdin/stdout. The bridge connects to the target app via
+JDWP and monitors for VM disconnect events. Build the bridge JAR with:
+
+```bash
+cd jdi-bridge && ./gradlew shadowJar
+```
+
 Emulator snapshots
 
 ```bash
@@ -315,6 +343,10 @@ Common errors
 | `ERR_PERMISSION`      | Root required            | Use a rooted device/emulator                    |
 | `ERR_ADB_NOT_FOUND`   | `adb` not on PATH        | Install Android SDK and ensure `adb` is on PATH |
 | `ERR_ADB_COMMAND`     | ADB command failed       | Check device connectivity and retry             |
+| `ERR_ALREADY_ATTACHED` | Debug session exists    | Detach first with `debug detach`                |
+| `ERR_DEBUG_NOT_ATTACHED` | No debug session      | Attach first with `debug attach`                |
+| `ERR_JDK_NOT_FOUND`   | Java not found           | Install JDK 17+ or set `JAVA_HOME`              |
+| `ERR_VM_DISCONNECTED` | Target VM exited         | Re-launch the app and re-attach                 |
 
 For deeper guidance, see `skills/android-emu-agent/references/troubleshooting.md`.
 
@@ -356,6 +388,10 @@ uv run android-emu-agent <group> --help
                                          │  │    UI Snapshotter          │  │
                                          │  │  (lxml, filtering)         │  │
                                          │  └────────────────────────────┘  │
+                                         │  ┌────────────────────────────┐  │
+                                         │  │    Debug Manager           │  │
+                                         │  │  (JDI Bridge, JDWP)       │──┼──► JDI Bridge
+                                         │  └────────────────────────────┘  │    (Kotlin subprocess)
                                          └──────────────────────────────────┘
                                                          │
                                                          ▼

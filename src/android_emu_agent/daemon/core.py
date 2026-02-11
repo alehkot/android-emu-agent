@@ -7,6 +7,7 @@ from android_emu_agent.actions.wait import WaitEngine
 from android_emu_agent.artifacts.manager import ArtifactManager
 from android_emu_agent.daemon.health import HealthMonitor
 from android_emu_agent.db.models import Database
+from android_emu_agent.debugger.manager import DebugManager
 from android_emu_agent.device.manager import DeviceManager
 from android_emu_agent.device.session import SessionManager
 from android_emu_agent.files.manager import FileManager
@@ -32,6 +33,7 @@ class DaemonCore:
         self.artifact_manager = ArtifactManager()
         self.file_manager = FileManager()
         self.reliability_manager = ReliabilityManager()
+        self.debug_manager = DebugManager()
         self.context_resolver = ContextResolver()
         self.health_monitor = HealthMonitor(self.device_manager, self.session_manager)
         self._running = False
@@ -50,6 +52,7 @@ class DaemonCore:
         """Gracefully shutdown all subsystems."""
         logger.info("daemon_core_stopping")
         self._running = False
+        await self.debug_manager.stop_all()
         await self.health_monitor.stop()
         await self.session_manager.stop()
         await self.device_manager.stop()

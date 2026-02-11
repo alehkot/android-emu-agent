@@ -283,3 +283,16 @@ class FileFindRequest(DeviceTargetRequest):
 class FileListRequest(DeviceTargetRequest):
     path: str
     kind: Literal["file", "dir", "any"] = "any"
+
+
+class DebugPingRequest(BaseModel):
+    session_id: str
+
+
+class DebugAttachRequest(BaseModel):
+    session_id: str
+    package: str
+
+
+class DebugDetachRequest(BaseModel):
+    session_id: str

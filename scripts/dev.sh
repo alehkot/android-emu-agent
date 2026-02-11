@@ -446,6 +446,26 @@ case "${1:-help}" in
         echo "All checks passed!"
         ;;
 
+    build-bridge)
+        echo "Building JDI Bridge..."
+        if [ ! -f "$PROJECT_DIR/jdi-bridge/gradlew" ]; then
+            echo "Gradle wrapper not found in jdi-bridge/. Run 'gradle wrapper' first."
+            exit 1
+        fi
+        "$PROJECT_DIR/jdi-bridge/gradlew" -p "$PROJECT_DIR/jdi-bridge" shadowJar
+        echo "JAR: $PROJECT_DIR/jdi-bridge/build/libs/"
+        ls -lh "$PROJECT_DIR/jdi-bridge/build/libs/"*-all.jar 2>/dev/null || echo "No JAR found."
+        ;;
+
+    test-bridge)
+        echo "Running JDI Bridge tests..."
+        if [ ! -f "$PROJECT_DIR/jdi-bridge/gradlew" ]; then
+            echo "Gradle wrapper not found in jdi-bridge/."
+            exit 1
+        fi
+        "$PROJECT_DIR/jdi-bridge/gradlew" -p "$PROJECT_DIR/jdi-bridge" test
+        ;;
+
     daemon)
         echo "Starting daemon..."
         uv run uvicorn android_emu_agent.daemon.server:app --uds /tmp/android-emu-agent.sock
@@ -537,6 +557,8 @@ case "${1:-help}" in
         echo "  hooks            Install git hooks"
         echo "  typecheck        Run type checkers (mypy + pyright)"
         echo "  check            Run all checks (lint + typecheck + unit tests + docs)"
+        echo "  build-bridge     Build the JDI Bridge fat JAR (jdi-bridge/)"
+        echo "  test-bridge      Run JDI Bridge Kotlin tests"
         echo "  daemon           Start the daemon server"
         echo "  bump-version     Interactively bump package version (patch/minor/major/custom),"
         echo "                   optionally refresh uv.lock, and optionally create a git tag"

@@ -32,6 +32,9 @@ from android_emu_agent.daemon.models import (
     AppResetRequest,
     AppResolveIntentRequest,
     ArtifactLogsRequest,
+    DebugAttachRequest,
+    DebugDetachRequest,
+    DebugPingRequest,
     DeviceSettingRequest,
     DeviceTargetRequest,
     DozeRequest,
@@ -1887,6 +1890,90 @@ async def emulator_snapshot_restore(req: EmulatorSnapshotRequest) -> EndpointRes
         return _error_response(device_offline_error(req.serial), status_code=404)
 
     return {"status": "done", "serial": req.serial, "snapshot": req.name}
+
+
+# Debug commands
+
+
+@app.post("/debug/ping", response_model=None)
+async def debug_ping(req: DebugPingRequest) -> EndpointResponse:
+    """Ping the JDI Bridge to verify it starts and responds."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    try:
+        result = await core.debug_manager.ping(req.session_id)
+    except AgentError as exc:
+        return _error_response(exc, status_code=500)
+
+    return {"status": "done", "session_id": req.session_id, "bridge": result}
+
+
+@app.post("/debug/attach", response_model=None)
+async def debug_attach(req: DebugAttachRequest) -> EndpointResponse:
+    """Attach the debugger to a running app's JVM via JDWP."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    try:
+        validate_package(req.package)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    adb_device = await core.device_manager.get_adb_device(session.device_serial)
+    if not adb_device:
+        return _error_response(device_offline_error(session.device_serial), status_code=404)
+
+    try:
+        result = await core.debug_manager.attach(
+            session_id=req.session_id,
+            device_serial=session.device_serial,
+            package=req.package,
+            adb_device=adb_device,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", **result}
+
+
+@app.post("/debug/detach", response_model=None)
+async def debug_detach(req: DebugDetachRequest) -> EndpointResponse:
+    """Detach the debugger from a session."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    adb_device = await core.device_manager.get_adb_device(session.device_serial)
+    if not adb_device:
+        return _error_response(device_offline_error(session.device_serial), status_code=404)
+
+    try:
+        result = await core.debug_manager.detach(
+            session_id=req.session_id,
+            adb_device=adb_device,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", **result}
+
+
+@app.get("/debug/status/{session_id}", response_model=None)
+async def debug_status(session_id: str) -> EndpointResponse:
+    """Get the debug session status."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(session_id)
+    if not session:
+        return _error_response(session_expired_error(session_id), status_code=404)
+
+    result = await core.debug_manager.status(session_id)
+    return {"status": "done", **result}
 
 
 @app.post("/actions/swipe", response_model=None)

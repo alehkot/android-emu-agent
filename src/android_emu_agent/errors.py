@@ -230,3 +230,92 @@ def file_not_found_error(path: str) -> AgentError:
         context={"path": path},
         remediation="Verify the local path and try again.",
     )
+
+
+def jdk_not_found_error() -> AgentError:
+    """Create error for missing JDK."""
+    return AgentError(
+        code="ERR_JDK_NOT_FOUND",
+        message="Java not found in PATH or JAVA_HOME",
+        context={},
+        remediation=(
+            "JDK 17+ required for the debugger. "
+            "Install via 'brew install openjdk@17' or use Android Studio's bundled JDK."
+        ),
+    )
+
+
+def bridge_not_running_error(reason: str = "") -> AgentError:
+    """Create error for bridge JAR not found or not startable."""
+    return AgentError(
+        code="ERR_BRIDGE_NOT_RUNNING",
+        message=f"JDI Bridge not available: {reason}" if reason else "JDI Bridge not available",
+        context={"reason": reason},
+        remediation=(
+            "Build the bridge with './scripts/dev.sh build-bridge' "
+            "or set ANDROID_EMU_AGENT_BRIDGE_JAR to the JAR path."
+        ),
+    )
+
+
+def bridge_crashed_error(reason: str = "") -> AgentError:
+    """Create error for bridge subprocess crash."""
+    return AgentError(
+        code="ERR_BRIDGE_CRASHED",
+        message=f"JDI Bridge process crashed: {reason}" if reason else "JDI Bridge process crashed",
+        context={"reason": reason},
+        remediation="Check daemon logs for bridge stderr output. Retry the command.",
+    )
+
+
+def app_not_debuggable_error(package: str) -> AgentError:
+    """Create error for non-debuggable app."""
+    return AgentError(
+        code="ERR_APP_NOT_DEBUGGABLE",
+        message=f"App is not debuggable: {package}",
+        context={"package": package},
+        remediation=(
+            "The app must be built with android:debuggable=true, "
+            "or the device must be running a userdebug/eng build."
+        ),
+    )
+
+
+def adb_forward_failed_error(pid: int, reason: str) -> AgentError:
+    """Create error for ADB port forwarding failure."""
+    return AgentError(
+        code="ERR_ADB_FORWARD_FAILED",
+        message=f"ADB forward failed for pid {pid}: {reason}",
+        context={"pid": pid, "reason": reason},
+        remediation="Check that the process is still running and JDWP is available.",
+    )
+
+
+def already_attached_error(session_id: str) -> AgentError:
+    """Create error for duplicate debug attach."""
+    return AgentError(
+        code="ERR_ALREADY_ATTACHED",
+        message=f"Already attached to a debug session for {session_id}",
+        context={"session_id": session_id},
+        remediation="Detach first with 'debug detach --session <id>'.",
+    )
+
+
+def vm_disconnected_error(reason: str) -> AgentError:
+    """Create error for VM disconnection."""
+    return AgentError(
+        code="ERR_VM_DISCONNECTED",
+        message=f"VM disconnected: {reason}",
+        context={"reason": reason},
+        remediation="The target process may have exited. Re-launch and re-attach.",
+    )
+
+
+def debug_not_attached_error(session_id: str) -> AgentError:
+    """Create error for debug commands without an active debug session."""
+    return AgentError(
+        code="ERR_DEBUG_NOT_ATTACHED",
+        message=f"No active debug session for {session_id}",
+        context={"session_id": session_id},
+        remediation="Attach first with 'debug attach --session <id> --package <pkg>'.",
+    )
