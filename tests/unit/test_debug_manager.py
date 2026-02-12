@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -13,11 +12,19 @@ from android_emu_agent.debugger.manager import DebugManager, DebugSessionState
 from android_emu_agent.errors import AgentError
 
 
+def _make_open_transport_context(jdwp_output: str) -> MagicMock:
+    conn = MagicMock()
+    conn.read_string_block = MagicMock(return_value=jdwp_output)
+    ctx = MagicMock()
+    ctx.__enter__.return_value = conn
+    ctx.__exit__.return_value = None
+    return ctx
+
+
 class TestFindJava:
     """Tests for JDK detection."""
 
     def test_find_java_from_java_home(self, tmp_path: Path) -> None:
-        """Should find java from JAVA_HOME."""
         java_bin = tmp_path / "bin" / "java"
         java_bin.parent.mkdir(parents=True)
         java_bin.touch()
@@ -28,19 +35,16 @@ class TestFindJava:
         assert result == java_bin
 
     def test_find_java_from_path(self) -> None:
-        """Should find java from PATH via shutil.which."""
         manager = DebugManager()
         with (
             patch.dict(os.environ, {}, clear=True),
             patch("shutil.which", return_value="/usr/bin/java"),
         ):
-            # Clear JAVA_HOME
             os.environ.pop("JAVA_HOME", None)
             result = manager._find_java()
         assert result == Path("/usr/bin/java")
 
     def test_find_java_not_found(self) -> None:
-        """Should raise ERR_JDK_NOT_FOUND when java is missing."""
         manager = DebugManager()
         with (
             patch.dict(os.environ, {}, clear=True),
@@ -49,14 +53,13 @@ class TestFindJava:
             os.environ.pop("JAVA_HOME", None)
             with pytest.raises(AgentError) as exc_info:
                 manager._find_java()
-            assert exc_info.value.code == "ERR_JDK_NOT_FOUND"
+        assert exc_info.value.code == "ERR_JDK_NOT_FOUND"
 
 
 class TestFindJar:
     """Tests for JAR resolution."""
 
     def test_find_jar_from_env_var(self, tmp_path: Path) -> None:
-        """Should find JAR from ANDROID_EMU_AGENT_BRIDGE_JAR env var."""
         jar = tmp_path / "bridge.jar"
         jar.touch()
 
@@ -66,7 +69,6 @@ class TestFindJar:
         assert result == jar
 
     def test_find_jar_env_var_missing_file(self) -> None:
-        """Should raise when env var points to nonexistent file."""
         manager = DebugManager()
         with (
             patch.dict(os.environ, {"ANDROID_EMU_AGENT_BRIDGE_JAR": "/nonexistent.jar"}),
@@ -75,22 +77,20 @@ class TestFindJar:
             manager._find_jar()
         assert exc_info.value.code == "ERR_BRIDGE_NOT_RUNNING"
 
-    def test_find_jar_not_found(self, tmp_path: Path) -> None:
-        """Should raise when JAR is not found anywhere."""
+    def test_find_jar_uses_downloader(self, tmp_path: Path) -> None:
+        downloaded = tmp_path / "jdi-bridge-0.1.10-all.jar"
+        downloaded.touch()
+
         manager = DebugManager()
         with (
             patch.dict(os.environ, {}, clear=True),
-            patch("pathlib.Path.cwd", return_value=tmp_path),
-            patch(
-                "android_emu_agent.debugger.manager._DEV_JAR_RELATIVE",
-                Path("nonexistent/path"),
-            ),
-            pytest.raises(AgentError) as exc_info,
+            patch("pathlib.Path.cwd", return_value=tmp_path / "empty"),
+            patch("android_emu_agent.debugger.manager._DEV_JAR_RELATIVE", Path("missing/build/libs")),
+            patch.object(manager._downloader, "resolve", return_value=downloaded) as resolve,
         ):
-            os.environ.pop("ANDROID_EMU_AGENT_BRIDGE_JAR", None)
-            manager._jar_path = None  # Reset cached path
-            manager._find_jar()
-        assert exc_info.value.code == "ERR_BRIDGE_NOT_RUNNING"
+            result = manager._find_jar()
+        resolve.assert_called_once()
+        assert result == downloaded
 
 
 class TestDebugManagerLifecycle:
@@ -98,7 +98,6 @@ class TestDebugManagerLifecycle:
 
     @pytest.mark.asyncio
     async def test_get_bridge_not_attached(self) -> None:
-        """Should raise ERR_DEBUG_NOT_ATTACHED for unknown session."""
         manager = DebugManager()
         with pytest.raises(AgentError) as exc_info:
             await manager.get_bridge("s-nonexistent")
@@ -106,9 +105,8 @@ class TestDebugManagerLifecycle:
 
     @pytest.mark.asyncio
     async def test_stop_all_empty(self) -> None:
-        """Stopping all bridges when none exist should be a no-op."""
         manager = DebugManager()
-        await manager.stop_all()  # Should not raise
+        await manager.stop_all()
 
 
 class TestAttach:
@@ -116,22 +114,28 @@ class TestAttach:
 
     @pytest.mark.asyncio
     async def test_attach_stores_session_state(self) -> None:
-        """Attach should store DebugSessionState after successful attach."""
         manager = DebugManager()
 
         mock_adb = MagicMock()
-        mock_adb.shell = MagicMock(return_value="12345")
-        mock_adb.forward = MagicMock(return_value=54321)
-
         mock_bridge = AsyncMock()
         mock_bridge.is_alive = True
-        mock_bridge.ping = AsyncMock(return_value={"pong": True})
         mock_bridge.request = AsyncMock(
-            return_value={"status": "attached", "vm_name": "Dalvik", "vm_version": "1.0"}
+            return_value={
+                "status": "attached",
+                "vm_name": "Dalvik",
+                "vm_version": "1.0",
+                "thread_count": 8,
+                "suspended": False,
+            }
         )
-        mock_bridge._event_queue = asyncio.Queue()
+        mock_bridge.next_event = AsyncMock()
 
-        with patch.object(manager, "start_bridge", return_value=mock_bridge):
+        with (
+            patch.object(manager, "_find_pid", AsyncMock(return_value=(12345, "com.example.app"))),
+            patch.object(manager, "_setup_forward", AsyncMock(return_value=54321)),
+            patch.object(manager, "start_bridge", AsyncMock(return_value=mock_bridge)),
+            patch.object(manager, "_monitor_events", AsyncMock()),
+        ):
             result = await manager.attach(
                 session_id="s-test",
                 device_serial="emulator-5554",
@@ -143,19 +147,22 @@ class TestAttach:
         assert result["pid"] == 12345
         assert result["local_port"] == 54321
         assert result["vm_name"] == "Dalvik"
+        assert result["threads"] == 8
+        assert result["process_name"] == "com.example.app"
         assert "s-test" in manager._debug_sessions
         ds = manager._debug_sessions["s-test"]
         assert ds.package == "com.example.app"
+        assert ds.process_name == "com.example.app"
         assert ds.pid == 12345
         assert ds.state == "attached"
 
     @pytest.mark.asyncio
     async def test_attach_already_attached_raises(self) -> None:
-        """Attach when already attached should raise ERR_ALREADY_ATTACHED."""
         manager = DebugManager()
         manager._debug_sessions["s-test"] = DebugSessionState(
             session_id="s-test",
             package="com.example.app",
+            process_name="com.example.app",
             pid=123,
             jdwp_port=123,
             local_forward_port=54321,
@@ -173,17 +180,45 @@ class TestAttach:
             )
         assert exc_info.value.code == "ERR_ALREADY_ATTACHED"
 
+    @pytest.mark.asyncio
+    async def test_attach_maps_not_debuggable_error(self) -> None:
+        manager = DebugManager()
+
+        mock_adb = MagicMock()
+        mock_bridge = AsyncMock()
+        mock_bridge.is_alive = True
+        mock_bridge.request = AsyncMock(
+            return_value={"error": {"message": "JDWP handshake failed: connection closed"}}
+        )
+        mock_bridge.next_event = AsyncMock()
+
+        with (
+            patch.object(manager, "_find_pid", AsyncMock(return_value=(12345, "com.example.app"))),
+            patch.object(manager, "_setup_forward", AsyncMock(return_value=54321)),
+            patch.object(manager, "start_bridge", AsyncMock(return_value=mock_bridge)),
+            patch.object(manager, "_remove_forward", AsyncMock()),
+            patch.object(manager, "stop_bridge", AsyncMock()),
+            pytest.raises(AgentError) as exc_info,
+        ):
+            await manager.attach(
+                session_id="s-test",
+                device_serial="emulator-5554",
+                package="com.example.app",
+                adb_device=mock_adb,
+            )
+        assert exc_info.value.code == "ERR_APP_NOT_DEBUGGABLE"
+
 
 class TestDetach:
     """Tests for debug detach flow."""
 
     @pytest.mark.asyncio
     async def test_detach_cleans_up(self) -> None:
-        """Detach should clean up session state, bridge, and forward."""
         manager = DebugManager()
         manager._debug_sessions["s-test"] = DebugSessionState(
             session_id="s-test",
             package="com.example.app",
+            process_name="com.example.app",
             pid=123,
             jdwp_port=123,
             local_forward_port=54321,
@@ -197,17 +232,16 @@ class TestDetach:
         manager._bridges["s-test"] = mock_bridge
 
         mock_adb = MagicMock()
-        mock_adb.forward = MagicMock()
-        mock_adb.shell = MagicMock(return_value="")
+        mock_adb.forward_remove = MagicMock()
 
         result = await manager.detach("s-test", mock_adb)
         assert result["status"] == "detached"
         assert "s-test" not in manager._debug_sessions
         assert "s-test" not in manager._bridges
+        mock_adb.forward_remove.assert_called_once_with("tcp:54321", False)
 
     @pytest.mark.asyncio
     async def test_detach_when_not_attached_raises(self) -> None:
-        """Detach when not attached should raise ERR_DEBUG_NOT_ATTACHED."""
         manager = DebugManager()
         mock_adb = MagicMock()
         with pytest.raises(AgentError) as exc_info:
@@ -220,18 +254,17 @@ class TestStatus:
 
     @pytest.mark.asyncio
     async def test_status_not_attached(self) -> None:
-        """Status for unknown session should return not_attached."""
         manager = DebugManager()
         result = await manager.status("s-nonexistent")
         assert result["status"] == "not_attached"
 
     @pytest.mark.asyncio
     async def test_status_attached(self) -> None:
-        """Status for attached session should query bridge."""
         manager = DebugManager()
         manager._debug_sessions["s-test"] = DebugSessionState(
             session_id="s-test",
             package="com.example.app",
+            process_name="com.example.app",
             pid=123,
             jdwp_port=123,
             local_forward_port=54321,
@@ -249,6 +282,7 @@ class TestStatus:
                 "vm_name": "Dalvik",
                 "vm_version": "1.0",
                 "thread_count": 5,
+                "suspended": False,
             }
         )
         manager._bridges["s-test"] = mock_bridge
@@ -256,30 +290,165 @@ class TestStatus:
         result = await manager.status("s-test")
         assert result["status"] == "attached"
         assert result["package"] == "com.example.app"
+        assert result["process_name"] == "com.example.app"
         assert result["pid"] == 123
         assert result["thread_count"] == 5
+        assert result["suspended"] is False
+
+    @pytest.mark.asyncio
+    async def test_status_disconnected_includes_remediation(self) -> None:
+        manager = DebugManager()
+        manager._debug_sessions["s-test"] = DebugSessionState(
+            session_id="s-test",
+            package="com.example.app",
+            process_name="com.example.app",
+            pid=123,
+            jdwp_port=123,
+            local_forward_port=54321,
+            device_serial="emulator-5554",
+            state="disconnected",
+            disconnect_reason="app_crashed",
+            disconnect_detail="VM disconnected",
+        )
+        result = await manager.status("s-test")
+        assert result["status"] == "disconnected"
+        assert "Relaunch" in result["remediation"]
 
 
-class TestFindPid:
-    """Tests for PID resolution."""
+class TestPidResolution:
+    """Tests for package PID/JDWP mapping."""
+
+    @pytest.mark.asyncio
+    async def test_find_pid_single_match(self) -> None:
+        manager = DebugManager()
+        mock_adb = MagicMock()
+        mock_adb.open_transport = MagicMock(return_value=_make_open_transport_context("12345\n"))
+        mock_adb.shell = MagicMock(return_value="PID NAME\n12345 com.example.app\n")
+
+        pid, process_name = await manager._find_pid("com.example.app", mock_adb)
+        assert pid == 12345
+        assert process_name == "com.example.app"
+
+    @pytest.mark.asyncio
+    async def test_find_pid_prefers_main_process(self) -> None:
+        manager = DebugManager()
+        mock_adb = MagicMock()
+        mock_adb.open_transport = MagicMock(return_value=_make_open_transport_context("123 456\n"))
+        mock_adb.shell = MagicMock(
+            return_value=("PID NAME\n123 com.example.app:remote\n456 com.example.app\n")
+        )
+
+        pid, process_name = await manager._find_pid("com.example.app", mock_adb)
+        assert pid == 456
+        assert process_name == "com.example.app"
+
+    @pytest.mark.asyncio
+    async def test_find_pid_multiple_without_main_requires_process(self) -> None:
+        manager = DebugManager()
+        mock_adb = MagicMock()
+        mock_adb.open_transport = MagicMock(return_value=_make_open_transport_context("123 456\n"))
+        mock_adb.shell = MagicMock(
+            return_value=("PID NAME\n123 com.example.app:alpha\n456 com.example.app:beta\n")
+        )
+
+        with pytest.raises(AgentError) as exc_info:
+            await manager._find_pid("com.example.app", mock_adb)
+        assert exc_info.value.code == "ERR_MULTIPLE_DEBUGGABLE_PROCESSES"
+
+    @pytest.mark.asyncio
+    async def test_find_pid_explicit_process(self) -> None:
+        manager = DebugManager()
+        mock_adb = MagicMock()
+        mock_adb.open_transport = MagicMock(return_value=_make_open_transport_context("123 456\n"))
+        mock_adb.shell = MagicMock(
+            return_value=("PID NAME\n123 com.example.app\n456 com.example.app:remote\n")
+        )
+
+        pid, process_name = await manager._find_pid(
+            "com.example.app",
+            mock_adb,
+            process_name="com.example.app:remote",
+        )
+        assert pid == 456
+        assert process_name == "com.example.app:remote"
+
+    @pytest.mark.asyncio
+    async def test_find_pid_not_debuggable(self) -> None:
+        manager = DebugManager()
+        mock_adb = MagicMock()
+        mock_adb.open_transport = MagicMock(return_value=_make_open_transport_context(""))
+        mock_adb.shell = MagicMock(return_value="PID NAME\n12345 com.example.app\n")
+
+        with pytest.raises(AgentError) as exc_info:
+            await manager._find_pid("com.example.app", mock_adb)
+        assert exc_info.value.code == "ERR_APP_NOT_DEBUGGABLE"
 
     @pytest.mark.asyncio
     async def test_find_pid_not_found(self) -> None:
-        """Should raise ERR_PROCESS_NOT_FOUND when pidof returns empty."""
         manager = DebugManager()
         mock_adb = MagicMock()
-        mock_adb.shell = MagicMock(return_value="")
+        mock_adb.open_transport = MagicMock(return_value=_make_open_transport_context(""))
+        mock_adb.shell = MagicMock(return_value="PID NAME\n")
 
         with pytest.raises(AgentError) as exc_info:
             await manager._find_pid("com.example.app", mock_adb)
         assert exc_info.value.code == "ERR_PROCESS_NOT_FOUND"
 
+
+class TestForwarding:
+    """Tests for ADB forwarding lifecycle."""
+
     @pytest.mark.asyncio
-    async def test_find_pid_returns_first(self) -> None:
-        """Should return first PID when pidof returns multiple."""
+    async def test_setup_forward_uses_forward_port(self) -> None:
         manager = DebugManager()
         mock_adb = MagicMock()
-        mock_adb.shell = MagicMock(return_value="123 456")
+        mock_adb.forward_port = MagicMock(return_value=54321)
 
-        pid = await manager._find_pid("com.example.app", mock_adb)
-        assert pid == 123
+        port = await manager._setup_forward(12345, mock_adb)
+        assert port == 54321
+        mock_adb.forward_port.assert_called_once_with("jdwp:12345")
+
+    @pytest.mark.asyncio
+    async def test_remove_forward_uses_forward_remove(self) -> None:
+        manager = DebugManager()
+        mock_adb = MagicMock()
+        mock_adb.forward_remove = MagicMock()
+
+        await manager._remove_forward(54321, mock_adb)
+        mock_adb.forward_remove.assert_called_once_with("tcp:54321", False)
+
+
+class TestDisconnectEvents:
+    """Tests for async bridge events."""
+
+    @pytest.mark.asyncio
+    async def test_monitor_event_handles_event_notification_shape(self) -> None:
+        manager = DebugManager()
+        manager._debug_sessions["s-test"] = DebugSessionState(
+            session_id="s-test",
+            package="com.example.app",
+            process_name="com.example.app",
+            pid=12345,
+            jdwp_port=12345,
+            local_forward_port=54321,
+            device_serial="emulator-5554",
+            state="attached",
+        )
+
+        bridge = MagicMock()
+        bridge.next_event = AsyncMock(
+            return_value={
+                "jsonrpc": "2.0",
+                "method": "event",
+                "params": {"type": "vm_disconnected", "reason": "device_disconnected"},
+            }
+        )
+
+        mock_adb = MagicMock()
+        with patch.object(manager, "stop_bridge", AsyncMock()) as stop_bridge:
+            await manager._monitor_events("s-test", bridge, mock_adb)
+
+        ds = manager._debug_sessions["s-test"]
+        assert ds.state == "disconnected"
+        assert ds.disconnect_reason == "device_disconnected"
+        stop_bridge.assert_awaited_once_with("s-test")

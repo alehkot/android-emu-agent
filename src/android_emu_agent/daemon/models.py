@@ -292,6 +292,7 @@ class DebugPingRequest(BaseModel):
 class DebugAttachRequest(BaseModel):
     session_id: str
     package: str
+    process: str | None = None
 
 
 class DebugDetachRequest(BaseModel):

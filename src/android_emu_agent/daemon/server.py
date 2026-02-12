@@ -1934,6 +1934,7 @@ async def debug_attach(req: DebugAttachRequest) -> EndpointResponse:
             device_serial=session.device_serial,
             package=req.package,
             adb_device=adb_device,
+            process_name=req.process,
         )
     except AgentError as exc:
         return _error_response(exc, status_code=400)
@@ -1974,6 +1975,12 @@ async def debug_status(session_id: str) -> EndpointResponse:
 
     result = await core.debug_manager.status(session_id)
     return {"status": "done", **result}
+
+
+@app.get("/debug/status", response_model=None)
+async def debug_status_query(session_id: str) -> EndpointResponse:
+    """Get debug status using query string style: /debug/status?session_id=..."""
+    return await debug_status(session_id)
 
 
 @app.post("/actions/swipe", response_model=None)

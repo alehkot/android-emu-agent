@@ -101,6 +101,17 @@ debugger to the app at startup:
 - `app deeplink <session_id> <uri> --wait-debugger` Wait for debugger before intent start.
 - `app intent <session_id> ... --wait-debugger` Wait for debugger before intent start.
 
+### Debug
+
+- `debug ping <session_id>` Start the JDI bridge (if needed) and verify JSON-RPC roundtrip.
+- `debug attach --session <session_id> --package <package> [--process <process_name>]` Attach via
+  JDWP and return VM status.
+- `debug status --session <session_id>` Show current debugger connection state.
+- `debug detach --session <session_id>` Detach debugger and clean up ADB forwarding.
+
+Use `--process` when multiple debuggable processes are present (for example
+`com.example.app:remote`). If omitted, the main package process is chosen when possible.
+
 ### Artifact
 
 - `artifact save-snapshot <session_id>` Save last snapshot.

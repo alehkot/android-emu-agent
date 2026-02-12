@@ -66,13 +66,20 @@ class BridgeClient:
         with contextlib.suppress(Exception):
             await asyncio.wait_for(self.request("shutdown"), timeout=2.0)
 
-        # Wait for process to exit
+        # Escalate from terminate to kill if graceful shutdown does not complete.
         try:
-            await asyncio.wait_for(self._process.wait(), timeout=3.0)
+            await asyncio.wait_for(self._process.wait(), timeout=2.0)
         except TimeoutError:
-            logger.warning("bridge_kill", pid=self._process.pid)
-            self._process.kill()
-            await self._process.wait()
+            logger.warning("bridge_terminate", pid=self._process.pid)
+            with contextlib.suppress(ProcessLookupError):
+                self._process.terminate()
+            try:
+                await asyncio.wait_for(self._process.wait(), timeout=3.0)
+            except TimeoutError:
+                logger.warning("bridge_kill", pid=self._process.pid)
+                with contextlib.suppress(ProcessLookupError):
+                    self._process.kill()
+                await asyncio.wait_for(self._process.wait(), timeout=5.0)
 
         # Cancel reader tasks
         for task in (self._stdout_task, self._stderr_task):
@@ -111,8 +118,12 @@ class BridgeClient:
         self._pending[req_id] = future
 
         line = json.dumps(msg, ensure_ascii=True) + "\n"
-        self._process.stdin.write(line.encode())
-        await self._process.stdin.drain()
+        try:
+            self._process.stdin.write(line.encode())
+            await self._process.stdin.drain()
+        except (BrokenPipeError, ConnectionResetError, RuntimeError) as exc:
+            self._pending.pop(req_id, None)
+            raise bridge_crashed_error(f"bridge write failed: {exc}") from None
 
         try:
             return await asyncio.wait_for(future, timeout=30.0)
@@ -123,6 +134,10 @@ class BridgeClient:
     async def ping(self) -> dict[str, Any]:
         """Send a ping request to verify the bridge is responsive."""
         return await self.request("ping")
+
+    async def next_event(self) -> dict[str, Any]:
+        """Block until the next bridge notification/event is available."""
+        return await self._event_queue.get()
 
     async def _read_stdout_loop(self) -> None:
         """Read JSON-RPC responses and notifications from bridge stdout."""

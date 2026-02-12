@@ -436,6 +436,8 @@ case "${1:-help}" in
         uv run ruff check .
         uv run mypy src/
         uv run pyright
+        "$PROJECT_DIR/jdi-bridge/gradlew" -p "$PROJECT_DIR/jdi-bridge" shadowJar
+        "$PROJECT_DIR/jdi-bridge/gradlew" -p "$PROJECT_DIR/jdi-bridge" test
         uv run pytest tests/unit -q
         uv run mkdocs build --strict
         if command -v npm >/dev/null 2>&1; then

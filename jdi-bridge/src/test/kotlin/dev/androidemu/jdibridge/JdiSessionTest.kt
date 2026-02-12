@@ -146,6 +146,8 @@ class JdiSessionTest {
         assertFalse(session.isAttached, "Session should be disconnected after target kill")
         assertTrue(notifications.isNotEmpty(), "Expected a vm_disconnected notification")
         val notif = notifications.first().jsonObject
-        assertEquals("vm_disconnected", notif["method"]?.jsonPrimitive?.content)
+        assertEquals("event", notif["method"]?.jsonPrimitive?.content)
+        val params = notif["params"]?.jsonObject
+        assertEquals("vm_disconnected", params?.get("type")?.jsonPrimitive?.content)
     }
 }

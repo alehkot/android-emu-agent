@@ -26,6 +26,11 @@ def debug_ping(
 def debug_attach(
     session_id: str = typer.Option(..., "--session", help="Session ID"),
     package: str = typer.Option(..., "--package", help="App package name"),
+    process: str | None = typer.Option(
+        None,
+        "--process",
+        help="Optional process name (e.g. com.example.app:remote) when multiple are debuggable",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Attach the debugger to a running app's JVM."""
@@ -33,7 +38,7 @@ def debug_attach(
     resp = client.request(
         "POST",
         "/debug/attach",
-        json_body={"session_id": session_id, "package": package},
+        json_body={"session_id": session_id, "package": package, "process": process},
     )
     client.close()
     handle_response(resp, json_output=json_output)

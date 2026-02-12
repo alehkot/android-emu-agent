@@ -252,11 +252,17 @@ Attach a JDWP debugger to a running Android app's JVM. This requires JDK 17+ and
 (built with `android:debuggable=true` or running on a userdebug/eng device).
 
 ```bash
+# Verify bridge startup and JSON-RPC health
+uv run android-emu-agent debug ping s-abc123
+
 # Launch the app in wait-for-debugger mode
 uv run android-emu-agent app launch s-abc123 com.example.app --wait-debugger
 
 # Attach the debugger (finds PID, sets up ADB forward, connects via JDI)
 uv run android-emu-agent debug attach --session s-abc123 --package com.example.app
+
+# If multiple debuggable processes exist, pick one explicitly
+uv run android-emu-agent debug attach --session s-abc123 --package com.example.app --process com.example.app:remote
 
 # Check debug session status (VM name, version, thread count)
 uv run android-emu-agent debug status --session s-abc123

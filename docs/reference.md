@@ -19,6 +19,7 @@ android-emu-agent [OPTIONS] COMMAND [ARGS]...
 
 - `version`: Show version information.
 - `daemon`: Daemon lifecycle commands
+- `debug`: Debugger commands (JDI Bridge)
 - `device`: Device management commands
 - `session`: Session management commands
 - `ui`: UI observation commands
@@ -104,6 +105,96 @@ android-emu-agent daemon status [OPTIONS]
 
 **Options**:
 
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+## `android-emu-agent debug`
+
+Debugger commands (JDI Bridge)
+
+**Usage**:
+
+```console
+android-emu-agent debug [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+- `--help`: Show this message and exit.
+
+**Commands**:
+
+- `ping`: Ping the JDI Bridge to verify it starts...
+- `attach`: Attach the debugger to a running app&#x27;s JVM.
+- `detach`: Detach the debugger from a session.
+- `status`: Get the debug session status.
+
+### `android-emu-agent debug ping`
+
+Ping the JDI Bridge to verify it starts and responds.
+
+**Usage**:
+
+```console
+android-emu-agent debug ping [OPTIONS] SESSION_ID
+```
+
+**Arguments**:
+
+- `SESSION_ID`: Session ID [required]
+
+**Options**:
+
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent debug attach`
+
+Attach the debugger to a running app&#x27;s JVM.
+
+**Usage**:
+
+```console
+android-emu-agent debug attach [OPTIONS]
+```
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--package TEXT`: App package name [required]
+- `--process TEXT`: Optional process name (e.g. com.example.app:remote) when multiple are debuggable
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent debug detach`
+
+Detach the debugger from a session.
+
+**Usage**:
+
+```console
+android-emu-agent debug detach [OPTIONS]
+```
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent debug status`
+
+Get the debug session status.
+
+**Usage**:
+
+```console
+android-emu-agent debug status [OPTIONS]
+```
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 

@@ -38,6 +38,8 @@ ENV/
 
 # Node
 node_modules/
+.gradle/
+jdi-bridge/.gradle/
 
 # Testing
 .pytest_cache/

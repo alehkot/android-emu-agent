@@ -46,7 +46,12 @@ class JdiSession(
         val machine = try {
             connector.attach(args)
         } catch (e: Exception) {
-            throw RpcException(INTERNAL_ERROR, "Failed to attach: ${e.message}")
+            val detail = e.message ?: "unknown"
+            val lowered = detail.lowercase()
+            if (lowered.contains("handshake") || lowered.contains("not debuggable")) {
+                throw RpcException(INTERNAL_ERROR, "APP_NOT_DEBUGGABLE: $detail")
+            }
+            throw RpcException(INTERNAL_ERROR, "Failed to attach: $detail")
         }
 
         vm = machine
@@ -66,6 +71,7 @@ class JdiSession(
             put("vm_name", machine.name())
             put("vm_version", machine.version())
             put("thread_count", machine.allThreads().size)
+            put("suspended", machine.allThreads().all { it.isSuspended })
         }
     }
 
@@ -108,6 +114,7 @@ class JdiSession(
                 put("vm_name", machine.name())
                 put("vm_version", machine.version())
                 put("thread_count", machine.allThreads().size)
+                put("suspended", machine.allThreads().all { it.isSuspended })
             }
         } catch (e: Exception) {
             buildJsonObject {
@@ -157,14 +164,17 @@ class JdiSession(
     private fun handleDisconnect(reason: String) {
         log("vm disconnected: $reason")
         disconnected = true
-        disconnectReason = reason
+        val normalizedReason = normalizeDisconnectReason(reason)
+        disconnectReason = normalizedReason
 
         val notification = buildJsonObject {
             put("jsonrpc", "2.0")
             // No id = notification
-            put("method", "vm_disconnected")
+            put("method", "event")
             put("params", buildJsonObject {
-                put("reason", reason)
+                put("type", "vm_disconnected")
+                put("reason", normalizedReason)
+                put("detail", reason)
             })
         }
         try {
@@ -179,5 +189,18 @@ class JdiSession(
         return vmm.attachingConnectors().firstOrNull {
             it.name() == "com.sun.jdi.SocketAttach"
         } ?: throw RpcException(INTERNAL_ERROR, "SocketAttach connector not found in JDK")
+    }
+
+    private fun normalizeDisconnectReason(reason: String): String {
+        val lowered = reason.lowercase()
+        return when {
+            lowered.contains("transport") || lowered.contains("device offline") ||
+                lowered.contains("connection reset") -> "device_disconnected"
+
+            lowered.contains("killed") || lowered.contains("terminated") ||
+                lowered.contains("force stop") -> "app_killed"
+
+            else -> "app_crashed"
+        }
     }
 }
