@@ -366,7 +366,7 @@ class DebugManager:
         result = await bridge.request("list_breakpoints")
         if not isinstance(result, dict):
             raise bridge_not_running_error("Invalid list_breakpoints response from bridge")
-        return result
+        return {"status": "attached", **result}
 
     async def list_threads(
         self,
@@ -383,17 +383,19 @@ class DebugManager:
         )
         if not isinstance(result, dict):
             raise bridge_not_running_error("Invalid list_threads response from bridge")
-        return result
+        return {"status": "attached", **result}
 
     async def drain_events(self, session_id: str) -> dict[str, Any]:
         """Drain and return queued debugger events for a session."""
-        if session_id not in self._debug_sessions:
+        ds = self._debug_sessions.get(session_id)
+        if ds is None:
             raise debug_not_attached_error(session_id)
 
         queue = self._event_queues.setdefault(session_id, [])
         events = list(queue)
         queue.clear()
         return {
+            "status": ds.state,
             "session_id": session_id,
             "count": len(events),
             "events": events,

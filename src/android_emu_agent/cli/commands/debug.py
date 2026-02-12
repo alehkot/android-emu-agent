@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import typer
 
-from android_emu_agent.cli.daemon_client import DaemonClient
+from android_emu_agent.cli.daemon_client import DaemonClient, format_json
 from android_emu_agent.cli.utils import handle_response
 
 app = typer.Typer(help="Debugger commands (JDI Bridge)")
@@ -21,7 +21,17 @@ def debug_ping(
     client = DaemonClient(timeout=30.0)
     resp = client.request("POST", "/debug/ping", json_body={"session_id": session_id})
     client.close()
-    handle_response(resp, json_output=json_output)
+    if json_output:
+        handle_response(resp, json_output=True)
+        return
+
+    data = resp.json()
+    if isinstance(data, dict) and isinstance(data.get("bridge"), dict) and data.get("status") == "done":
+        bridge = data["bridge"]
+        typer.echo(format_json({"status": "pong", "session_id": session_id, **bridge}))
+        return
+
+    handle_response(resp, json_output=False)
 
 
 @app.command("attach")

@@ -539,7 +539,8 @@ class TestMilestone2DebugMethods:
         bridge.request = AsyncMock(return_value={"threads": [], "total_threads": 0, "truncated": False})
         manager._bridges["s-test"] = bridge
 
-        await manager.list_threads("s-test", include_daemon=True, max_threads=100)
+        result = await manager.list_threads("s-test", include_daemon=True, max_threads=100)
+        assert result["status"] == "attached"
         bridge.request.assert_awaited_once_with(
             "list_threads",
             {"include_daemon": True, "max_threads": 100},
@@ -555,6 +556,7 @@ class TestMilestone2DebugMethods:
         ]
 
         first = await manager.drain_events("s-test")
+        assert first["status"] == "attached"
         assert first["count"] == 2
         assert len(first["events"]) == 2
 
