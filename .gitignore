@@ -60,6 +60,7 @@ dmypy.json
 .android-agent/
 .android-agent-artifacts/
 *.db
+*-gitignore.md
 
 # Logs
 *.log
