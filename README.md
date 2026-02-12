@@ -267,6 +267,18 @@ uv run android-emu-agent debug attach --session s-abc123 --package com.example.a
 # Check debug session status (VM name, version, thread count)
 uv run android-emu-agent debug status --session s-abc123
 
+# Set/list/remove breakpoints
+uv run android-emu-agent debug break set com.example.app.MainActivity 42 --session s-abc123
+uv run android-emu-agent debug break list --session s-abc123
+uv run android-emu-agent debug break remove 1 --session s-abc123
+
+# List threads (default skips daemon threads; --all includes them)
+uv run android-emu-agent debug threads --session s-abc123
+uv run android-emu-agent debug threads --session s-abc123 --all
+
+# Drain debugger event queue (breakpoint hits/resolutions, disconnect events)
+uv run android-emu-agent debug events --session s-abc123
+
 # Detach when done (cleans up ADB forward and bridge process)
 uv run android-emu-agent debug detach --session s-abc123
 ```

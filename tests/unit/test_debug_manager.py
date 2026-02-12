@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
+import subprocess
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -155,6 +157,7 @@ class TestAttach:
         assert ds.process_name == "com.example.app"
         assert ds.pid == 12345
         assert ds.state == "attached"
+        assert manager._event_queues["s-test"] == []
 
     @pytest.mark.asyncio
     async def test_attach_already_attached_raises(self) -> None:
@@ -238,6 +241,7 @@ class TestDetach:
         assert result["status"] == "detached"
         assert "s-test" not in manager._debug_sessions
         assert "s-test" not in manager._bridges
+        assert "s-test" not in manager._event_queues
         mock_adb.forward_remove.assert_called_once_with("tcp:54321", False)
 
     @pytest.mark.asyncio
@@ -394,6 +398,44 @@ class TestPidResolution:
             await manager._find_pid("com.example.app", mock_adb)
         assert exc_info.value.code == "ERR_PROCESS_NOT_FOUND"
 
+    @pytest.mark.asyncio
+    async def test_list_jdwp_pids_falls_back_to_adb_cli(self) -> None:
+        manager = DebugManager()
+        mock_adb = MagicMock()
+        mock_adb.serial = "emulator-5554"
+
+        with (
+            patch.object(
+                manager,
+                "_read_jdwp_list",
+                side_effect=RuntimeError("unknown host service 'jdwp'"),
+            ),
+            patch.object(
+                manager,
+                "_read_jdwp_list_via_adb",
+                return_value="1649\n5182\n6547\n",
+            ),
+        ):
+            pids = await manager._list_jdwp_pids(mock_adb)
+
+        assert pids == {1649, 5182, 6547}
+
+    def test_read_jdwp_list_via_adb_parses_timeout_partial_output(self) -> None:
+        manager = DebugManager()
+        timeout = subprocess.TimeoutExpired(
+            cmd=["adb", "-s", "emulator-5554", "jdwp"],
+            timeout=1.0,
+            output=b"1649\n5182\n6547\n",
+        )
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/adb"),
+            patch("subprocess.run", side_effect=timeout),
+        ):
+            output = manager._read_jdwp_list_via_adb("emulator-5554")
+
+        assert output.strip().splitlines() == ["1649", "5182", "6547"]
+
 
 class TestForwarding:
     """Tests for ADB forwarding lifecycle."""
@@ -452,3 +494,100 @@ class TestDisconnectEvents:
         assert ds.state == "disconnected"
         assert ds.disconnect_reason == "device_disconnected"
         stop_bridge.assert_awaited_once_with("s-test")
+
+
+class TestMilestone2DebugMethods:
+    """Tests for breakpoint/thread/event manager APIs."""
+
+    @staticmethod
+    def _attach_session(manager: DebugManager, session_id: str = "s-test") -> None:
+        manager._debug_sessions[session_id] = DebugSessionState(
+            session_id=session_id,
+            package="com.example.app",
+            process_name="com.example.app",
+            pid=123,
+            jdwp_port=123,
+            local_forward_port=54321,
+            device_serial="emulator-5554",
+            state="attached",
+        )
+
+    @pytest.mark.asyncio
+    async def test_set_breakpoint_forwards_rpc(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(return_value={"status": "set", "breakpoint_id": 1})
+        manager._bridges["s-test"] = bridge
+
+        result = await manager.set_breakpoint("s-test", "com.example.MainActivity", 25)
+        assert result["status"] == "set"
+        bridge.request.assert_awaited_once_with(
+            "set_breakpoint",
+            {"class_pattern": "com.example.MainActivity", "line": 25},
+        )
+
+    @pytest.mark.asyncio
+    async def test_list_threads_forwards_rpc(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(return_value={"threads": [], "total_threads": 0, "truncated": False})
+        manager._bridges["s-test"] = bridge
+
+        await manager.list_threads("s-test", include_daemon=True, max_threads=100)
+        bridge.request.assert_awaited_once_with(
+            "list_threads",
+            {"include_daemon": True, "max_threads": 100},
+        )
+
+    @pytest.mark.asyncio
+    async def test_drain_events_returns_and_clears_queue(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+        manager._event_queues["s-test"] = [
+            {"type": "breakpoint_resolved", "breakpoint_id": 1},
+            {"type": "breakpoint_hit", "breakpoint_id": 1},
+        ]
+
+        first = await manager.drain_events("s-test")
+        assert first["count"] == 2
+        assert len(first["events"]) == 2
+
+        second = await manager.drain_events("s-test")
+        assert second["count"] == 0
+        assert second["events"] == []
+
+    @pytest.mark.asyncio
+    async def test_monitor_events_queues_breakpoint_notifications(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = MagicMock()
+        bridge.next_event = AsyncMock(
+            side_effect=[
+                {
+                    "jsonrpc": "2.0",
+                    "method": "event",
+                    "params": {
+                        "type": "breakpoint_hit",
+                        "breakpoint_id": 3,
+                        "thread": "main",
+                        "location": "com.example.MainActivity:25",
+                    },
+                },
+                asyncio.CancelledError(),
+            ]
+        )
+
+        adb = MagicMock()
+        await manager._monitor_events("s-test", bridge, adb)
+
+        queued = manager._event_queues.get("s-test", [])
+        assert len(queued) == 1
+        assert queued[0]["type"] == "breakpoint_hit"
+        assert queued[0]["breakpoint_id"] == 3

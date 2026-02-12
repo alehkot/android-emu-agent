@@ -3,9 +3,11 @@ package dev.androidemu.jdibridge
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.int
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -92,6 +94,39 @@ class JdiSessionTest {
         val status = session.status().jsonObject
         assertEquals("attached", status["status"]?.jsonPrimitive?.content)
         assertTrue(status.containsKey("vm_name"))
+    }
+
+    @Test
+    fun `list threads returns bounded thread payload`() {
+        session.attach("localhost", targetPort)
+
+        val result = session.listThreads(includeDaemon = false, maxThreads = 20).jsonObject
+        assertTrue(result.containsKey("threads"))
+        assertTrue(result.containsKey("total_threads"))
+        assertTrue(result.containsKey("truncated"))
+    }
+
+    @Test
+    fun `breakpoint lifecycle set list remove`() {
+        session.attach("localhost", targetPort)
+
+        val set = session.setBreakpoint("dev.androidemu.jdibridge.TestTarget", 12).jsonObject
+        val breakpointId = set["breakpoint_id"]?.jsonPrimitive?.int
+        assertNotNull(breakpointId)
+        val nonNullBreakpointId = breakpointId
+            ?: throw IllegalStateException("breakpoint_id missing from setBreakpoint result")
+        val status = set["status"]?.jsonPrimitive?.content
+        assertTrue(status == "set" || status == "pending")
+
+        val listed = session.listBreakpoints().jsonObject
+        val count = listed["count"]?.jsonPrimitive?.int
+        assertEquals(1, count)
+
+        val removed = session.removeBreakpoint(nonNullBreakpointId).jsonObject
+        assertEquals("removed", removed["status"]?.jsonPrimitive?.content)
+
+        val after = session.listBreakpoints().jsonObject
+        assertEquals(0, after["count"]?.jsonPrimitive?.int)
     }
 
     @Test

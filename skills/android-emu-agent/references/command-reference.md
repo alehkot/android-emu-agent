@@ -107,6 +107,13 @@ debugger to the app at startup:
 - `debug attach --session <session_id> --package <package> [--process <process_name>]` Attach via
   JDWP and return VM status.
 - `debug status --session <session_id>` Show current debugger connection state.
+- `debug break set <class_pattern> <line> --session <session_id>` Set a breakpoint.
+- `debug break list --session <session_id>` List breakpoints and their IDs/status.
+- `debug break remove <breakpoint_id> --session <session_id>` Remove a breakpoint.
+- `debug threads --session <session_id> [--all]` List VM threads (use `--all` to include daemon
+  threads).
+- `debug events --session <session_id>` Drain queued debugger events (for example `breakpoint_hit`,
+  `breakpoint_resolved`).
 - `debug detach --session <session_id>` Detach debugger and clean up ADB forwarding.
 
 Use `--process` when multiple debuggable processes are present (for example

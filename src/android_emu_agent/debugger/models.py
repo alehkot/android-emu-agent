@@ -21,3 +21,14 @@ class DebugDetachRequest(BaseModel):
 
 class DebugStatusRequest(BaseModel):
     session_id: str
+
+
+class DebugBreakpointSetRequest(BaseModel):
+    session_id: str
+    class_pattern: str
+    line: int
+
+
+class DebugBreakpointRemoveRequest(BaseModel):
+    session_id: str
+    breakpoint_id: int

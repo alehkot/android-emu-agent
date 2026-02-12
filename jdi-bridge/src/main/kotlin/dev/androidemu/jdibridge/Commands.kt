@@ -1,7 +1,9 @@
 package dev.androidemu.jdibridge
 
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.int
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
@@ -40,6 +42,40 @@ object Commands {
 
             "status" -> {
                 val result = s.status()
+                successResponse(request.id, result)
+            }
+
+            "set_breakpoint" -> {
+                val classPattern = request.params["class_pattern"]?.jsonPrimitive?.content
+                    ?: throw RpcException(INVALID_PARAMS, "Missing required param: class_pattern")
+                val line = request.params["line"]?.jsonPrimitive?.int
+                    ?: throw RpcException(INVALID_PARAMS, "Missing required param: line")
+                val result = s.setBreakpoint(classPattern, line)
+                successResponse(request.id, result)
+            }
+
+            "remove_breakpoint" -> {
+                val breakpointId = request.params["breakpoint_id"]?.jsonPrimitive?.int
+                    ?: throw RpcException(INVALID_PARAMS, "Missing required param: breakpoint_id")
+                val result = s.removeBreakpoint(breakpointId)
+                successResponse(request.id, result)
+            }
+
+            "list_breakpoints" -> {
+                val result = s.listBreakpoints()
+                successResponse(request.id, result)
+            }
+
+            "list_threads" -> {
+                val includeDaemon = request.params["include_daemon"]
+                    ?.jsonPrimitive
+                    ?.booleanOrNull
+                    ?: false
+                val maxThreads = request.params["max_threads"]
+                    ?.jsonPrimitive
+                    ?.intOrNull
+                    ?: 20
+                val result = s.listThreads(includeDaemon, maxThreads)
                 successResponse(request.id, result)
             }
 

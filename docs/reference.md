@@ -128,6 +128,9 @@ android-emu-agent debug [OPTIONS] COMMAND [ARGS]...
 - `attach`: Attach the debugger to a running app&#x27;s JVM.
 - `detach`: Detach the debugger from a session.
 - `status`: Get the debug session status.
+- `threads`: List debugger-visible VM threads.
+- `events`: Drain and return queued debugger events.
+- `break`: Breakpoint commands
 
 ### `android-emu-agent debug ping`
 
@@ -190,6 +193,116 @@ Get the debug session status.
 
 ```console
 android-emu-agent debug status [OPTIONS]
+```
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent debug threads`
+
+List debugger-visible VM threads.
+
+**Usage**:
+
+```console
+android-emu-agent debug threads [OPTIONS]
+```
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--all`: Include daemon/internal threads and increase output limit
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent debug events`
+
+Drain and return queued debugger events.
+
+**Usage**:
+
+```console
+android-emu-agent debug events [OPTIONS]
+```
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent debug break`
+
+Breakpoint commands
+
+**Usage**:
+
+```console
+android-emu-agent debug break [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+- `--help`: Show this message and exit.
+
+**Commands**:
+
+- `set`: Set a breakpoint by class pattern and line...
+- `remove`: Remove a breakpoint by ID.
+- `list`: List active breakpoints.
+
+#### `android-emu-agent debug break set`
+
+Set a breakpoint by class pattern and line number.
+
+**Usage**:
+
+```console
+android-emu-agent debug break set [OPTIONS] CLASS_PATTERN LINE
+```
+
+**Arguments**:
+
+- `CLASS_PATTERN`: Class pattern (e.g. com.example.MainActivity) [required]
+- `LINE`: 1-based source line number [required]
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+#### `android-emu-agent debug break remove`
+
+Remove a breakpoint by ID.
+
+**Usage**:
+
+```console
+android-emu-agent debug break remove [OPTIONS] BREAKPOINT_ID
+```
+
+**Arguments**:
+
+- `BREAKPOINT_ID`: Breakpoint ID [required]
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+#### `android-emu-agent debug break list`
+
+List active breakpoints.
+
+**Usage**:
+
+```console
+android-emu-agent debug break list [OPTIONS]
 ```
 
 **Options**:

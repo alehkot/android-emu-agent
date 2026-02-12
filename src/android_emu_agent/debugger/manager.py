@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import os
 import shutil
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -65,6 +66,7 @@ class DebugManager:
         self._bridges: dict[str, BridgeClient] = {}
         self._debug_sessions: dict[str, DebugSessionState] = {}
         self._event_tasks: dict[str, asyncio.Task[None]] = {}
+        self._event_queues: dict[str, list[dict[str, Any]]] = {}
         self._jar_path: Path | None = None
         self._java_path: Path | None = None
         self._downloader = BridgeDownloader()
@@ -168,6 +170,7 @@ class DebugManager:
         for session_id in list(self._bridges.keys()):
             await self.stop_bridge(session_id)
         self._debug_sessions.clear()
+        self._event_queues.clear()
 
     async def ping(self, session_id: str) -> dict[str, Any]:
         """Start a bridge (if needed) and ping it."""
@@ -233,6 +236,7 @@ class DebugManager:
             vm_version=vm_version,
         )
         self._debug_sessions[session_id] = ds
+        self._event_queues[session_id] = []
 
         self._event_tasks[session_id] = asyncio.create_task(
             self._monitor_events(session_id, bridge, adb_device)
@@ -329,6 +333,72 @@ class DebugManager:
             "local_port": ds.local_forward_port,
         }
 
+    async def set_breakpoint(
+        self,
+        session_id: str,
+        class_pattern: str,
+        line: int,
+    ) -> dict[str, Any]:
+        """Set a breakpoint by class pattern and line number."""
+        bridge = await self.get_bridge(session_id)
+        result = await bridge.request(
+            "set_breakpoint",
+            {"class_pattern": class_pattern, "line": line},
+        )
+        if not isinstance(result, dict):
+            raise bridge_not_running_error("Invalid set_breakpoint response from bridge")
+        return result
+
+    async def remove_breakpoint(self, session_id: str, breakpoint_id: int) -> dict[str, Any]:
+        """Remove a breakpoint by ID."""
+        bridge = await self.get_bridge(session_id)
+        result = await bridge.request(
+            "remove_breakpoint",
+            {"breakpoint_id": breakpoint_id},
+        )
+        if not isinstance(result, dict):
+            raise bridge_not_running_error("Invalid remove_breakpoint response from bridge")
+        return result
+
+    async def list_breakpoints(self, session_id: str) -> dict[str, Any]:
+        """List breakpoints for an attached debug session."""
+        bridge = await self.get_bridge(session_id)
+        result = await bridge.request("list_breakpoints")
+        if not isinstance(result, dict):
+            raise bridge_not_running_error("Invalid list_breakpoints response from bridge")
+        return result
+
+    async def list_threads(
+        self,
+        session_id: str,
+        *,
+        include_daemon: bool = False,
+        max_threads: int = 20,
+    ) -> dict[str, Any]:
+        """List VM threads with bounded output."""
+        bridge = await self.get_bridge(session_id)
+        result = await bridge.request(
+            "list_threads",
+            {"include_daemon": include_daemon, "max_threads": max_threads},
+        )
+        if not isinstance(result, dict):
+            raise bridge_not_running_error("Invalid list_threads response from bridge")
+        return result
+
+    async def drain_events(self, session_id: str) -> dict[str, Any]:
+        """Drain and return queued debugger events for a session."""
+        if session_id not in self._debug_sessions:
+            raise debug_not_attached_error(session_id)
+
+        queue = self._event_queues.setdefault(session_id, [])
+        events = list(queue)
+        queue.clear()
+        return {
+            "session_id": session_id,
+            "count": len(events),
+            "events": events,
+        }
+
     async def _find_pid(
         self,
         package: str,
@@ -387,11 +457,19 @@ class DebugManager:
 
     async def _list_jdwp_pids(self, adb_device: Any) -> set[int]:
         """Return the set of PIDs currently available via adb jdwp."""
+        raw_output = ""
         try:
             raw_output = await asyncio.to_thread(self._read_jdwp_list, adb_device)
         except Exception as exc:
             logger.warning("jdwp_list_failed", error=str(exc))
-            return set()
+
+        if not raw_output:
+            serial = str(getattr(adb_device, "serial", "")).strip()
+            if serial:
+                try:
+                    raw_output = await asyncio.to_thread(self._read_jdwp_list_via_adb, serial)
+                except Exception as exc:
+                    logger.warning("jdwp_cli_list_failed", serial=serial, error=str(exc))
 
         pids: set[int] = set()
         for token in raw_output.split():
@@ -406,6 +484,37 @@ class DebugManager:
             if isinstance(raw, bytes):
                 return raw.decode(errors="ignore")
             return str(raw)
+
+    @staticmethod
+    def _read_jdwp_list_via_adb(serial: str) -> str:
+        """Fallback JDWP listing via adb CLI.
+
+        `adb jdwp` prints the current PID list quickly and then blocks as a tracker stream.
+        We intentionally use a short timeout and parse partial stdout from TimeoutExpired.
+        """
+        adb_path = shutil.which("adb")
+        if not adb_path:
+            return ""
+
+        try:
+            proc = subprocess.run(
+                [adb_path, "-s", serial, "jdwp"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=1.0,
+            )
+        except subprocess.TimeoutExpired as exc:
+            partial = exc.stdout or ""
+            if isinstance(partial, bytes):
+                return partial.decode(errors="ignore")
+            return str(partial)
+
+        output = proc.stdout or ""
+        if proc.returncode != 0 and not output.strip():
+            reason = (proc.stderr or "adb jdwp failed").strip()
+            raise RuntimeError(reason)
+        return output
 
     async def _list_processes(self, adb_device: Any) -> dict[int, str]:
         """Return PID -> process name from device process list."""
@@ -472,6 +581,7 @@ class DebugManager:
         ds = self._debug_sessions.pop(session_id, None)
         if ds:
             await self._remove_forward(ds.local_forward_port, adb_device)
+        self._event_queues.pop(session_id, None)
 
         await self.stop_bridge(session_id)
 
@@ -482,22 +592,42 @@ class DebugManager:
                 event = await bridge.next_event()
                 method = event.get("method")
                 params = event.get("params", {})
+                params_obj = params if isinstance(params, dict) else {}
+                event_type = ""
+                if isinstance(method, str) and method != "event":
+                    event_type = method
+                if method == "event":
+                    event_type = str(params_obj.get("type", ""))
+
+                if event_type in {"breakpoint_hit", "breakpoint_resolved"}:
+                    self._queue_event(session_id, params_obj, event_type=event_type)
+                    logger.info(
+                        "debug_event_queued",
+                        session_id=session_id,
+                        type=event_type,
+                    )
+                    continue
 
                 is_disconnect = method == "vm_disconnected" or (
-                    method == "event" and params.get("type") == "vm_disconnected"
+                    method == "event" and params_obj.get("type") == "vm_disconnected"
                 )
                 if not is_disconnect:
                     continue
 
-                raw_reason = str(params.get("detail", params.get("reason", "unknown")))
+                raw_reason = str(params_obj.get("detail", params_obj.get("reason", "unknown")))
                 normalized_reason = self._normalize_disconnect_reason(
-                    str(params.get("reason", raw_reason))
+                    str(params_obj.get("reason", raw_reason))
                 )
                 logger.warning(
                     "vm_disconnected",
                     session_id=session_id,
                     reason=normalized_reason,
                     detail=raw_reason,
+                )
+                self._queue_event(
+                    session_id,
+                    {"reason": normalized_reason, "detail": raw_reason},
+                    event_type="vm_disconnected",
                 )
 
                 ds = self._debug_sessions.get(session_id)
@@ -513,6 +643,19 @@ class DebugManager:
             return
         except Exception:
             logger.exception("event_monitor_error", session_id=session_id)
+
+    def _queue_event(
+        self,
+        session_id: str,
+        payload: dict[str, Any],
+        *,
+        event_type: str,
+    ) -> None:
+        """Append a normalized event payload to the per-session event queue."""
+        queue = self._event_queues.setdefault(session_id, [])
+        event = {"type": event_type}
+        event.update({k: v for k, v in payload.items() if k != "type"})
+        queue.append(event)
 
     @staticmethod
     def _looks_not_debuggable(message: str) -> bool:

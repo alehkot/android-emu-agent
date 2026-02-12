@@ -33,6 +33,8 @@ from android_emu_agent.daemon.models import (
     AppResolveIntentRequest,
     ArtifactLogsRequest,
     DebugAttachRequest,
+    DebugBreakpointRemoveRequest,
+    DebugBreakpointSetRequest,
     DebugDetachRequest,
     DebugPingRequest,
     DeviceSettingRequest,
@@ -1981,6 +1983,137 @@ async def debug_status(session_id: str) -> EndpointResponse:
 async def debug_status_query(session_id: str) -> EndpointResponse:
     """Get debug status using query string style: /debug/status?session_id=..."""
     return await debug_status(session_id)
+
+
+@app.post("/debug/breakpoint/set", response_model=None)
+async def debug_breakpoint_set(req: DebugBreakpointSetRequest) -> EndpointResponse:
+    """Set a debugger breakpoint by class pattern and source line."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    if req.line <= 0:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_LINE",
+                message=f"Invalid line number: {req.line}",
+                context={"line": req.line},
+                remediation="Use a positive 1-based source line.",
+            ),
+            status_code=400,
+        )
+
+    try:
+        result = await core.debug_manager.set_breakpoint(
+            session_id=req.session_id,
+            class_pattern=req.class_pattern,
+            line=req.line,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", **result}
+
+
+@app.post("/debug/breakpoint/remove", response_model=None)
+async def debug_breakpoint_remove(req: DebugBreakpointRemoveRequest) -> EndpointResponse:
+    """Remove a debugger breakpoint by ID."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    if req.breakpoint_id <= 0:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_BREAKPOINT_ID",
+                message=f"Invalid breakpoint id: {req.breakpoint_id}",
+                context={"breakpoint_id": req.breakpoint_id},
+                remediation="Use a positive breakpoint id from 'debug break list'.",
+            ),
+            status_code=400,
+        )
+
+    try:
+        result = await core.debug_manager.remove_breakpoint(
+            session_id=req.session_id,
+            breakpoint_id=req.breakpoint_id,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", **result}
+
+
+@app.get("/debug/breakpoints", response_model=None)
+async def debug_breakpoint_list(session_id: str) -> EndpointResponse:
+    """List active debugger breakpoints for a session."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(session_id)
+    if not session:
+        return _error_response(session_expired_error(session_id), status_code=404)
+
+    try:
+        result = await core.debug_manager.list_breakpoints(session_id)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", "session_id": session_id, **result}
+
+
+@app.get("/debug/threads", response_model=None)
+async def debug_threads(
+    session_id: str,
+    include_daemon: bool = False,
+    max_threads: int | None = None,
+) -> EndpointResponse:
+    """List debugger-visible VM threads with bounded output."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(session_id)
+    if not session:
+        return _error_response(session_expired_error(session_id), status_code=404)
+
+    resolved_max_threads = (
+        max_threads if max_threads is not None else (100 if include_daemon else 20)
+    )
+    if resolved_max_threads <= 0:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_MAX_THREADS",
+                message=f"Invalid max_threads: {resolved_max_threads}",
+                context={"max_threads": resolved_max_threads},
+                remediation="Use a positive max_threads value.",
+            ),
+            status_code=400,
+        )
+
+    try:
+        result = await core.debug_manager.list_threads(
+            session_id,
+            include_daemon=include_daemon,
+            max_threads=resolved_max_threads,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", "session_id": session_id, **result}
+
+
+@app.get("/debug/events", response_model=None)
+async def debug_events(session_id: str) -> EndpointResponse:
+    """Drain and return queued debugger events for a session."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(session_id)
+    if not session:
+        return _error_response(session_expired_error(session_id), status_code=404)
+
+    try:
+        result = await core.debug_manager.drain_events(session_id)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", **result}
 
 
 @app.post("/actions/swipe", response_model=None)
