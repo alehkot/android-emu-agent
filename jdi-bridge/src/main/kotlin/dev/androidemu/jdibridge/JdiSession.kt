@@ -5,25 +5,32 @@ import com.sun.jdi.BooleanValue
 import com.sun.jdi.Bootstrap
 import com.sun.jdi.ClassType
 import com.sun.jdi.Location
-import com.sun.jdi.StackFrame
-import com.sun.jdi.StringReference
 import com.sun.jdi.ThreadReference
 import com.sun.jdi.VMDisconnectedException
-import com.sun.jdi.Value
 import com.sun.jdi.VirtualMachine
 import com.sun.jdi.connect.AttachingConnector
 import com.sun.jdi.event.BreakpointEvent
 import com.sun.jdi.event.ClassPrepareEvent
+import com.sun.jdi.event.StepEvent
 import com.sun.jdi.event.VMDeathEvent
 import com.sun.jdi.event.VMDisconnectEvent
 import com.sun.jdi.request.BreakpointRequest
 import com.sun.jdi.request.ClassPrepareRequest
 import com.sun.jdi.request.EventRequest
+import com.sun.jdi.request.StepRequest
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import java.util.Locale
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 /**
  * Manages a single JDI connection to a target JVM.
@@ -34,6 +41,11 @@ import kotlinx.serialization.json.put
 class JdiSession(
     private val notificationEmitter: (JsonElement) -> Unit,
 ) {
+    companion object {
+        const val DEFAULT_STEP_TIMEOUT_SECONDS = 10.0
+        const val ANR_WARNING_SECONDS = 8.0
+    }
+
     private data class BreakpointState(
         val id: Int,
         val classPattern: String,
@@ -42,6 +54,13 @@ class JdiSession(
         var location: String? = null,
         var request: BreakpointRequest? = null,
         var prepareRequest: ClassPrepareRequest? = null,
+    )
+
+    private data class PendingStep(
+        val action: String,
+        val threadName: String,
+        val request: StepRequest,
+        val completion: CompletableFuture<JsonObject>,
     )
 
     @Volatile
@@ -59,6 +78,9 @@ class JdiSession(
     private val stateLock = Any()
     private val breakpoints = linkedMapOf<Int, BreakpointState>()
     private var nextBreakpointId = 1
+    private var activeStep: PendingStep? = null
+    private val inspector = Inspector()
+    private val suspendedAtMs = mutableMapOf<Long, Long>()
 
     val isAttached: Boolean get() = vm != null && !disconnected
 
@@ -91,6 +113,8 @@ class JdiSession(
         synchronized(stateLock) {
             breakpoints.clear()
             nextBreakpointId = 1
+            activeStep = null
+            suspendedAtMs.clear()
         }
 
         // If the VM is fully suspended (wait-for-debugger), resume it
@@ -123,6 +147,10 @@ class JdiSession(
         vm = null
         disconnected = false
         disconnectReason = null
+        synchronized(stateLock) {
+            activeStep = null
+            suspendedAtMs.clear()
+        }
 
         return buildJsonObject {
             put("status", "detached")
@@ -318,11 +346,191 @@ class JdiSession(
         }
     }
 
+    fun stepOver(
+        threadName: String,
+        timeoutSeconds: Double = DEFAULT_STEP_TIMEOUT_SECONDS,
+    ): JsonElement {
+        return performStep(
+            action = "step_over",
+            threadName = threadName,
+            timeoutSeconds = timeoutSeconds,
+            depth = StepRequest.STEP_OVER,
+        )
+    }
+
+    fun stepInto(
+        threadName: String,
+        timeoutSeconds: Double = DEFAULT_STEP_TIMEOUT_SECONDS,
+    ): JsonElement {
+        return performStep(
+            action = "step_into",
+            threadName = threadName,
+            timeoutSeconds = timeoutSeconds,
+            depth = StepRequest.STEP_INTO,
+        )
+    }
+
+    fun stepOut(
+        threadName: String,
+        timeoutSeconds: Double = DEFAULT_STEP_TIMEOUT_SECONDS,
+    ): JsonElement {
+        return performStep(
+            action = "step_out",
+            threadName = threadName,
+            timeoutSeconds = timeoutSeconds,
+            depth = StepRequest.STEP_OUT,
+        )
+    }
+
+    fun resume(threadName: String?): JsonElement {
+        val machine = requireAttachedMachine()
+        if (threadName == null) {
+            try {
+                machine.resume()
+            } catch (e: Exception) {
+                throw RpcException(INTERNAL_ERROR, "Failed to resume VM: ${e.message ?: "unknown"}")
+            }
+            synchronized(stateLock) {
+                suspendedAtMs.clear()
+            }
+            return buildJsonObject {
+                put("status", "resumed")
+                put("scope", "all")
+            }
+        }
+
+        if (threadName.isBlank()) {
+            throw RpcException(INVALID_PARAMS, "thread_name must not be blank")
+        }
+
+        val thread = resolveThread(machine, threadName)
+        try {
+            var attempts = 0
+            while (thread.isSuspended && attempts < 32) {
+                thread.resume()
+                attempts += 1
+            }
+        } catch (e: Exception) {
+            throw RpcException(INTERNAL_ERROR, "Failed to resume thread: ${e.message ?: "unknown"}")
+        }
+        markThreadResumed(thread)
+
+        return buildJsonObject {
+            put("status", "resumed")
+            put("scope", "thread")
+            put("thread", thread.name())
+        }
+    }
+
+    private fun performStep(
+        action: String,
+        threadName: String,
+        timeoutSeconds: Double,
+        depth: Int,
+    ): JsonObject {
+        if (threadName.isBlank()) {
+            throw RpcException(INVALID_PARAMS, "thread_name must not be blank")
+        }
+        if (timeoutSeconds <= 0.0) {
+            throw RpcException(INVALID_PARAMS, "timeout_seconds must be > 0")
+        }
+
+        val machine = requireAttachedMachine()
+        val thread = resolveThread(machine, threadName)
+
+        synchronized(stateLock) {
+            if (activeStep != null) {
+                throw RpcException(INVALID_REQUEST, "Another step command is already in progress")
+            }
+        }
+
+        if (!thread.isSuspended) {
+            try {
+                thread.suspend()
+            } catch (e: Exception) {
+                throw RpcException(INTERNAL_ERROR, "Failed to suspend thread: ${e.message ?: "unknown"}")
+            }
+        }
+        markThreadSuspended(thread)
+
+        clearExistingStepRequests(machine, thread)
+
+        val request = machine.eventRequestManager().createStepRequest(
+            thread,
+            StepRequest.STEP_LINE,
+            depth,
+        ).apply {
+            addCountFilter(1)
+            setSuspendPolicy(EventRequest.SUSPEND_EVENT_THREAD)
+            putProperty("step_action", action)
+            enable()
+        }
+
+        val completion = CompletableFuture<JsonObject>()
+        synchronized(stateLock) {
+            activeStep = PendingStep(
+                action = action,
+                threadName = thread.name(),
+                request = request,
+                completion = completion,
+            )
+        }
+
+        try {
+            thread.resume()
+        } catch (e: Exception) {
+            clearStepRequest(machine, request)
+            synchronized(stateLock) {
+                if (activeStep?.request == request) {
+                    activeStep = null
+                }
+            }
+            throw RpcException(INTERNAL_ERROR, "Failed to resume thread for step: ${e.message ?: "unknown"}")
+        }
+
+        return try {
+            completion.get((timeoutSeconds * 1000).toLong(), TimeUnit.MILLISECONDS)
+        } catch (_: TimeoutException) {
+            clearStepRequest(machine, request)
+            synchronized(stateLock) {
+                if (activeStep?.request == request) {
+                    activeStep = null
+                }
+            }
+            buildJsonObject {
+                put("status", "timeout")
+                put("reason", "$action did not complete within ${timeoutSeconds.toInt()}s")
+                put(
+                    "remediation",
+                    "The app may be blocked on I/O or in a loop. Use 'debug resume' to continue, then set a breakpoint further ahead.",
+                )
+            }
+        } catch (e: Exception) {
+            clearStepRequest(machine, request)
+            synchronized(stateLock) {
+                if (activeStep?.request == request) {
+                    activeStep = null
+                }
+            }
+            throw RpcException(INTERNAL_ERROR, "Step failed: ${e.message ?: "unknown"}")
+        }
+    }
+
     private fun requireAttachedMachine(): VirtualMachine {
         if (disconnected) {
             throw RpcException(INVALID_REQUEST, "VM is disconnected: ${disconnectReason ?: "unknown"}")
         }
         return vm ?: throw RpcException(INVALID_REQUEST, "Not attached to any VM")
+    }
+
+    private fun resolveThread(machine: VirtualMachine, threadName: String): ThreadReference {
+        val threads = try {
+            machine.allThreads()
+        } catch (e: Exception) {
+            throw RpcException(INTERNAL_ERROR, "Failed to list threads: ${e.message ?: "unknown"}")
+        }
+        return threads.firstOrNull { it.name() == threadName }
+            ?: throw RpcException(INVALID_REQUEST, "Thread not found: $threadName")
     }
 
     private fun startEventLoop(machine: VirtualMachine) {
@@ -344,11 +552,21 @@ class JdiSession(
                     }
 
                     var shouldStop = false
+                    var shouldResumeSet = true
                     try {
                         for (event in eventSet) {
                             when (event) {
-                                is BreakpointEvent -> handleBreakpointEvent(machine, event)
+                                is BreakpointEvent -> {
+                                    if (!handleBreakpointEvent(event)) {
+                                        shouldResumeSet = false
+                                    }
+                                }
                                 is ClassPrepareEvent -> handleClassPrepareEvent(machine, event)
+                                is StepEvent -> {
+                                    if (!handleStepEvent(machine, event)) {
+                                        shouldResumeSet = false
+                                    }
+                                }
                                 is VMDisconnectEvent -> {
                                     handleDisconnect("VM disconnected")
                                     shouldStop = true
@@ -366,10 +584,12 @@ class JdiSession(
                         handleDisconnect("Event loop error: ${e.message}")
                         shouldStop = true
                     } finally {
-                        try {
-                            eventSet.resume()
-                        } catch (_: Exception) {
-                            // Ignore resume failures during shutdown/disconnect.
+                        if (shouldResumeSet) {
+                            try {
+                                eventSet.resume()
+                            } catch (_: Exception) {
+                                // Ignore resume failures during shutdown/disconnect.
+                            }
                         }
                     }
 
@@ -397,6 +617,22 @@ class JdiSession(
         disconnected = true
         val normalizedReason = normalizeDisconnectReason(reason)
         disconnectReason = normalizedReason
+        val pending = synchronized(stateLock) {
+            val current = activeStep
+            activeStep = null
+            suspendedAtMs.clear()
+            current
+        }
+        pending?.completion?.complete(
+            buildJsonObject {
+                put("status", "timeout")
+                put("reason", "${pending.action} interrupted: VM disconnected")
+                put(
+                    "remediation",
+                    "The target process disconnected. Relaunch the app, re-attach the debugger, and retry the step.",
+                )
+            },
+        )
 
         val notification = buildJsonObject {
             put("jsonrpc", "2.0")
@@ -458,11 +694,12 @@ class JdiSession(
         }
     }
 
-    private fun handleBreakpointEvent(machine: VirtualMachine, event: BreakpointEvent) {
+    private fun handleBreakpointEvent(event: BreakpointEvent): Boolean {
         val request = event.request() as? BreakpointRequest
         val requestId = request?.getProperty("breakpoint_id") as? Int
         val locationText = formatLocation(event.location())
-        val locals = safeTopFrameLocals(event.thread())
+        val stopped = buildStoppedPayload(event.thread(), event.location())
+        markThreadSuspended(event.thread())
 
         if (requestId != null) {
             synchronized(stateLock) {
@@ -476,22 +713,151 @@ class JdiSession(
                 if (requestId != null) {
                     put("breakpoint_id", requestId)
                 }
-                put("thread", event.thread().name())
-                put("location", locationText)
-                put("locals", locals)
+                for ((key, value) in stopped) {
+                    put(key, value)
+                }
             },
         )
 
-        // Keep VM running unless client asks to suspend in a later milestone.
-        try {
-            machine.resume()
+        // Keep thread suspended at breakpoint for step/inspect flows.
+        return false
+    }
+
+    private fun handleStepEvent(machine: VirtualMachine, event: StepEvent): Boolean {
+        val stepRequest = event.request() as? StepRequest ?: return true
+
+        val pending = synchronized(stateLock) {
+            val current = activeStep
+            if (current == null || current.request != stepRequest) {
+                null
+            } else {
+                activeStep = null
+                current
+            }
+        }
+
+        if (pending == null) {
+            clearStepRequest(machine, stepRequest)
+            return true
+        }
+
+        clearStepRequest(machine, stepRequest)
+        val payload = buildStoppedPayload(event.thread(), event.location())
+        markThreadSuspended(event.thread())
+        pending.completion.complete(payload)
+
+        // Keep thread suspended on the new line for follow-up step/inspect commands.
+        return false
+    }
+
+    private fun buildStoppedPayload(thread: ThreadReference, fallbackLocation: Location): JsonObject {
+        val frames = try {
+            thread.frames()
         } catch (_: Exception) {
-            // Ignore resume failures during disconnect.
+            emptyList()
+        }
+        val frameLocations = frames.map { it.location() }
+        val selection = if (frameLocations.isEmpty()) {
+            FrameFilter.Selection(selectedIndex = 0, filteredCount = 0)
+        } else {
+            FrameFilter.selectPrimaryFrame(frameLocations)
+        }
+        val selectedIndex = selection.selectedIndex.coerceIn(0, (frames.size - 1).coerceAtLeast(0))
+        val selectedLocation = frames.getOrNull(selectedIndex)?.location() ?: fallbackLocation
+        val inspectedFrame = try {
+            inspector.inspectFrame(
+                thread = thread,
+                frameIndex = selectedIndex,
+                tokenBudget = TokenBudget.DEFAULT_MAX_TOKENS,
+            )
+        } catch (_: Exception) {
+            buildJsonObject {
+                put("locals", JsonArray(emptyList()))
+                put("token_usage_estimate", 0)
+                put("truncated", false)
+            }
+        }
+        val locals = inspectedFrame["locals"] ?: JsonArray(emptyList())
+        val tokenUsage = inspectedFrame["token_usage_estimate"]?.jsonPrimitive?.intOrNull ?: 0
+        val truncated = inspectedFrame["truncated"]?.jsonPrimitive?.booleanOrNull ?: false
+
+        val warning = anrWarningForThread(thread)
+
+        return buildJsonObject {
+            put("status", "stopped")
+            put("location", formatLocation(selectedLocation))
+            put("method", selectedLocation.method().name())
+            put("thread", thread.name())
+            put("locals", locals)
+            put("token_usage_estimate", tokenUsage)
+            put("truncated", truncated)
+            if (selection.filteredCount > 0) {
+                put("frame_filters", buildJsonArray {
+                    add(buildJsonObject {
+                        put("filtered", true)
+                        put("count", selection.filteredCount)
+                        put("reason", "coroutine_internal")
+                    })
+                })
+            }
+            if (warning != null) {
+                put("warning", warning)
+            }
+        }
+    }
+
+    private fun anrWarningForThread(thread: ThreadReference): String? {
+        if (thread.name() != "main") {
+            return null
+        }
+        val since = synchronized(stateLock) {
+            suspendedAtMs[thread.uniqueID()]
+        } ?: return null
+        val elapsedSeconds = (System.currentTimeMillis() - since) / 1000.0
+        if (elapsedSeconds < ANR_WARNING_SECONDS) {
+            return null
+        }
+        return String.format(
+            Locale.US,
+            "main thread suspended for %.1fs — Android may trigger ANR. Consider resuming soon.",
+            elapsedSeconds,
+        )
+    }
+
+    private fun markThreadSuspended(thread: ThreadReference) {
+        synchronized(stateLock) {
+            suspendedAtMs.putIfAbsent(thread.uniqueID(), System.currentTimeMillis())
+        }
+    }
+
+    private fun markThreadResumed(thread: ThreadReference) {
+        synchronized(stateLock) {
+            suspendedAtMs.remove(thread.uniqueID())
+        }
+    }
+
+    private fun clearStepRequest(machine: VirtualMachine, stepRequest: StepRequest) {
+        try {
+            machine.eventRequestManager().deleteEventRequest(stepRequest)
+        } catch (_: Exception) {
+            // Best effort cleanup.
+        }
+    }
+
+    private fun clearExistingStepRequests(machine: VirtualMachine, thread: ThreadReference) {
+        val manager = machine.eventRequestManager()
+        val existing = try {
+            manager.stepRequests().filter { it.thread() == thread }
+        } catch (_: Exception) {
+            emptyList()
+        }
+        for (request in existing) {
+            clearStepRequest(machine, request)
         }
     }
 
     private fun emitEvent(type: String, extraParams: JsonElement) {
-        val paramsObject = extraParams as? kotlinx.serialization.json.JsonObject
+        val paramsObject = extraParams as? JsonObject
             ?: throw IllegalArgumentException("extraParams must be a JsonObject")
 
         val payload = buildJsonObject {
@@ -532,6 +898,8 @@ class JdiSession(
                 }
             }
             breakpoints.clear()
+            activeStep = null
+            suspendedAtMs.clear()
         }
     }
 
@@ -567,69 +935,6 @@ class JdiSession(
             setSuspendPolicy(EventRequest.SUSPEND_EVENT_THREAD)
             putProperty("breakpoint_id", breakpointId)
             enable()
-        }
-    }
-
-    private fun safeTopFrameLocals(thread: ThreadReference): JsonArray {
-        if (!thread.isSuspended) {
-            return JsonArray(emptyList())
-        }
-
-        val frame = try {
-            thread.frame(0)
-        } catch (_: Exception) {
-            return JsonArray(emptyList())
-        }
-
-        return serializeLocals(frame)
-    }
-
-    private fun serializeLocals(frame: StackFrame): JsonArray {
-        val maxLocals = 10
-        val maxChars = 512
-        var remainingChars = maxChars
-        var emittedCount = 0
-
-        val variables = try {
-            frame.visibleVariables()
-        } catch (_: AbsentInformationException) {
-            return JsonArray(emptyList())
-        } catch (_: Exception) {
-            return JsonArray(emptyList())
-        }
-
-        return buildJsonArray {
-            for (variable in variables) {
-                if (emittedCount >= maxLocals || remainingChars <= 0) {
-                    break
-                }
-
-                val value = try {
-                    frame.getValue(variable)
-                } catch (_: Exception) {
-                    null
-                }
-                val rendered = renderValue(value)
-                remainingChars -= rendered.length
-
-                add(buildJsonObject {
-                    put("name", variable.name())
-                    put("type", variable.typeName())
-                    put("value", rendered)
-                })
-                emittedCount += 1
-            }
-        }
-    }
-
-    private fun renderValue(value: Value?): String {
-        if (value == null) {
-            return "null"
-        }
-
-        return when (value) {
-            is StringReference -> value.value().take(200)
-            else -> value.toString().take(200)
         }
     }
 

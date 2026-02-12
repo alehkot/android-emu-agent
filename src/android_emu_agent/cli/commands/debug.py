@@ -171,3 +171,101 @@ def debug_events(
     resp = client.request("GET", f"/debug/events?session_id={session_id}")
     client.close()
     handle_response(resp, json_output=json_output)
+
+
+@app.command("step-over")
+def debug_step_over(
+    session_id: str = typer.Option(..., "--session", help="Session ID"),
+    thread: str = typer.Option("main", "--thread", help="Thread name"),
+    timeout_seconds: float = typer.Option(
+        10.0,
+        "--timeout-seconds",
+        help="Step timeout in seconds",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Step over and return stopped state atomically."""
+    client = DaemonClient(timeout=60.0)
+    resp = client.request(
+        "POST",
+        "/debug/step_over",
+        json_body={
+            "session_id": session_id,
+            "thread": thread,
+            "timeout_seconds": timeout_seconds,
+        },
+    )
+    client.close()
+    handle_response(resp, json_output=json_output)
+
+
+@app.command("step-into")
+def debug_step_into(
+    session_id: str = typer.Option(..., "--session", help="Session ID"),
+    thread: str = typer.Option("main", "--thread", help="Thread name"),
+    timeout_seconds: float = typer.Option(
+        10.0,
+        "--timeout-seconds",
+        help="Step timeout in seconds",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Step into and return stopped state atomically."""
+    client = DaemonClient(timeout=60.0)
+    resp = client.request(
+        "POST",
+        "/debug/step_into",
+        json_body={
+            "session_id": session_id,
+            "thread": thread,
+            "timeout_seconds": timeout_seconds,
+        },
+    )
+    client.close()
+    handle_response(resp, json_output=json_output)
+
+
+@app.command("step-out")
+def debug_step_out(
+    session_id: str = typer.Option(..., "--session", help="Session ID"),
+    thread: str = typer.Option("main", "--thread", help="Thread name"),
+    timeout_seconds: float = typer.Option(
+        10.0,
+        "--timeout-seconds",
+        help="Step timeout in seconds",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Step out and return stopped state atomically."""
+    client = DaemonClient(timeout=60.0)
+    resp = client.request(
+        "POST",
+        "/debug/step_out",
+        json_body={
+            "session_id": session_id,
+            "thread": thread,
+            "timeout_seconds": timeout_seconds,
+        },
+    )
+    client.close()
+    handle_response(resp, json_output=json_output)
+
+
+@app.command("resume")
+def debug_resume(
+    session_id: str = typer.Option(..., "--session", help="Session ID"),
+    thread: str | None = typer.Option(
+        None,
+        "--thread",
+        help="Optional thread name; omit to resume all threads",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Resume one thread or all threads."""
+    payload: dict[str, str | None] = {"session_id": session_id}
+    if thread is not None:
+        payload["thread"] = thread
+    client = DaemonClient(timeout=30.0)
+    resp = client.request("POST", "/debug/resume", json_body=payload)
+    client.close()
+    handle_response(resp, json_output=json_output)

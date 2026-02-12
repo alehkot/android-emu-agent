@@ -308,3 +308,14 @@ class DebugBreakpointSetRequest(BaseModel):
 class DebugBreakpointRemoveRequest(BaseModel):
     session_id: str
     breakpoint_id: int
+
+
+class DebugStepRequest(BaseModel):
+    session_id: str
+    thread: str = "main"
+    timeout_seconds: float = 10.0
+
+
+class DebugResumeRequest(BaseModel):
+    session_id: str
+    thread: str | None = None

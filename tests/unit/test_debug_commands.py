@@ -274,3 +274,140 @@ def test_debug_events_calls_endpoint() -> None:
         debug.debug_events(session_id="s-abc123", json_output=False)
 
     assert calls[0] == ("GET", "/debug/events?session_id=s-abc123", None)
+
+
+def test_debug_step_over_calls_endpoint() -> None:
+    from android_emu_agent.cli.commands import debug
+
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+            calls.append((method, path, json_body))
+            return DummyResponse({"status": "done"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(debug, "DaemonClient", DummyClient):
+        debug.debug_step_over(
+            session_id="s-abc123",
+            thread="main",
+            timeout_seconds=10.0,
+            json_output=False,
+        )
+
+    assert calls[0] == (
+        "POST",
+        "/debug/step_over",
+        {"session_id": "s-abc123", "thread": "main", "timeout_seconds": 10.0},
+    )
+
+
+def test_debug_step_into_calls_endpoint() -> None:
+    from android_emu_agent.cli.commands import debug
+
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+            calls.append((method, path, json_body))
+            return DummyResponse({"status": "done"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(debug, "DaemonClient", DummyClient):
+        debug.debug_step_into(
+            session_id="s-abc123",
+            thread="main",
+            timeout_seconds=10.0,
+            json_output=False,
+        )
+
+    assert calls[0] == (
+        "POST",
+        "/debug/step_into",
+        {"session_id": "s-abc123", "thread": "main", "timeout_seconds": 10.0},
+    )
+
+
+def test_debug_step_out_calls_endpoint() -> None:
+    from android_emu_agent.cli.commands import debug
+
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+            calls.append((method, path, json_body))
+            return DummyResponse({"status": "done"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(debug, "DaemonClient", DummyClient):
+        debug.debug_step_out(
+            session_id="s-abc123",
+            thread="main",
+            timeout_seconds=10.0,
+            json_output=False,
+        )
+
+    assert calls[0] == (
+        "POST",
+        "/debug/step_out",
+        {"session_id": "s-abc123", "thread": "main", "timeout_seconds": 10.0},
+    )
+
+
+def test_debug_resume_calls_endpoint_for_all_threads() -> None:
+    from android_emu_agent.cli.commands import debug
+
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+            calls.append((method, path, json_body))
+            return DummyResponse({"status": "done"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(debug, "DaemonClient", DummyClient):
+        debug.debug_resume(session_id="s-abc123", thread=None, json_output=False)
+
+    assert calls[0] == ("POST", "/debug/resume", {"session_id": "s-abc123"})
+
+
+def test_debug_resume_calls_endpoint_for_specific_thread() -> None:
+    from android_emu_agent.cli.commands import debug
+
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+            calls.append((method, path, json_body))
+            return DummyResponse({"status": "done"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(debug, "DaemonClient", DummyClient):
+        debug.debug_resume(session_id="s-abc123", thread="main", json_output=False)
+
+    assert calls[0] == ("POST", "/debug/resume", {"session_id": "s-abc123", "thread": "main"})

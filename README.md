@@ -279,9 +279,22 @@ uv run android-emu-agent debug threads --session s-abc123 --all
 # Drain debugger event queue (breakpoint hits/resolutions, disconnect events)
 uv run android-emu-agent debug events --session s-abc123
 
+# Step execution (observe-act-verify): returns new location + locals atomically
+uv run android-emu-agent debug step-over --session s-abc123 --thread main
+uv run android-emu-agent debug step-into --session s-abc123 --thread main
+uv run android-emu-agent debug step-out --session s-abc123 --thread main
+
+# Resume one thread or all threads
+uv run android-emu-agent debug resume --session s-abc123 --thread main
+uv run android-emu-agent debug resume --session s-abc123
+
 # Detach when done (cleans up ADB forward and bridge process)
 uv run android-emu-agent debug detach --session s-abc123
 ```
+
+Step commands default to a 10s timeout (`--timeout-seconds`) and return actionable timeout payloads
+when a step cannot complete. If the main thread has been suspended for too long, responses include
+an ANR warning so you can resume before Android's ANR threshold.
 
 Under the hood, the daemon spawns a **JDI Bridge** sidecar (a Kotlin/JVM subprocess in
 `jdi-bridge/`) that speaks JSON-RPC over stdin/stdout. The bridge connects to the target app via

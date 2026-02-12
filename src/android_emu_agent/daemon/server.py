@@ -37,6 +37,8 @@ from android_emu_agent.daemon.models import (
     DebugBreakpointSetRequest,
     DebugDetachRequest,
     DebugPingRequest,
+    DebugResumeRequest,
+    DebugStepRequest,
     DeviceSettingRequest,
     DeviceTargetRequest,
     DozeRequest,
@@ -2110,6 +2112,158 @@ async def debug_events(session_id: str) -> EndpointResponse:
 
     try:
         result = await core.debug_manager.drain_events(session_id)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", **result}
+
+
+@app.post("/debug/step_over", response_model=None)
+async def debug_step_over(req: DebugStepRequest) -> EndpointResponse:
+    """Step over on a debugger thread and return stopped state atomically."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    if req.timeout_seconds <= 0:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_STEP_TIMEOUT",
+                message=f"Invalid step timeout: {req.timeout_seconds}",
+                context={"timeout_seconds": req.timeout_seconds},
+                remediation="Use a positive timeout (seconds), for example --timeout-seconds 10.",
+            ),
+            status_code=400,
+        )
+
+    if not req.thread.strip():
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_THREAD",
+                message="Invalid thread name: empty",
+                remediation="Provide a non-empty thread name, for example --thread main.",
+            ),
+            status_code=400,
+        )
+
+    try:
+        result = await core.debug_manager.step_over(
+            session_id=req.session_id,
+            thread_name=req.thread,
+            timeout_seconds=req.timeout_seconds,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", **result}
+
+
+@app.post("/debug/step_into", response_model=None)
+async def debug_step_into(req: DebugStepRequest) -> EndpointResponse:
+    """Step into on a debugger thread and return stopped state atomically."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    if req.timeout_seconds <= 0:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_STEP_TIMEOUT",
+                message=f"Invalid step timeout: {req.timeout_seconds}",
+                context={"timeout_seconds": req.timeout_seconds},
+                remediation="Use a positive timeout (seconds), for example --timeout-seconds 10.",
+            ),
+            status_code=400,
+        )
+
+    if not req.thread.strip():
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_THREAD",
+                message="Invalid thread name: empty",
+                remediation="Provide a non-empty thread name, for example --thread main.",
+            ),
+            status_code=400,
+        )
+
+    try:
+        result = await core.debug_manager.step_into(
+            session_id=req.session_id,
+            thread_name=req.thread,
+            timeout_seconds=req.timeout_seconds,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", **result}
+
+
+@app.post("/debug/step_out", response_model=None)
+async def debug_step_out(req: DebugStepRequest) -> EndpointResponse:
+    """Step out on a debugger thread and return stopped state atomically."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    if req.timeout_seconds <= 0:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_STEP_TIMEOUT",
+                message=f"Invalid step timeout: {req.timeout_seconds}",
+                context={"timeout_seconds": req.timeout_seconds},
+                remediation="Use a positive timeout (seconds), for example --timeout-seconds 10.",
+            ),
+            status_code=400,
+        )
+
+    if not req.thread.strip():
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_THREAD",
+                message="Invalid thread name: empty",
+                remediation="Provide a non-empty thread name, for example --thread main.",
+            ),
+            status_code=400,
+        )
+
+    try:
+        result = await core.debug_manager.step_out(
+            session_id=req.session_id,
+            thread_name=req.thread,
+            timeout_seconds=req.timeout_seconds,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", **result}
+
+
+@app.post("/debug/resume", response_model=None)
+async def debug_resume(req: DebugResumeRequest) -> EndpointResponse:
+    """Resume one debugger thread or the whole VM."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    if req.thread is not None and not req.thread.strip():
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_THREAD",
+                message="Invalid thread name: empty",
+                remediation="Provide a non-empty thread name or omit --thread to resume all threads.",
+            ),
+            status_code=400,
+        )
+
+    try:
+        result = await core.debug_manager.resume(
+            session_id=req.session_id,
+            thread_name=req.thread,
+        )
     except AgentError as exc:
         return _error_response(exc, status_code=400)
 

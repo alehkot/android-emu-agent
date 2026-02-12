@@ -2,6 +2,7 @@ package dev.androidemu.jdibridge
 
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
@@ -76,6 +77,42 @@ object Commands {
                     ?.intOrNull
                     ?: 20
                 val result = s.listThreads(includeDaemon, maxThreads)
+                successResponse(request.id, result)
+            }
+
+            "step_over" -> {
+                val threadName = request.params["thread_name"]?.jsonPrimitive?.content ?: "main"
+                val timeoutSeconds = request.params["timeout_seconds"]
+                    ?.jsonPrimitive
+                    ?.doubleOrNull
+                    ?: JdiSession.DEFAULT_STEP_TIMEOUT_SECONDS
+                val result = s.stepOver(threadName, timeoutSeconds)
+                successResponse(request.id, result)
+            }
+
+            "step_into" -> {
+                val threadName = request.params["thread_name"]?.jsonPrimitive?.content ?: "main"
+                val timeoutSeconds = request.params["timeout_seconds"]
+                    ?.jsonPrimitive
+                    ?.doubleOrNull
+                    ?: JdiSession.DEFAULT_STEP_TIMEOUT_SECONDS
+                val result = s.stepInto(threadName, timeoutSeconds)
+                successResponse(request.id, result)
+            }
+
+            "step_out" -> {
+                val threadName = request.params["thread_name"]?.jsonPrimitive?.content ?: "main"
+                val timeoutSeconds = request.params["timeout_seconds"]
+                    ?.jsonPrimitive
+                    ?.doubleOrNull
+                    ?: JdiSession.DEFAULT_STEP_TIMEOUT_SECONDS
+                val result = s.stepOut(threadName, timeoutSeconds)
+                successResponse(request.id, result)
+            }
+
+            "resume" -> {
+                val threadName = request.params["thread_name"]?.jsonPrimitive?.content
+                val result = s.resume(threadName)
                 successResponse(request.id, result)
             }
 

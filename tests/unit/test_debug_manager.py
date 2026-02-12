@@ -547,6 +547,85 @@ class TestMilestone2DebugMethods:
         )
 
     @pytest.mark.asyncio
+    async def test_step_over_forwards_rpc(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(return_value={"status": "stopped"})
+        manager._bridges["s-test"] = bridge
+
+        result = await manager.step_over("s-test", thread_name="main", timeout_seconds=10.0)
+        assert result["status"] == "stopped"
+        bridge.request.assert_awaited_once_with(
+            "step_over",
+            {"thread_name": "main", "timeout_seconds": 10.0},
+        )
+
+    @pytest.mark.asyncio
+    async def test_step_into_forwards_rpc(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(return_value={"status": "stopped"})
+        manager._bridges["s-test"] = bridge
+
+        result = await manager.step_into("s-test", thread_name="main", timeout_seconds=10.0)
+        assert result["status"] == "stopped"
+        bridge.request.assert_awaited_once_with(
+            "step_into",
+            {"thread_name": "main", "timeout_seconds": 10.0},
+        )
+
+    @pytest.mark.asyncio
+    async def test_step_out_forwards_rpc(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(return_value={"status": "stopped"})
+        manager._bridges["s-test"] = bridge
+
+        result = await manager.step_out("s-test", thread_name="main", timeout_seconds=10.0)
+        assert result["status"] == "stopped"
+        bridge.request.assert_awaited_once_with(
+            "step_out",
+            {"thread_name": "main", "timeout_seconds": 10.0},
+        )
+
+    @pytest.mark.asyncio
+    async def test_resume_forwards_rpc_for_all_threads(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(return_value={"status": "resumed", "scope": "all"})
+        manager._bridges["s-test"] = bridge
+
+        result = await manager.resume("s-test", thread_name=None)
+        assert result["scope"] == "all"
+        bridge.request.assert_awaited_once_with("resume", {})
+
+    @pytest.mark.asyncio
+    async def test_resume_forwards_rpc_for_specific_thread(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(return_value={"status": "resumed", "scope": "thread"})
+        manager._bridges["s-test"] = bridge
+
+        result = await manager.resume("s-test", thread_name="main")
+        assert result["scope"] == "thread"
+        bridge.request.assert_awaited_once_with("resume", {"thread_name": "main"})
+
+    @pytest.mark.asyncio
     async def test_drain_events_returns_and_clears_queue(self) -> None:
         manager = DebugManager()
         self._attach_session(manager)

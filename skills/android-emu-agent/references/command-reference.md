@@ -112,12 +112,24 @@ debugger to the app at startup:
 - `debug break remove <breakpoint_id> --session <session_id>` Remove a breakpoint.
 - `debug threads --session <session_id> [--all]` List VM threads (use `--all` to include daemon
   threads).
+- `debug step-over --session <session_id> [--thread <name>] [--timeout-seconds <sec>]` Step to the
+  next line and return stopped location + locals.
+- `debug step-into --session <session_id> [--thread <name>] [--timeout-seconds <sec>]` Step into the
+  next call and return stopped location + locals.
+- `debug step-out --session <session_id> [--thread <name>] [--timeout-seconds <sec>]` Step out of
+  the current method and return stopped location + locals.
+- `debug resume --session <session_id> [--thread <name>]` Resume one thread (when set) or all
+  threads.
 - `debug events --session <session_id>` Drain queued debugger events (for example `breakpoint_hit`,
   `breakpoint_resolved`).
 - `debug detach --session <session_id>` Detach debugger and clean up ADB forwarding.
 
 Use `--process` when multiple debuggable processes are present (for example
 `com.example.app:remote`). If omitted, the main package process is chosen when possible.
+
+Step commands return an Observe-Act-Verify payload with `status`, `location`, `method`, `thread`,
+`locals`, `token_usage_estimate`, and `truncated`. If stepping times out, `status=timeout` includes
+an actionable remediation hint.
 
 ### Artifact
 

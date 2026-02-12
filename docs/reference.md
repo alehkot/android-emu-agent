@@ -130,6 +130,10 @@ android-emu-agent debug [OPTIONS] COMMAND [ARGS]...
 - `status`: Get the debug session status.
 - `threads`: List debugger-visible VM threads.
 - `events`: Drain and return queued debugger events.
+- `step-over`: Step over and return stopped state...
+- `step-into`: Step into and return stopped state...
+- `step-out`: Step out and return stopped state atomically.
+- `resume`: Resume one thread or all threads.
 - `break`: Breakpoint commands
 
 ### `android-emu-agent debug ping`
@@ -231,6 +235,77 @@ android-emu-agent debug events [OPTIONS]
 **Options**:
 
 - `--session TEXT`: Session ID [required]
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent debug step-over`
+
+Step over and return stopped state atomically.
+
+**Usage**:
+
+```console
+android-emu-agent debug step-over [OPTIONS]
+```
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--thread TEXT`: Thread name [default: main]
+- `--timeout-seconds FLOAT`: Step timeout in seconds [default: 10.0]
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent debug step-into`
+
+Step into and return stopped state atomically.
+
+**Usage**:
+
+```console
+android-emu-agent debug step-into [OPTIONS]
+```
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--thread TEXT`: Thread name [default: main]
+- `--timeout-seconds FLOAT`: Step timeout in seconds [default: 10.0]
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent debug step-out`
+
+Step out and return stopped state atomically.
+
+**Usage**:
+
+```console
+android-emu-agent debug step-out [OPTIONS]
+```
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--thread TEXT`: Thread name [default: main]
+- `--timeout-seconds FLOAT`: Step timeout in seconds [default: 10.0]
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent debug resume`
+
+Resume one thread or all threads.
+
+**Usage**:
+
+```console
+android-emu-agent debug resume [OPTIONS]
+```
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--thread TEXT`: Optional thread name; omit to resume all threads
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 

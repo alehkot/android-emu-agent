@@ -385,6 +385,87 @@ class DebugManager:
             raise bridge_not_running_error("Invalid list_threads response from bridge")
         return {"status": "attached", **result}
 
+    async def step_over(
+        self,
+        session_id: str,
+        *,
+        thread_name: str = "main",
+        timeout_seconds: float = 10.0,
+    ) -> dict[str, Any]:
+        """Step over and return the stopped state from bridge atomically."""
+        return await self._step(
+            session_id=session_id,
+            method="step_over",
+            thread_name=thread_name,
+            timeout_seconds=timeout_seconds,
+        )
+
+    async def step_into(
+        self,
+        session_id: str,
+        *,
+        thread_name: str = "main",
+        timeout_seconds: float = 10.0,
+    ) -> dict[str, Any]:
+        """Step into and return the stopped state from bridge atomically."""
+        return await self._step(
+            session_id=session_id,
+            method="step_into",
+            thread_name=thread_name,
+            timeout_seconds=timeout_seconds,
+        )
+
+    async def step_out(
+        self,
+        session_id: str,
+        *,
+        thread_name: str = "main",
+        timeout_seconds: float = 10.0,
+    ) -> dict[str, Any]:
+        """Step out and return the stopped state from bridge atomically."""
+        return await self._step(
+            session_id=session_id,
+            method="step_out",
+            thread_name=thread_name,
+            timeout_seconds=timeout_seconds,
+        )
+
+    async def resume(
+        self,
+        session_id: str,
+        *,
+        thread_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Resume one thread or all threads on the attached VM."""
+        bridge = await self.get_bridge(session_id)
+        payload: dict[str, Any] = {}
+        if thread_name is not None:
+            payload["thread_name"] = thread_name
+        result = await bridge.request("resume", payload)
+        if not isinstance(result, dict):
+            raise bridge_not_running_error("Invalid resume response from bridge")
+        return result
+
+    async def _step(
+        self,
+        *,
+        session_id: str,
+        method: str,
+        thread_name: str,
+        timeout_seconds: float,
+    ) -> dict[str, Any]:
+        bridge = await self.get_bridge(session_id)
+        result = await bridge.request(
+            method,
+            {
+                "thread_name": thread_name,
+                "timeout_seconds": timeout_seconds,
+            },
+        )
+        if not isinstance(result, dict):
+            raise bridge_not_running_error(f"Invalid {method} response from bridge")
+        return result
+
     async def drain_events(self, session_id: str) -> dict[str, Any]:
         """Drain and return queued debugger events for a session."""
         ds = self._debug_sessions.get(session_id)
