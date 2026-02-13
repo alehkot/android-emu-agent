@@ -618,6 +618,34 @@ class TestMilestone2DebugMethods:
         )
 
     @pytest.mark.asyncio
+    async def test_load_mapping_forwards_rpc(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(return_value={"status": "loaded", "path": "/tmp/mapping.txt"})
+        manager._bridges["s-test"] = bridge
+
+        result = await manager.load_mapping("s-test", path="/tmp/mapping.txt")
+        assert result["status"] == "loaded"
+        bridge.request.assert_awaited_once_with("load_mapping", {"path": "/tmp/mapping.txt"})
+
+    @pytest.mark.asyncio
+    async def test_clear_mapping_forwards_rpc(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(return_value={"status": "cleared"})
+        manager._bridges["s-test"] = bridge
+
+        result = await manager.clear_mapping("s-test")
+        assert result["status"] == "cleared"
+        bridge.request.assert_awaited_once_with("clear_mapping")
+
+    @pytest.mark.asyncio
     async def test_step_over_forwards_rpc(self) -> None:
         manager = DebugManager()
         self._attach_session(manager)

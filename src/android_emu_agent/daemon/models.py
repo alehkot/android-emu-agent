@@ -340,3 +340,12 @@ class DebugEvalRequest(BaseModel):
     expression: str
     thread: str = "main"
     frame: int = 0
+
+
+class DebugMappingLoadRequest(BaseModel):
+    session_id: str
+    path: str
+
+
+class DebugMappingClearRequest(BaseModel):
+    session_id: str

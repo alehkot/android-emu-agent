@@ -442,6 +442,18 @@ class DebugManager:
         )
         return self._ensure_bridge_result(result, method="evaluate")
 
+    async def load_mapping(self, session_id: str, *, path: str) -> dict[str, Any]:
+        """Load a ProGuard/R8 mapping file into the attached bridge session."""
+        bridge = await self.get_bridge(session_id)
+        result = await bridge.request("load_mapping", {"path": path})
+        return self._ensure_bridge_result(result, method="load_mapping")
+
+    async def clear_mapping(self, session_id: str) -> dict[str, Any]:
+        """Clear any loaded ProGuard/R8 mapping from the attached bridge session."""
+        bridge = await self.get_bridge(session_id)
+        result = await bridge.request("clear_mapping")
+        return self._ensure_bridge_result(result, method="clear_mapping")
+
     async def step_over(
         self,
         session_id: str,

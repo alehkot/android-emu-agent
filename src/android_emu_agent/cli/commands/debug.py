@@ -9,7 +9,9 @@ from android_emu_agent.cli.utils import handle_response
 
 app = typer.Typer(help="Debugger commands (JDI Bridge)")
 break_app = typer.Typer(help="Breakpoint commands")
+mapping_app = typer.Typer(help="ProGuard/R8 mapping commands")
 app.add_typer(break_app, name="break")
+app.add_typer(mapping_app, name="mapping")
 
 
 @app.command("ping")
@@ -240,6 +242,42 @@ def debug_eval(
             "thread": thread,
             "frame": frame,
         },
+    )
+    client.close()
+    handle_response(resp, json_output=json_output)
+
+
+@mapping_app.command("load")
+def debug_mapping_load(
+    path: str = typer.Argument(..., help="Path to ProGuard/R8 mapping.txt"),
+    session_id: str = typer.Option(..., "--session", help="Session ID"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Load a ProGuard/R8 mapping file for deobfuscation."""
+    client = DaemonClient(timeout=30.0)
+    resp = client.request(
+        "POST",
+        "/debug/mapping/load",
+        json_body={
+            "session_id": session_id,
+            "path": path,
+        },
+    )
+    client.close()
+    handle_response(resp, json_output=json_output)
+
+
+@mapping_app.command("clear")
+def debug_mapping_clear(
+    session_id: str = typer.Option(..., "--session", help="Session ID"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Clear the loaded ProGuard/R8 mapping from this debug session."""
+    client = DaemonClient(timeout=30.0)
+    resp = client.request(
+        "POST",
+        "/debug/mapping/clear",
+        json_body={"session_id": session_id},
     )
     client.close()
     handle_response(resp, json_output=json_output)

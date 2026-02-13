@@ -138,6 +138,7 @@ android-emu-agent debug [OPTIONS] COMMAND [ARGS]...
 - `step-out`: Step out and return stopped state atomically.
 - `resume`: Resume one thread or all threads.
 - `break`: Breakpoint commands
+- `mapping`: ProGuard/R8 mapping commands
 
 ### `android-emu-agent debug ping`
 
@@ -444,6 +445,61 @@ List active breakpoints.
 
 ```console
 android-emu-agent debug break list [OPTIONS]
+```
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent debug mapping`
+
+ProGuard/R8 mapping commands
+
+**Usage**:
+
+```console
+android-emu-agent debug mapping [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+- `--help`: Show this message and exit.
+
+**Commands**:
+
+- `load`: Load a ProGuard/R8 mapping file for...
+- `clear`: Clear the loaded ProGuard/R8 mapping from...
+
+#### `android-emu-agent debug mapping load`
+
+Load a ProGuard/R8 mapping file for deobfuscation.
+
+**Usage**:
+
+```console
+android-emu-agent debug mapping load [OPTIONS] PATH
+```
+
+**Arguments**:
+
+- `PATH`: Path to ProGuard/R8 mapping.txt [required]
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+#### `android-emu-agent debug mapping clear`
+
+Clear the loaded ProGuard/R8 mapping from this debug session.
+
+**Usage**:
+
+```console
+android-emu-agent debug mapping clear [OPTIONS]
 ```
 
 **Options**:

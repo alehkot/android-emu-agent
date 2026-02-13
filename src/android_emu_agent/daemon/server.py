@@ -38,6 +38,8 @@ from android_emu_agent.daemon.models import (
     DebugDetachRequest,
     DebugEvalRequest,
     DebugInspectRequest,
+    DebugMappingClearRequest,
+    DebugMappingLoadRequest,
     DebugPingRequest,
     DebugResumeRequest,
     DebugStackRequest,
@@ -2424,6 +2426,52 @@ async def debug_eval(req: DebugEvalRequest) -> EndpointResponse:
             thread_name=req.thread,
             frame_index=req.frame,
         )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", **result}
+
+
+@app.post("/debug/mapping/load", response_model=None)
+async def debug_mapping_load(req: DebugMappingLoadRequest) -> EndpointResponse:
+    """Load a ProGuard/R8 mapping file for a debug session."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    path = req.path.strip()
+    if not path:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_MAPPING_PATH",
+                message="Invalid mapping path: empty",
+                remediation="Provide a readable mapping.txt path.",
+            ),
+            status_code=400,
+        )
+
+    try:
+        result = await core.debug_manager.load_mapping(
+            session_id=req.session_id,
+            path=path,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", **result}
+
+
+@app.post("/debug/mapping/clear", response_model=None)
+async def debug_mapping_clear(req: DebugMappingClearRequest) -> EndpointResponse:
+    """Clear the loaded ProGuard/R8 mapping for a debug session."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    try:
+        result = await core.debug_manager.clear_mapping(session_id=req.session_id)
     except AgentError as exc:
         return _error_response(exc, status_code=400)
 

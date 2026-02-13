@@ -118,6 +118,9 @@ debugger to the app at startup:
   Inspect a local/object path in a stack frame.
 - `debug eval <expression> --session <session_id> [--thread <name>] [--frame <idx>]` Evaluate a
   constrained expression (field access or `toString()`).
+- `debug mapping load <path> --session <session_id>` Load ProGuard/R8 mapping for deobfuscated
+  class/method/field names.
+- `debug mapping clear --session <session_id>` Clear loaded mapping from the active debug bridge.
 - `debug step-over --session <session_id> [--thread <name>] [--timeout-seconds <sec>]` Step to the
   next line and return stopped location + locals.
 - `debug step-into --session <session_id> [--thread <name>] [--timeout-seconds <sec>]` Step into the
@@ -140,6 +143,9 @@ an actionable remediation hint.
 `debug inspect` returns object IDs (`obj_1`, `obj_2`, ...) for object values. These IDs are valid
 only while execution remains suspended; after resume/step they are invalidated and must be
 re-captured.
+
+When a mapping is loaded, stack traces and inspect output show deobfuscated names where the mapping
+provides them.
 
 ### Artifact
 

@@ -151,6 +151,18 @@ object Commands {
                 successResponse(request.id, result)
             }
 
+            "load_mapping" -> {
+                val path = request.params["path"]?.jsonPrimitive?.content
+                    ?: throw RpcException(INVALID_PARAMS, "Missing required param: path")
+                val result = s.loadMapping(path)
+                successResponse(request.id, result)
+            }
+
+            "clear_mapping" -> {
+                val result = s.clearMapping()
+                successResponse(request.id, result)
+            }
+
             else -> null
         }
     }

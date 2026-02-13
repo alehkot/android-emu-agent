@@ -284,6 +284,10 @@ uv run android-emu-agent debug stack --session s-abc123 --thread main --max-fram
 uv run android-emu-agent debug inspect savedInstanceState --session s-abc123 --thread main --frame 0 --depth 1
 uv run android-emu-agent debug eval savedInstanceState.toString() --session s-abc123 --thread main --frame 0
 
+# Optional: load/clear ProGuard-R8 mapping for deobfuscated names in stack/inspect output
+uv run android-emu-agent debug mapping load ./mapping.txt --session s-abc123
+uv run android-emu-agent debug mapping clear --session s-abc123
+
 # Step execution (observe-act-verify): returns new location + locals atomically
 uv run android-emu-agent debug step-over --session s-abc123 --thread main
 uv run android-emu-agent debug step-into --session s-abc123 --thread main
@@ -299,7 +303,9 @@ uv run android-emu-agent debug detach --session s-abc123
 
 Step commands default to a 10s timeout (`--timeout-seconds`) and return actionable timeout payloads
 when a step cannot complete. If the main thread has been suspended for too long, responses include
-an ANR warning so you can resume before Android's ANR threshold.
+an ANR warning so you can resume before Android's ANR threshold. When a mapping file is loaded,
+stack class/method names and inspect field names are deobfuscated. Mapping state is per attached
+bridge instance and clears on detach.
 
 Under the hood, the daemon spawns a **JDI Bridge** sidecar (a Kotlin/JVM subprocess in
 `jdi-bridge/`) that speaks JSON-RPC over stdin/stdout. The bridge connects to the target app via

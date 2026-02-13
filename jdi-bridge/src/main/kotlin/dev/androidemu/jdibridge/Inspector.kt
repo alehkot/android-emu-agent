@@ -34,6 +34,7 @@ class Inspector(
         frameIndex: Int = 0,
         tokenBudget: Int = TokenBudget.DEFAULT_MAX_TOKENS,
         objectIdProvider: (ObjectReference) -> String = noopObjectIdProvider,
+        mapping: ProguardMapping? = null,
     ): JsonObject {
         if (frameIndex < 0) {
             throw RpcException(INVALID_PARAMS, "frame_index must be >= 0")
@@ -67,6 +68,7 @@ class Inspector(
             frame = frame,
             budget = budget,
             objectIdProvider = objectIdProvider,
+            mapping = mapping,
         )
         return buildJsonObject {
             put("locals", locals)
@@ -80,6 +82,7 @@ class Inspector(
         depth: Int = 1,
         tokenBudget: Int = TokenBudget.DEFAULT_MAX_TOKENS,
         objectIdProvider: (ObjectReference) -> String = noopObjectIdProvider,
+        mapping: ProguardMapping? = null,
     ): JsonObject {
         if (depth < 0) {
             throw RpcException(INVALID_PARAMS, "depth must be >= 0")
@@ -91,6 +94,7 @@ class Inspector(
             budget = budget,
             depth = depth,
             objectIdProvider = objectIdProvider,
+            mapping = mapping,
             visited = emptySet(),
         )
         return buildJsonObject {
@@ -104,6 +108,7 @@ class Inspector(
         frame: StackFrame,
         budget: TokenBudget,
         objectIdProvider: (ObjectReference) -> String,
+        mapping: ProguardMapping?,
     ): JsonElement {
         val variables = try {
             frame.visibleVariables()
@@ -115,7 +120,8 @@ class Inspector(
 
         return buildJsonArray {
             for (variable in variables) {
-                val overhead = variable.name().length + variable.typeName().length + 24
+                val typeName = mapping?.deobfuscateTypeName(variable.typeName()) ?: variable.typeName()
+                val overhead = variable.name().length + typeName.length + 24
                 if (!budget.tryConsume(overhead)) {
                     budget.markTruncated()
                     break
@@ -129,7 +135,7 @@ class Inspector(
 
                 add(buildJsonObject {
                     put("name", variable.name())
-                    put("type", variable.typeName())
+                    put("type", typeName)
                     put(
                         "value",
                         serializeValue(
@@ -137,6 +143,7 @@ class Inspector(
                             budget = budget,
                             depth = 1,
                             objectIdProvider = objectIdProvider,
+                            mapping = mapping,
                             visited = emptySet(),
                         ),
                     )
@@ -150,6 +157,7 @@ class Inspector(
         budget: TokenBudget,
         depth: Int,
         objectIdProvider: (ObjectReference) -> String,
+        mapping: ProguardMapping?,
         visited: Set<Long>,
     ): JsonElement {
         if (value == null) {
@@ -165,6 +173,7 @@ class Inspector(
                 budget = budget,
                 depth = depth,
                 objectIdProvider = objectIdProvider,
+                mapping = mapping,
                 visited = visited,
             )
             is ObjectReference -> serializeObject(
@@ -172,6 +181,7 @@ class Inspector(
                 budget = budget,
                 depth = depth,
                 objectIdProvider = objectIdProvider,
+                mapping = mapping,
                 visited = visited,
             )
             else -> serializeFallback(value.toString(), budget)
@@ -198,10 +208,12 @@ class Inspector(
         budget: TokenBudget,
         depth: Int,
         objectIdProvider: (ObjectReference) -> String,
+        mapping: ProguardMapping?,
         visited: Set<Long>,
     ): JsonElement {
         val objectId = objectIdProvider(value)
-        val className = value.referenceType().name()
+        val rawClassName = value.referenceType().name()
+        val className = mapping?.deobfuscateClass(rawClassName) ?: rawClassName
         val nextVisited = visited + value.uniqueID()
 
         if (depth <= 0) {
@@ -239,6 +251,7 @@ class Inspector(
                             budget = budget,
                             depth = depth - 1,
                             objectIdProvider = objectIdProvider,
+                            mapping = mapping,
                             visited = nextVisited,
                         ),
                     )
@@ -252,21 +265,23 @@ class Inspector(
         budget: TokenBudget,
         depth: Int,
         objectIdProvider: (ObjectReference) -> String,
+        mapping: ProguardMapping?,
         visited: Set<Long>,
     ): JsonElement {
         val uniqueId = value.uniqueID()
+        val rawClassName = value.referenceType().name()
+        val className = mapping?.deobfuscateClass(rawClassName) ?: rawClassName
         if (visited.contains(uniqueId)) {
             return buildJsonObject {
                 val objectId = objectIdProvider(value)
                 if (objectId.isNotEmpty()) {
                     put("object_id", objectId)
                 }
-                put("class", value.referenceType().name())
+                put("class", className)
                 put("circular", true)
             }
         }
 
-        val className = value.referenceType().name()
         if (!budget.tryConsume(className.length + 12)) {
             return buildJsonObject {
                 val objectId = objectIdProvider(value)
@@ -284,6 +299,7 @@ class Inspector(
                 budget = budget,
                 depth = depth,
                 objectIdProvider = objectIdProvider,
+                mapping = mapping,
                 visited = visited + uniqueId,
             )
             if (listLike != null) {
@@ -323,12 +339,13 @@ class Inspector(
                         null
                     }
                     put(
-                        field.name(),
+                        mapping?.deobfuscateField(rawClassName, field.name()) ?: field.name(),
                         serializeValue(
                             value = fieldValue,
                             budget = budget,
                             depth = depth - 1,
                             objectIdProvider = objectIdProvider,
+                            mapping = mapping,
                             visited = visited + uniqueId,
                         ),
                     )
@@ -342,6 +359,7 @@ class Inspector(
         budget: TokenBudget,
         depth: Int,
         objectIdProvider: (ObjectReference) -> String,
+        mapping: ProguardMapping?,
         visited: Set<Long>,
     ): JsonElement? {
         val fields = value.referenceType().allFields()
@@ -377,7 +395,8 @@ class Inspector(
             if (objectId.isNotEmpty()) {
                 put("object_id", objectId)
             }
-            put("class", value.referenceType().name())
+            val rawClassName = value.referenceType().name()
+            put("class", mapping?.deobfuscateClass(rawClassName) ?: rawClassName)
             put("length", if (length >= 0) length else allValues.size)
             put("items", buildJsonArray {
                 for (item in shown) {
@@ -387,6 +406,7 @@ class Inspector(
                             budget = budget,
                             depth = depth - 1,
                             objectIdProvider = objectIdProvider,
+                            mapping = mapping,
                             visited = visited,
                         ),
                     )

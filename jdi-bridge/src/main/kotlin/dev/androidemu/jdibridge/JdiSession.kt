@@ -96,6 +96,8 @@ class JdiSession(
     private val objectIdsByUniqueId = mutableMapOf<Long, String>()
     private val objectRefsById = mutableMapOf<String, ObjectReference>()
     private var nextObjectId = 1
+    @Volatile
+    private var mapping: ProguardMapping? = null
 
     val isAttached: Boolean get() = vm != null && !disconnected
 
@@ -168,9 +170,28 @@ class JdiSession(
             suspendedAtMs.clear()
             invalidateObjectCacheLocked()
         }
+        mapping = null
 
         return buildJsonObject {
             put("status", "detached")
+        }
+    }
+
+    fun loadMapping(path: String): JsonElement {
+        val loaded = ProguardMapping.load(path)
+        mapping = loaded
+        return buildJsonObject {
+            put("status", "loaded")
+            put("path", path)
+            put("class_count", loaded.classCount)
+            put("member_count", loaded.memberCount)
+        }
+    }
+
+    fun clearMapping(): JsonElement {
+        mapping = null
+        return buildJsonObject {
+            put("status", "cleared")
         }
     }
 
@@ -454,6 +475,7 @@ class JdiSession(
         val machine = requireAttachedMachine()
         val thread = resolveThread(machine, threadName)
         val frames = requireThreadFrames(thread)
+        val activeMapping = mapping
 
         val entries = mutableListOf<JsonObject>()
         var index = 0
@@ -478,9 +500,16 @@ class JdiSession(
 
             entries.add(
                 buildJsonObject {
+                    val rawClassName = location.declaringType().name()
+                    val method = location.method()
+                    val methodArity = runCatching { method.argumentTypeNames().size }.getOrNull()
                     put("index", index)
-                    put("class", location.declaringType().name())
-                    put("method", location.method().name())
+                    put("class", activeMapping?.deobfuscateClass(rawClassName) ?: rawClassName)
+                    put(
+                        "method",
+                        activeMapping?.deobfuscateMethod(rawClassName, method.name(), methodArity)
+                            ?: method.name(),
+                    )
                     put("line", location.lineNumber())
                     val source = runCatching { location.sourceName() }.getOrNull()
                     if (source != null) {
@@ -526,11 +555,13 @@ class JdiSession(
         val thread = resolveThread(machine, threadName)
         val frame = resolveFrame(thread, frameIndex)
         val value = resolveValuePath(frame, variablePath)
+        val activeMapping = mapping
         val inspected = inspector.inspectValue(
             value = value,
             depth = depth,
             tokenBudget = TokenBudget.DEFAULT_MAX_TOKENS,
             objectIdProvider = this::cacheObjectId,
+            mapping = activeMapping,
         )
 
         return buildJsonObject {
@@ -587,11 +618,13 @@ class JdiSession(
                 )
             }
             val value = resolveValuePath(frame, trimmedExpression)
+            val activeMapping = mapping
             inspector.inspectValue(
                 value = value,
                 depth = 1,
                 tokenBudget = TokenBudget.DEFAULT_MAX_TOKENS,
                 objectIdProvider = this::cacheObjectId,
+                mapping = activeMapping,
             )
         }
 
@@ -952,12 +985,22 @@ class JdiSession(
         }
         val selectedIndex = selection.selectedIndex.coerceIn(0, (frames.size - 1).coerceAtLeast(0))
         val selectedLocation = frames.getOrNull(selectedIndex)?.location() ?: fallbackLocation
+        val activeMapping = mapping
+        val rawClassName = selectedLocation.declaringType().name()
+        val selectedMethod = selectedLocation.method()
+        val selectedMethodArity = runCatching { selectedMethod.argumentTypeNames().size }.getOrNull()
+        val mappedMethod = activeMapping?.deobfuscateMethod(
+            rawClassName,
+            selectedMethod.name(),
+            selectedMethodArity,
+        ) ?: selectedMethod.name()
         val inspectedFrame = try {
             inspector.inspectFrame(
                 thread = thread,
                 frameIndex = selectedIndex,
                 tokenBudget = TokenBudget.DEFAULT_MAX_TOKENS,
                 objectIdProvider = this::cacheObjectId,
+                mapping = activeMapping,
             )
         } catch (_: Exception) {
             buildJsonObject {
@@ -975,7 +1018,7 @@ class JdiSession(
         return buildJsonObject {
             put("status", "stopped")
             put("location", formatLocation(selectedLocation))
-            put("method", selectedLocation.method().name())
+            put("method", mappedMethod)
             put("thread", thread.name())
             put("locals", locals)
             put("token_usage_estimate", tokenUsage)
@@ -1170,11 +1213,20 @@ class JdiSession(
     }
 
     private fun resolveFieldValue(objectRef: ObjectReference, fieldName: String): Value? {
-        val field = objectRef.referenceType().allFields().firstOrNull { it.name() == fieldName }
-            ?: throw RpcException(
-                INVALID_REQUEST,
-                "Field '$fieldName' not found on ${objectRef.referenceType().name()}",
-            )
+        val referenceType = objectRef.referenceType()
+        val rawClassName = referenceType.name()
+        val fields = referenceType.allFields()
+        val field = fields.firstOrNull { it.name() == fieldName } ?: run {
+            val remapped = mapping?.obfuscateField(rawClassName, fieldName)
+            if (remapped != null) {
+                fields.firstOrNull { it.name() == remapped }
+            } else {
+                null
+            }
+        } ?: throw RpcException(
+            INVALID_REQUEST,
+            "Field '$fieldName' not found on ${mapping?.deobfuscateClass(rawClassName) ?: rawClassName}",
+        )
         return try {
             objectRef.getValue(field)
         } catch (e: ObjectCollectedException) {
@@ -1310,7 +1362,9 @@ class JdiSession(
     }
 
     private fun formatLocation(location: Location): String {
-        return "${location.declaringType().name()}:${location.lineNumber()}"
+        val rawClassName = location.declaringType().name()
+        val className = mapping?.deobfuscateClass(rawClassName) ?: rawClassName
+        return "$className:${location.lineNumber()}"
     }
 
     private fun mapThreadState(thread: ThreadReference): String {
