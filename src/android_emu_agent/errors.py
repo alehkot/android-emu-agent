@@ -258,6 +258,20 @@ def bridge_not_running_error(reason: str = "") -> AgentError:
     )
 
 
+def bridge_download_failed_error(url: str, reason: str) -> AgentError:
+    """Create error for bridge artifact download failures."""
+    return AgentError(
+        code="ERR_BRIDGE_DOWNLOAD_FAILED",
+        message=f"Could not download JDI Bridge artifact: {url}",
+        context={"url": url, "reason": reason},
+        remediation=(
+            "Check network access and release availability, then retry. "
+            "You can also run './scripts/dev.sh build-bridge' and set "
+            "ANDROID_EMU_AGENT_BRIDGE_JAR to a local JAR path."
+        ),
+    )
+
+
 def bridge_crashed_error(reason: str = "") -> AgentError:
     """Create error for bridge subprocess crash."""
     return AgentError(
@@ -277,6 +291,69 @@ def app_not_debuggable_error(package: str) -> AgentError:
         remediation=(
             "The app must be built with android:debuggable=true, "
             "or the device must be running a userdebug/eng build."
+        ),
+    )
+
+
+def not_suspended_error(thread_name: str | None = None) -> AgentError:
+    """Create error for operations that require a suspended thread."""
+    thread_hint = f" for thread '{thread_name}'" if thread_name else ""
+    return AgentError(
+        code="ERR_NOT_SUSPENDED",
+        message=f"Thread is not suspended{thread_hint}",
+        context={"thread_name": thread_name},
+        remediation="Pause execution at a breakpoint or with a step command, then retry.",
+    )
+
+
+def step_timeout_error(action: str, thread_name: str, timeout_seconds: float) -> AgentError:
+    """Create error for step command timeout."""
+    return AgentError(
+        code="ERR_STEP_TIMEOUT",
+        message=f"{action} did not complete within {timeout_seconds:g}s on thread '{thread_name}'",
+        context={
+            "action": action,
+            "thread_name": thread_name,
+            "timeout_seconds": timeout_seconds,
+        },
+        remediation=(
+            "Use 'debug resume' to continue execution, then set a breakpoint further ahead "
+            "or increase --timeout-seconds."
+        ),
+    )
+
+
+def object_collected_error() -> AgentError:
+    """Create error for stale object references after resume/step."""
+    return AgentError(
+        code="ERR_OBJECT_COLLECTED",
+        message="Object reference is stale",
+        context={},
+        remediation="Resume to a fresh suspension point (breakpoint/step), then inspect again.",
+    )
+
+
+def class_not_found_error(class_pattern: str) -> AgentError:
+    """Create error for unresolved breakpoint class targets."""
+    return AgentError(
+        code="ERR_CLASS_NOT_FOUND",
+        message=f"Breakpoint target class not found: {class_pattern}",
+        context={"class_pattern": class_pattern},
+        remediation=(
+            "Verify the fully-qualified class name and that the class is loaded in the target "
+            "process, then retry."
+        ),
+    )
+
+
+def breakpoint_invalid_line_error(class_pattern: str, line: int) -> AgentError:
+    """Create error for breakpoints set on non-executable lines."""
+    return AgentError(
+        code="ERR_BREAKPOINT_INVALID_LINE",
+        message=f"No executable code at {class_pattern}:{line}",
+        context={"class_pattern": class_pattern, "line": line},
+        remediation=(
+            "Use a valid executable source line (for example from 'debug stack') and retry."
         ),
     )
 

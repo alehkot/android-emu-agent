@@ -140,9 +140,23 @@ Step commands return an Observe-Act-Verify payload with `status`, `location`, `m
 `locals`, `token_usage_estimate`, and `truncated`. If stepping times out, `status=timeout` includes
 an actionable remediation hint.
 
+`debug break set` may return `status=pending` when the class is not loaded yet. Keep execution
+running and use `debug events` to wait for `breakpoint_resolved` / `breakpoint_hit`.
+
 `debug inspect` returns object IDs (`obj_1`, `obj_2`, ...) for object values. These IDs are valid
 only while execution remains suspended; after resume/step they are invalidated and must be
 re-captured.
+
+Default token bounds are intentionally small (stack: 10 frames, inspect depth: 1). Use
+`--max-frames` or `--depth` to inspect more data when needed.
+
+If the stack is mostly `kotlinx.coroutines`, use `debug step-out` repeatedly until user code
+appears.
+
+Do not leave the main thread suspended for more than ~8 seconds to avoid ANR risk.
+
+Debugger startup requires JDK 17+; `ERR_JDK_NOT_FOUND` means `java` is not available through
+`PATH`/`JAVA_HOME`.
 
 When a mapping is loaded, stack traces and inspect output show deobfuscated names where the mapping
 provides them.

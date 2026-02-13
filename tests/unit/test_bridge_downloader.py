@@ -57,4 +57,4 @@ def test_resolve_raises_on_checksum_mismatch(tmp_path: Path) -> None:
     ):
         downloader.resolve()
 
-    assert exc_info.value.code == "ERR_BRIDGE_NOT_RUNNING"
+    assert exc_info.value.code == "ERR_BRIDGE_DOWNLOAD_FAILED"

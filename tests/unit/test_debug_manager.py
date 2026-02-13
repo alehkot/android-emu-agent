@@ -799,3 +799,30 @@ class TestBridgeErrorMapping:
                 method="evaluate",
             )
         assert exc_info.value.code == "ERR_EVAL_UNSUPPORTED"
+
+    def test_step_timeout_error_is_mapped(self) -> None:
+        with pytest.raises(AgentError) as exc_info:
+            DebugManager._ensure_bridge_result(
+                {"error": {"code": -32020, "message": "ERR_STEP_TIMEOUT: step did not complete within 8s"}},
+                method="step_over",
+                error_context={"thread_name": "main", "timeout_seconds": 8.0},
+            )
+        assert exc_info.value.code == "ERR_STEP_TIMEOUT"
+
+    def test_class_not_found_error_is_mapped(self) -> None:
+        with pytest.raises(AgentError) as exc_info:
+            DebugManager._ensure_bridge_result(
+                {"error": {"code": -32030, "message": "ERR_CLASS_NOT_FOUND: class not found"}},
+                method="set_breakpoint",
+                error_context={"class_pattern": "com.example.Missing", "line": 42},
+            )
+        assert exc_info.value.code == "ERR_CLASS_NOT_FOUND"
+
+    def test_breakpoint_invalid_line_error_is_mapped(self) -> None:
+        with pytest.raises(AgentError) as exc_info:
+            DebugManager._ensure_bridge_result(
+                {"error": {"code": -32031, "message": "ERR_BREAKPOINT_INVALID_LINE: no executable code"}},
+                method="set_breakpoint",
+                error_context={"class_pattern": "com.example.MainActivity", "line": 42},
+            )
+        assert exc_info.value.code == "ERR_BREAKPOINT_INVALID_LINE"

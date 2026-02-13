@@ -20,10 +20,15 @@ from android_emu_agent.errors import (
     adb_forward_failed_error,
     already_attached_error,
     app_not_debuggable_error,
+    breakpoint_invalid_line_error,
     bridge_not_running_error,
+    class_not_found_error,
     debug_not_attached_error,
     jdk_not_found_error,
+    not_suspended_error,
+    object_collected_error,
     process_not_found_error,
+    step_timeout_error,
 )
 
 logger = structlog.get_logger()
@@ -141,8 +146,10 @@ class DebugManager:
         try:
             result = await client.ping()
             logger.info("bridge_ping_ok", session_id=session_id, result=result)
-        except Exception:
+        except Exception as exc:
             await client.stop()
+            if isinstance(exc, AgentError):
+                raise
             raise bridge_not_running_error("bridge started but ping failed") from None
 
         self._bridges[session_id] = client
@@ -345,9 +352,11 @@ class DebugManager:
             "set_breakpoint",
             {"class_pattern": class_pattern, "line": line},
         )
-        if not isinstance(result, dict):
-            raise bridge_not_running_error("Invalid set_breakpoint response from bridge")
-        return result
+        return self._ensure_bridge_result(
+            result,
+            method="set_breakpoint",
+            error_context={"class_pattern": class_pattern, "line": line},
+        )
 
     async def remove_breakpoint(self, session_id: str, breakpoint_id: int) -> dict[str, Any]:
         """Remove a breakpoint by ID."""
@@ -356,17 +365,18 @@ class DebugManager:
             "remove_breakpoint",
             {"breakpoint_id": breakpoint_id},
         )
-        if not isinstance(result, dict):
-            raise bridge_not_running_error("Invalid remove_breakpoint response from bridge")
-        return result
+        return self._ensure_bridge_result(
+            result,
+            method="remove_breakpoint",
+            error_context={"breakpoint_id": breakpoint_id},
+        )
 
     async def list_breakpoints(self, session_id: str) -> dict[str, Any]:
         """List breakpoints for an attached debug session."""
         bridge = await self.get_bridge(session_id)
         result = await bridge.request("list_breakpoints")
-        if not isinstance(result, dict):
-            raise bridge_not_running_error("Invalid list_breakpoints response from bridge")
-        return {"status": "attached", **result}
+        mapped = self._ensure_bridge_result(result, method="list_breakpoints")
+        return {"status": "attached", **mapped}
 
     async def list_threads(
         self,
@@ -381,9 +391,8 @@ class DebugManager:
             "list_threads",
             {"include_daemon": include_daemon, "max_threads": max_threads},
         )
-        if not isinstance(result, dict):
-            raise bridge_not_running_error("Invalid list_threads response from bridge")
-        return {"status": "attached", **result}
+        mapped = self._ensure_bridge_result(result, method="list_threads")
+        return {"status": "attached", **mapped}
 
     async def stack_trace(
         self,
@@ -511,9 +520,11 @@ class DebugManager:
         if thread_name is not None:
             payload["thread_name"] = thread_name
         result = await bridge.request("resume", payload)
-        if not isinstance(result, dict):
-            raise bridge_not_running_error("Invalid resume response from bridge")
-        return result
+        return self._ensure_bridge_result(
+            result,
+            method="resume",
+            error_context={"thread_name": thread_name},
+        )
 
     async def _step(
         self,
@@ -531,9 +542,14 @@ class DebugManager:
                 "timeout_seconds": timeout_seconds,
             },
         )
-        if not isinstance(result, dict):
-            raise bridge_not_running_error(f"Invalid {method} response from bridge")
-        return result
+        return self._ensure_bridge_result(
+            result,
+            method=method,
+            error_context={
+                "thread_name": thread_name,
+                "timeout_seconds": timeout_seconds,
+            },
+        )
 
     async def drain_events(self, session_id: str) -> dict[str, Any]:
         """Drain and return queued debugger events for a session."""
@@ -844,7 +860,12 @@ class DebugManager:
         return "Reattach with 'debug attach --session <id> --package <pkg>'."
 
     @staticmethod
-    def _ensure_bridge_result(result: Any, *, method: str) -> dict[str, Any]:
+    def _ensure_bridge_result(
+        result: Any,
+        *,
+        method: str,
+        error_context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Return a bridge result dict or raise a mapped AgentError for RPC failures."""
         if not isinstance(result, dict):
             raise bridge_not_running_error(f"Invalid {method} response from bridge")
@@ -860,29 +881,69 @@ class DebugManager:
             message = str(error_obj)
             code = None
 
+        bridge_context = {
+            "method": method,
+            "bridge_code": code,
+            "bridge_message": message,
+        }
+        if error_context:
+            bridge_context.update(error_context)
+
+        def _attach_context(error: AgentError) -> AgentError:
+            return AgentError(
+                code=error.code,
+                message=error.message,
+                context={**error.context, **bridge_context},
+                remediation=error.remediation,
+            )
+
         lowered = message.lower()
         if "object_collected" in lowered or "err_object_collected" in lowered:
-            raise AgentError(
-                code="ERR_OBJECT_COLLECTED",
-                message="Object reference is stale",
-                context={"method": method, "bridge_code": code, "bridge_message": message},
-                remediation=(
-                    "Resume to a fresh suspension point (breakpoint/step), then inspect again."
-                ),
-            )
+            raise _attach_context(object_collected_error())
         if "not_suspended" in lowered or "err_not_suspended" in lowered:
-            raise AgentError(
-                code="ERR_NOT_SUSPENDED",
-                message="Thread is not suspended",
-                context={"method": method, "bridge_code": code, "bridge_message": message},
-                remediation="Pause execution at a breakpoint or with a step command, then retry.",
-            )
+            thread_name = None
+            if error_context is not None:
+                thread = error_context.get("thread_name")
+                if isinstance(thread, str) and thread:
+                    thread_name = thread
+            raise _attach_context(not_suspended_error(thread_name))
+        if "err_step_timeout" in lowered or "did not complete within" in lowered:
+            thread_name = "main"
+            timeout_seconds = 10.0
+            if error_context is not None:
+                thread = error_context.get("thread_name")
+                if isinstance(thread, str) and thread:
+                    thread_name = thread
+                timeout_raw = error_context.get("timeout_seconds")
+                if isinstance(timeout_raw, int | float):
+                    timeout_seconds = float(timeout_raw)
+            action = method.replace("_", "-")
+            raise _attach_context(step_timeout_error(action, thread_name, timeout_seconds))
+        if "err_class_not_found" in lowered or "class not found" in lowered:
+            class_pattern = ""
+            if error_context is not None:
+                pattern = error_context.get("class_pattern")
+                if isinstance(pattern, str):
+                    class_pattern = pattern
+            raise _attach_context(class_not_found_error(class_pattern))
+        if "err_breakpoint_invalid_line" in lowered or "no executable code" in lowered:
+            class_pattern = ""
+            line = -1
+            if error_context is not None:
+                pattern = error_context.get("class_pattern")
+                if isinstance(pattern, str):
+                    class_pattern = pattern
+                line_raw = error_context.get("line")
+                if isinstance(line_raw, int):
+                    line = line_raw
+            raise _attach_context(breakpoint_invalid_line_error(class_pattern, line))
         if "unsupported expression" in lowered or "err_eval_unsupported" in lowered:
-            raise AgentError(
-                code="ERR_EVAL_UNSUPPORTED",
-                message="Unsupported debug expression",
-                context={"method": method, "bridge_code": code, "bridge_message": message},
-                remediation="Use field access (a.b.c) or toString() calls only.",
+            raise _attach_context(
+                AgentError(
+                    code="ERR_EVAL_UNSUPPORTED",
+                    message="Unsupported debug expression",
+                    remediation="Use field access (a.b.c) or toString() calls only.",
+                )
             )
 
         raise bridge_not_running_error(f"{method} RPC error: {message}")

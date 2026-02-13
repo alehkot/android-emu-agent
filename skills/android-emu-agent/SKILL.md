@@ -88,4 +88,5 @@ Match your situation to the right file:
 - **Hit an error or unexpected behavior** → `references/troubleshooting.md`
 - **Need a complete end-to-end walkthrough** → `references/examples.md`
 - **Diagnosing a crash, ANR, or process death** → `references/reliability.md`
+- **Investigating runtime behavior with breakpoints/stack/inspect** → `references/debugging.md`
 - **Pushing or pulling files to/from device** → `references/files.md`

@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib import request
 from urllib.error import HTTPError, URLError
 
-from android_emu_agent.errors import bridge_not_running_error
+from android_emu_agent.errors import bridge_download_failed_error
 
 _DEFAULT_BRIDGE_REPO = "alehkot/android-emu-agent"
 _DEFAULT_BRIDGE_VERSION = "0.1.10"
@@ -82,8 +82,9 @@ class BridgeDownloader:
 
         if not self._verify_sha(tmp_path, expected_sha):
             tmp_path.unlink(missing_ok=True)
-            raise bridge_not_running_error(
-                f"Downloaded bridge JAR checksum mismatch for {self._jar_name}"
+            raise bridge_download_failed_error(
+                self._jar_url,
+                f"checksum mismatch for {self._jar_name}",
             )
 
         tmp_path.replace(jar_path)
@@ -99,9 +100,7 @@ class BridgeDownloader:
                     return data
                 return bytes(data)
         except (HTTPError, URLError, OSError) as exc:
-            raise bridge_not_running_error(
-                f"Failed to download bridge artifact: {url} ({exc})"
-            ) from None
+            raise bridge_download_failed_error(url, str(exc)) from None
 
     @staticmethod
     def _verify_sha(path: Path, expected_sha: str) -> bool:
