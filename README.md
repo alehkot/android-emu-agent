@@ -279,6 +279,11 @@ uv run android-emu-agent debug threads --session s-abc123 --all
 # Drain debugger event queue (breakpoint hits/resolutions, disconnect events)
 uv run android-emu-agent debug events --session s-abc123
 
+# Stack and variable inspection on suspended threads
+uv run android-emu-agent debug stack --session s-abc123 --thread main --max-frames 10
+uv run android-emu-agent debug inspect savedInstanceState --session s-abc123 --thread main --frame 0 --depth 1
+uv run android-emu-agent debug eval savedInstanceState.toString() --session s-abc123 --thread main --frame 0
+
 # Step execution (observe-act-verify): returns new location + locals atomically
 uv run android-emu-agent debug step-over --session s-abc123 --thread main
 uv run android-emu-agent debug step-into --session s-abc123 --thread main

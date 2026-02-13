@@ -4,9 +4,16 @@ import com.sun.jdi.AbsentInformationException
 import com.sun.jdi.BooleanValue
 import com.sun.jdi.Bootstrap
 import com.sun.jdi.ClassType
+import com.sun.jdi.IncompatibleThreadStateException
 import com.sun.jdi.Location
+import com.sun.jdi.ObjectCollectedException
+import com.sun.jdi.ObjectReference
+import com.sun.jdi.PrimitiveValue
+import com.sun.jdi.StackFrame
+import com.sun.jdi.StringReference
 import com.sun.jdi.ThreadReference
 import com.sun.jdi.VMDisconnectedException
+import com.sun.jdi.Value
 import com.sun.jdi.VirtualMachine
 import com.sun.jdi.connect.AttachingConnector
 import com.sun.jdi.event.BreakpointEvent
@@ -20,7 +27,9 @@ import com.sun.jdi.request.EventRequest
 import com.sun.jdi.request.StepRequest
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -44,6 +53,9 @@ class JdiSession(
     companion object {
         const val DEFAULT_STEP_TIMEOUT_SECONDS = 10.0
         const val ANR_WARNING_SECONDS = 8.0
+        private const val ERR_NOT_SUSPENDED = "ERR_NOT_SUSPENDED"
+        private const val ERR_OBJECT_COLLECTED = "ERR_OBJECT_COLLECTED"
+        private const val ERR_EVAL_UNSUPPORTED = "ERR_EVAL_UNSUPPORTED"
     }
 
     private data class BreakpointState(
@@ -81,6 +93,9 @@ class JdiSession(
     private var activeStep: PendingStep? = null
     private val inspector = Inspector()
     private val suspendedAtMs = mutableMapOf<Long, Long>()
+    private val objectIdsByUniqueId = mutableMapOf<Long, String>()
+    private val objectRefsById = mutableMapOf<String, ObjectReference>()
+    private var nextObjectId = 1
 
     val isAttached: Boolean get() = vm != null && !disconnected
 
@@ -115,6 +130,7 @@ class JdiSession(
             nextBreakpointId = 1
             activeStep = null
             suspendedAtMs.clear()
+            invalidateObjectCacheLocked()
         }
 
         // If the VM is fully suspended (wait-for-debugger), resume it
@@ -150,6 +166,7 @@ class JdiSession(
         synchronized(stateLock) {
             activeStep = null
             suspendedAtMs.clear()
+            invalidateObjectCacheLocked()
         }
 
         return buildJsonObject {
@@ -392,6 +409,7 @@ class JdiSession(
             }
             synchronized(stateLock) {
                 suspendedAtMs.clear()
+                invalidateObjectCacheLocked()
             }
             return buildJsonObject {
                 put("status", "resumed")
@@ -414,11 +432,179 @@ class JdiSession(
             throw RpcException(INTERNAL_ERROR, "Failed to resume thread: ${e.message ?: "unknown"}")
         }
         markThreadResumed(thread)
+        synchronized(stateLock) {
+            invalidateObjectCacheLocked()
+        }
 
         return buildJsonObject {
             put("status", "resumed")
             put("scope", "thread")
             put("thread", thread.name())
+        }
+    }
+
+    fun stackTrace(threadName: String, maxFrames: Int): JsonElement {
+        if (threadName.isBlank()) {
+            throw RpcException(INVALID_PARAMS, "thread_name must not be blank")
+        }
+        if (maxFrames <= 0) {
+            throw RpcException(INVALID_PARAMS, "max_frames must be > 0")
+        }
+
+        val machine = requireAttachedMachine()
+        val thread = resolveThread(machine, threadName)
+        val frames = requireThreadFrames(thread)
+
+        val entries = mutableListOf<JsonObject>()
+        var index = 0
+        while (index < frames.size && entries.size < maxFrames) {
+            val frame = frames[index]
+            val location = frame.location()
+            if (FrameFilter.isCoroutineInternal(location)) {
+                var filteredCount = 0
+                while (index < frames.size && FrameFilter.isCoroutineInternal(frames[index].location())) {
+                    filteredCount += 1
+                    index += 1
+                }
+                entries.add(
+                    buildJsonObject {
+                        put("filtered", true)
+                        put("count", filteredCount)
+                        put("reason", "coroutine_internal")
+                    },
+                )
+                continue
+            }
+
+            entries.add(
+                buildJsonObject {
+                    put("index", index)
+                    put("class", location.declaringType().name())
+                    put("method", location.method().name())
+                    put("line", location.lineNumber())
+                    val source = runCatching { location.sourceName() }.getOrNull()
+                    if (source != null) {
+                        put("source", source)
+                    }
+                },
+            )
+            index += 1
+        }
+
+        val truncated = index < frames.size
+        return buildJsonObject {
+            put("thread", thread.name())
+            put("frame_count", frames.size)
+            put("frames", JsonArray(entries))
+            put("truncated", truncated)
+            put("total_frames", frames.size)
+            put("shown_frames", entries.size)
+            put("max_frames", maxFrames)
+        }
+    }
+
+    fun inspectVariable(
+        threadName: String,
+        frameIndex: Int,
+        variablePath: String,
+        depth: Int,
+    ): JsonElement {
+        if (threadName.isBlank()) {
+            throw RpcException(INVALID_PARAMS, "thread_name must not be blank")
+        }
+        if (frameIndex < 0) {
+            throw RpcException(INVALID_PARAMS, "frame_index must be >= 0")
+        }
+        if (depth <= 0 || depth > 3) {
+            throw RpcException(INVALID_PARAMS, "depth must be in range 1..3")
+        }
+        if (variablePath.isBlank()) {
+            throw RpcException(INVALID_PARAMS, "variable_path must not be blank")
+        }
+
+        val machine = requireAttachedMachine()
+        val thread = resolveThread(machine, threadName)
+        val frame = resolveFrame(thread, frameIndex)
+        val value = resolveValuePath(frame, variablePath)
+        val inspected = inspector.inspectValue(
+            value = value,
+            depth = depth,
+            tokenBudget = TokenBudget.DEFAULT_MAX_TOKENS,
+            objectIdProvider = this::cacheObjectId,
+        )
+
+        return buildJsonObject {
+            put("thread", thread.name())
+            put("frame_index", frameIndex)
+            put("variable_path", variablePath)
+            put("depth", depth)
+            put("value", inspected["value"] ?: JsonNull)
+            put(
+                "token_usage_estimate",
+                inspected["token_usage_estimate"] ?: JsonPrimitive(0),
+            )
+            put("truncated", inspected["truncated"] ?: JsonPrimitive(false))
+        }
+    }
+
+    fun evaluate(
+        threadName: String,
+        frameIndex: Int,
+        expression: String,
+    ): JsonElement {
+        if (threadName.isBlank()) {
+            throw RpcException(INVALID_PARAMS, "thread_name must not be blank")
+        }
+        if (frameIndex < 0) {
+            throw RpcException(INVALID_PARAMS, "frame_index must be >= 0")
+        }
+        val trimmedExpression = expression.trim()
+        if (trimmedExpression.isEmpty()) {
+            throw RpcException(INVALID_PARAMS, "expression must not be blank")
+        }
+
+        val machine = requireAttachedMachine()
+        val thread = resolveThread(machine, threadName)
+        val frame = resolveFrame(thread, frameIndex)
+
+        val result: JsonObject = if (trimmedExpression.endsWith(".toString()")) {
+            val targetPath = trimmedExpression.removeSuffix(".toString()").trim()
+            if (targetPath.isEmpty()) {
+                throw RpcException(INVALID_PARAMS, "toString() target must not be empty")
+            }
+            val value = resolveValuePath(frame, targetPath)
+            val text = renderToString(thread, value)
+            buildJsonObject {
+                put("value", JsonPrimitive(text))
+                put("token_usage_estimate", JsonPrimitive(estimateTokenUsage(text.length)))
+                put("truncated", JsonPrimitive(false))
+            }
+        } else {
+            if (trimmedExpression.contains("(") || trimmedExpression.contains(")")) {
+                throw RpcException(
+                    INVALID_PARAMS,
+                    "$ERR_EVAL_UNSUPPORTED: only field access and toString() are supported",
+                )
+            }
+            val value = resolveValuePath(frame, trimmedExpression)
+            inspector.inspectValue(
+                value = value,
+                depth = 1,
+                tokenBudget = TokenBudget.DEFAULT_MAX_TOKENS,
+                objectIdProvider = this::cacheObjectId,
+            )
+        }
+
+        return buildJsonObject {
+            put("thread", thread.name())
+            put("frame_index", frameIndex)
+            put("expression", trimmedExpression)
+            put("result", result["value"] ?: JsonNull)
+            put(
+                "token_usage_estimate",
+                result["token_usage_estimate"] ?: JsonPrimitive(0),
+            )
+            put("truncated", result["truncated"] ?: JsonPrimitive(false))
         }
     }
 
@@ -474,6 +660,7 @@ class JdiSession(
                 request = request,
                 completion = completion,
             )
+            invalidateObjectCacheLocked()
         }
 
         try {
@@ -621,6 +808,7 @@ class JdiSession(
             val current = activeStep
             activeStep = null
             suspendedAtMs.clear()
+            invalidateObjectCacheLocked()
             current
         }
         pending?.completion?.complete(
@@ -769,6 +957,7 @@ class JdiSession(
                 thread = thread,
                 frameIndex = selectedIndex,
                 tokenBudget = TokenBudget.DEFAULT_MAX_TOKENS,
+                objectIdProvider = this::cacheObjectId,
             )
         } catch (_: Exception) {
             buildJsonObject {
@@ -900,7 +1089,177 @@ class JdiSession(
             breakpoints.clear()
             activeStep = null
             suspendedAtMs.clear()
+            invalidateObjectCacheLocked()
         }
+    }
+
+    private fun requireThreadFrames(thread: ThreadReference): List<StackFrame> {
+        if (!thread.isSuspended) {
+            throw RpcException(
+                INVALID_REQUEST,
+                "$ERR_NOT_SUSPENDED: thread '${thread.name()}' is not suspended",
+            )
+        }
+        return try {
+            thread.frames()
+        } catch (e: IncompatibleThreadStateException) {
+            throw RpcException(
+                INVALID_REQUEST,
+                "$ERR_NOT_SUSPENDED: thread '${thread.name()}' is not suspended",
+            )
+        } catch (e: Exception) {
+            throw RpcException(INTERNAL_ERROR, "Failed to read thread frames: ${e.message ?: "unknown"}")
+        }
+    }
+
+    private fun resolveFrame(thread: ThreadReference, frameIndex: Int): StackFrame {
+        val frames = requireThreadFrames(thread)
+        if (frameIndex >= frames.size) {
+            throw RpcException(
+                INVALID_PARAMS,
+                "frame_index out of range: $frameIndex (frame_count=${frames.size})",
+            )
+        }
+        return frames[frameIndex]
+    }
+
+    private fun resolveValuePath(frame: StackFrame, variablePath: String): Value? {
+        val segments = variablePath.split(".").map { it.trim() }.filter { it.isNotEmpty() }
+        if (segments.isEmpty()) {
+            throw RpcException(INVALID_PARAMS, "variable_path must not be blank")
+        }
+
+        var current: Value? = resolveRootValue(frame, segments.first())
+        for (index in 1 until segments.size) {
+            val fieldName = segments[index]
+            if (current == null) {
+                val traversed = segments.take(index).joinToString(".")
+                throw RpcException(
+                    INVALID_REQUEST,
+                    "Cannot access '$fieldName' on null while traversing '$traversed'",
+                )
+            }
+            val objectRef = current as? ObjectReference
+                ?: throw RpcException(
+                    INVALID_REQUEST,
+                    "Cannot access '$fieldName' on non-object value at '${segments.take(index).joinToString(".")}'",
+                )
+            current = resolveFieldValue(objectRef, fieldName)
+        }
+        return current
+    }
+
+    private fun resolveRootValue(frame: StackFrame, root: String): Value? {
+        if (root.startsWith("obj_")) {
+            return resolveCachedObject(root)
+        }
+
+        val local = try {
+            frame.visibleVariables().firstOrNull { it.name() == root }
+        } catch (_: AbsentInformationException) {
+            null
+        } catch (e: Exception) {
+            throw RpcException(INTERNAL_ERROR, "Failed to read frame locals: ${e.message ?: "unknown"}")
+        } ?: throw RpcException(INVALID_REQUEST, "Local variable not found: $root")
+
+        return try {
+            frame.getValue(local)
+        } catch (e: Exception) {
+            throw RpcException(INTERNAL_ERROR, "Failed to read local '$root': ${e.message ?: "unknown"}")
+        }
+    }
+
+    private fun resolveFieldValue(objectRef: ObjectReference, fieldName: String): Value? {
+        val field = objectRef.referenceType().allFields().firstOrNull { it.name() == fieldName }
+            ?: throw RpcException(
+                INVALID_REQUEST,
+                "Field '$fieldName' not found on ${objectRef.referenceType().name()}",
+            )
+        return try {
+            objectRef.getValue(field)
+        } catch (e: ObjectCollectedException) {
+            throw RpcException(
+                INVALID_REQUEST,
+                "$ERR_OBJECT_COLLECTED: object was collected while reading '$fieldName'",
+            )
+        } catch (e: Exception) {
+            throw RpcException(INTERNAL_ERROR, "Failed to read field '$fieldName': ${e.message ?: "unknown"}")
+        }
+    }
+
+    private fun renderToString(thread: ThreadReference, value: Value?): String {
+        if (value == null) {
+            return "null"
+        }
+        if (value is StringReference) {
+            return value.value()
+        }
+        if (value is PrimitiveValue) {
+            return value.toString()
+        }
+        val objectRef = value as? ObjectReference
+            ?: return value.toString()
+
+        val toStringMethod = objectRef.referenceType()
+            .methodsByName("toString")
+            .firstOrNull { it.argumentTypeNames().isEmpty() }
+            ?: return objectRef.toString()
+
+        return try {
+            val invoked = objectRef.invokeMethod(
+                thread,
+                toStringMethod,
+                emptyList<Value>(),
+                ObjectReference.INVOKE_SINGLE_THREADED,
+            )
+            when (invoked) {
+                null -> "null"
+                is StringReference -> invoked.value()
+                else -> invoked.toString()
+            }
+        } catch (e: ObjectCollectedException) {
+            throw RpcException(INVALID_REQUEST, "$ERR_OBJECT_COLLECTED: object no longer available")
+        } catch (e: Exception) {
+            throw RpcException(INTERNAL_ERROR, "Failed to invoke toString(): ${e.message ?: "unknown"}")
+        }
+    }
+
+    private fun cacheObjectId(objectRef: ObjectReference): String {
+        val uniqueId = objectRef.uniqueID()
+        synchronized(stateLock) {
+            val existing = objectIdsByUniqueId[uniqueId]
+            if (existing != null) {
+                objectRefsById[existing] = objectRef
+                return existing
+            }
+
+            val id = "obj_${nextObjectId++}"
+            objectIdsByUniqueId[uniqueId] = id
+            objectRefsById[id] = objectRef
+            return id
+        }
+    }
+
+    private fun resolveCachedObject(objectId: String): ObjectReference {
+        synchronized(stateLock) {
+            return objectRefsById[objectId]
+                ?: throw RpcException(
+                    INVALID_REQUEST,
+                    "$ERR_OBJECT_COLLECTED: stale object id '$objectId'",
+                )
+        }
+    }
+
+    private fun invalidateObjectCacheLocked() {
+        objectIdsByUniqueId.clear()
+        objectRefsById.clear()
+    }
+
+    private fun estimateTokenUsage(charCount: Int): Int {
+        if (charCount <= 0) {
+            return 0
+        }
+        return (charCount + 3) / 4
     }
 
     private fun findLoadedLocation(machine: VirtualMachine, classPattern: String, line: Int): Location? {

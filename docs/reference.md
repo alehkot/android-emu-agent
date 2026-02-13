@@ -130,6 +130,9 @@ android-emu-agent debug [OPTIONS] COMMAND [ARGS]...
 - `status`: Get the debug session status.
 - `threads`: List debugger-visible VM threads.
 - `events`: Drain and return queued debugger events.
+- `stack`: Return stack trace for a debugger thread.
+- `inspect`: Inspect a variable path in the selected...
+- `eval`: Evaluate a constrained expression in the...
 - `step-over`: Step over and return stopped state...
 - `step-into`: Step into and return stopped state...
 - `step-out`: Step out and return stopped state atomically.
@@ -235,6 +238,69 @@ android-emu-agent debug events [OPTIONS]
 **Options**:
 
 - `--session TEXT`: Session ID [required]
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent debug stack`
+
+Return stack trace for a debugger thread.
+
+**Usage**:
+
+```console
+android-emu-agent debug stack [OPTIONS]
+```
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--thread TEXT`: Thread name [default: main]
+- `--max-frames INTEGER`: Maximum frames to return [default: 10]
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent debug inspect`
+
+Inspect a variable path in the selected frame.
+
+**Usage**:
+
+```console
+android-emu-agent debug inspect [OPTIONS] VARIABLE_PATH
+```
+
+**Arguments**:
+
+- `VARIABLE_PATH`: Variable path (e.g. user.profile.name or obj_1) [required]
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--thread TEXT`: Thread name [default: main]
+- `--frame INTEGER`: Zero-based frame index [default: 0]
+- `--depth INTEGER`: Nested expansion depth (1-3) [default: 1]
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent debug eval`
+
+Evaluate a constrained expression in the selected frame.
+
+**Usage**:
+
+```console
+android-emu-agent debug eval [OPTIONS] EXPRESSION
+```
+
+**Arguments**:
+
+- `EXPRESSION`: Expression (field access or toString()) [required]
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--thread TEXT`: Thread name [default: main]
+- `--frame INTEGER`: Zero-based frame index [default: 0]
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 

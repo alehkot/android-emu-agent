@@ -385,6 +385,63 @@ class DebugManager:
             raise bridge_not_running_error("Invalid list_threads response from bridge")
         return {"status": "attached", **result}
 
+    async def stack_trace(
+        self,
+        session_id: str,
+        *,
+        thread_name: str = "main",
+        max_frames: int = 10,
+    ) -> dict[str, Any]:
+        """Return stack trace for a thread with coroutine frame filtering."""
+        bridge = await self.get_bridge(session_id)
+        result = await bridge.request(
+            "stack_trace",
+            {"thread_name": thread_name, "max_frames": max_frames},
+        )
+        return self._ensure_bridge_result(result, method="stack_trace")
+
+    async def inspect_variable(
+        self,
+        session_id: str,
+        *,
+        variable_path: str,
+        thread_name: str = "main",
+        frame_index: int = 0,
+        depth: int = 1,
+    ) -> dict[str, Any]:
+        """Inspect a variable path at a stack frame."""
+        bridge = await self.get_bridge(session_id)
+        result = await bridge.request(
+            "inspect_variable",
+            {
+                "thread_name": thread_name,
+                "frame_index": frame_index,
+                "variable_path": variable_path,
+                "depth": depth,
+            },
+        )
+        return self._ensure_bridge_result(result, method="inspect_variable")
+
+    async def evaluate(
+        self,
+        session_id: str,
+        *,
+        expression: str,
+        thread_name: str = "main",
+        frame_index: int = 0,
+    ) -> dict[str, Any]:
+        """Evaluate a constrained expression at a stack frame."""
+        bridge = await self.get_bridge(session_id)
+        result = await bridge.request(
+            "evaluate",
+            {
+                "thread_name": thread_name,
+                "frame_index": frame_index,
+                "expression": expression,
+            },
+        )
+        return self._ensure_bridge_result(result, method="evaluate")
+
     async def step_over(
         self,
         session_id: str,
@@ -773,3 +830,47 @@ class DebugManager:
         if reason == "device_disconnected":
             return "Reconnect the device/emulator, relaunch the app, then attach again."
         return "Reattach with 'debug attach --session <id> --package <pkg>'."
+
+    @staticmethod
+    def _ensure_bridge_result(result: Any, *, method: str) -> dict[str, Any]:
+        """Return a bridge result dict or raise a mapped AgentError for RPC failures."""
+        if not isinstance(result, dict):
+            raise bridge_not_running_error(f"Invalid {method} response from bridge")
+
+        error_obj = result.get("error")
+        if error_obj is None:
+            return result
+
+        if isinstance(error_obj, dict):
+            message = str(error_obj.get("message", error_obj))
+            code = error_obj.get("code")
+        else:
+            message = str(error_obj)
+            code = None
+
+        lowered = message.lower()
+        if "object_collected" in lowered or "err_object_collected" in lowered:
+            raise AgentError(
+                code="ERR_OBJECT_COLLECTED",
+                message="Object reference is stale",
+                context={"method": method, "bridge_code": code, "bridge_message": message},
+                remediation=(
+                    "Resume to a fresh suspension point (breakpoint/step), then inspect again."
+                ),
+            )
+        if "not_suspended" in lowered or "err_not_suspended" in lowered:
+            raise AgentError(
+                code="ERR_NOT_SUSPENDED",
+                message="Thread is not suspended",
+                context={"method": method, "bridge_code": code, "bridge_message": message},
+                remediation="Pause execution at a breakpoint or with a step command, then retry.",
+            )
+        if "unsupported expression" in lowered or "err_eval_unsupported" in lowered:
+            raise AgentError(
+                code="ERR_EVAL_UNSUPPORTED",
+                message="Unsupported debug expression",
+                context={"method": method, "bridge_code": code, "bridge_message": message},
+                remediation="Use field access (a.b.c) or toString() calls only.",
+            )
+
+        raise bridge_not_running_error(f"{method} RPC error: {message}")

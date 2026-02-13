@@ -173,6 +173,78 @@ def debug_events(
     handle_response(resp, json_output=json_output)
 
 
+@app.command("stack")
+def debug_stack(
+    session_id: str = typer.Option(..., "--session", help="Session ID"),
+    thread: str = typer.Option("main", "--thread", help="Thread name"),
+    max_frames: int = typer.Option(10, "--max-frames", help="Maximum frames to return"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Return stack trace for a debugger thread."""
+    client = DaemonClient(timeout=30.0)
+    resp = client.request(
+        "POST",
+        "/debug/stack",
+        json_body={
+            "session_id": session_id,
+            "thread": thread,
+            "max_frames": max_frames,
+        },
+    )
+    client.close()
+    handle_response(resp, json_output=json_output)
+
+
+@app.command("inspect")
+def debug_inspect(
+    variable_path: str = typer.Argument(..., help="Variable path (e.g. user.profile.name or obj_1)"),
+    session_id: str = typer.Option(..., "--session", help="Session ID"),
+    thread: str = typer.Option("main", "--thread", help="Thread name"),
+    frame: int = typer.Option(0, "--frame", help="Zero-based frame index"),
+    depth: int = typer.Option(1, "--depth", help="Nested expansion depth (1-3)"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Inspect a variable path in the selected frame."""
+    client = DaemonClient(timeout=30.0)
+    resp = client.request(
+        "POST",
+        "/debug/inspect",
+        json_body={
+            "session_id": session_id,
+            "variable_path": variable_path,
+            "thread": thread,
+            "frame": frame,
+            "depth": depth,
+        },
+    )
+    client.close()
+    handle_response(resp, json_output=json_output)
+
+
+@app.command("eval")
+def debug_eval(
+    expression: str = typer.Argument(..., help="Expression (field access or toString())"),
+    session_id: str = typer.Option(..., "--session", help="Session ID"),
+    thread: str = typer.Option("main", "--thread", help="Thread name"),
+    frame: int = typer.Option(0, "--frame", help="Zero-based frame index"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Evaluate a constrained expression in the selected frame."""
+    client = DaemonClient(timeout=30.0)
+    resp = client.request(
+        "POST",
+        "/debug/eval",
+        json_body={
+            "session_id": session_id,
+            "expression": expression,
+            "thread": thread,
+            "frame": frame,
+        },
+    )
+    client.close()
+    handle_response(resp, json_output=json_output)
+
+
 @app.command("step-over")
 def debug_step_over(
     session_id: str = typer.Option(..., "--session", help="Session ID"),

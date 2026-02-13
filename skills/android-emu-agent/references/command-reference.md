@@ -112,6 +112,12 @@ debugger to the app at startup:
 - `debug break remove <breakpoint_id> --session <session_id>` Remove a breakpoint.
 - `debug threads --session <session_id> [--all]` List VM threads (use `--all` to include daemon
   threads).
+- `debug stack --session <session_id> [--thread <name>] [--max-frames <n>]` Show coroutine-filtered
+  stack frames for a suspended thread.
+- `debug inspect <variable_path> --session <session_id> [--thread <name>] [--frame <idx>] [--depth <n>]`
+  Inspect a local/object path in a stack frame.
+- `debug eval <expression> --session <session_id> [--thread <name>] [--frame <idx>]` Evaluate a
+  constrained expression (field access or `toString()`).
 - `debug step-over --session <session_id> [--thread <name>] [--timeout-seconds <sec>]` Step to the
   next line and return stopped location + locals.
 - `debug step-into --session <session_id> [--thread <name>] [--timeout-seconds <sec>]` Step into the
@@ -130,6 +136,10 @@ Use `--process` when multiple debuggable processes are present (for example
 Step commands return an Observe-Act-Verify payload with `status`, `location`, `method`, `thread`,
 `locals`, `token_usage_estimate`, and `truncated`. If stepping times out, `status=timeout` includes
 an actionable remediation hint.
+
+`debug inspect` returns object IDs (`obj_1`, `obj_2`, ...) for object values. These IDs are valid
+only while execution remains suspended; after resume/step they are invalidated and must be
+re-captured.
 
 ### Artifact
 

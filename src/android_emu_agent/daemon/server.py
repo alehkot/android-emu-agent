@@ -36,8 +36,11 @@ from android_emu_agent.daemon.models import (
     DebugBreakpointRemoveRequest,
     DebugBreakpointSetRequest,
     DebugDetachRequest,
+    DebugEvalRequest,
+    DebugInspectRequest,
     DebugPingRequest,
     DebugResumeRequest,
+    DebugStackRequest,
     DebugStepRequest,
     DeviceSettingRequest,
     DeviceTargetRequest,
@@ -2263,6 +2266,163 @@ async def debug_resume(req: DebugResumeRequest) -> EndpointResponse:
         result = await core.debug_manager.resume(
             session_id=req.session_id,
             thread_name=req.thread,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", **result}
+
+
+@app.post("/debug/stack", response_model=None)
+async def debug_stack(req: DebugStackRequest) -> EndpointResponse:
+    """Return stack trace for a debugger thread."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    if not req.thread.strip():
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_THREAD",
+                message="Invalid thread name: empty",
+                remediation="Provide a non-empty thread name, for example --thread main.",
+            ),
+            status_code=400,
+        )
+
+    if req.max_frames <= 0:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_MAX_FRAMES",
+                message=f"Invalid max_frames: {req.max_frames}",
+                context={"max_frames": req.max_frames},
+                remediation="Use a positive max frame count, for example --max-frames 10.",
+            ),
+            status_code=400,
+        )
+
+    try:
+        result = await core.debug_manager.stack_trace(
+            session_id=req.session_id,
+            thread_name=req.thread,
+            max_frames=req.max_frames,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", **result}
+
+
+@app.post("/debug/inspect", response_model=None)
+async def debug_inspect(req: DebugInspectRequest) -> EndpointResponse:
+    """Inspect a variable path in a debugger frame."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    if not req.thread.strip():
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_THREAD",
+                message="Invalid thread name: empty",
+                remediation="Provide a non-empty thread name, for example --thread main.",
+            ),
+            status_code=400,
+        )
+
+    if req.frame < 0:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_FRAME_INDEX",
+                message=f"Invalid frame index: {req.frame}",
+                context={"frame": req.frame},
+                remediation="Use a zero-based frame index (0 for the top frame).",
+            ),
+            status_code=400,
+        )
+
+    if req.depth <= 0 or req.depth > 3:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_DEPTH",
+                message=f"Invalid depth: {req.depth}",
+                context={"depth": req.depth},
+                remediation="Use a depth between 1 and 3.",
+            ),
+            status_code=400,
+        )
+
+    if not req.variable_path.strip():
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_VARIABLE_PATH",
+                message="Invalid variable path: empty",
+                remediation="Provide a variable path such as savedInstanceState or user.profile.name.",
+            ),
+            status_code=400,
+        )
+
+    try:
+        result = await core.debug_manager.inspect_variable(
+            session_id=req.session_id,
+            variable_path=req.variable_path,
+            thread_name=req.thread,
+            frame_index=req.frame,
+            depth=req.depth,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", **result}
+
+
+@app.post("/debug/eval", response_model=None)
+async def debug_eval(req: DebugEvalRequest) -> EndpointResponse:
+    """Evaluate a constrained expression in a debugger frame."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    if not req.thread.strip():
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_THREAD",
+                message="Invalid thread name: empty",
+                remediation="Provide a non-empty thread name, for example --thread main.",
+            ),
+            status_code=400,
+        )
+
+    if req.frame < 0:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_FRAME_INDEX",
+                message=f"Invalid frame index: {req.frame}",
+                context={"frame": req.frame},
+                remediation="Use a zero-based frame index (0 for the top frame).",
+            ),
+            status_code=400,
+        )
+
+    if not req.expression.strip():
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_EXPRESSION",
+                message="Invalid expression: empty",
+                remediation="Use field access (a.b.c) or toString() (a.toString()).",
+            ),
+            status_code=400,
+        )
+
+    try:
+        result = await core.debug_manager.evaluate(
+            session_id=req.session_id,
+            expression=req.expression,
+            thread_name=req.thread,
+            frame_index=req.frame,
         )
     except AgentError as exc:
         return _error_response(exc, status_code=400)

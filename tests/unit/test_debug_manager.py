@@ -547,6 +547,77 @@ class TestMilestone2DebugMethods:
         )
 
     @pytest.mark.asyncio
+    async def test_stack_trace_forwards_rpc(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(return_value={"thread": "main", "frames": []})
+        manager._bridges["s-test"] = bridge
+
+        result = await manager.stack_trace("s-test", thread_name="main", max_frames=10)
+        assert result["thread"] == "main"
+        bridge.request.assert_awaited_once_with(
+            "stack_trace",
+            {"thread_name": "main", "max_frames": 10},
+        )
+
+    @pytest.mark.asyncio
+    async def test_inspect_variable_forwards_rpc(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(return_value={"variable_path": "user", "value": {"class": "User"}})
+        manager._bridges["s-test"] = bridge
+
+        result = await manager.inspect_variable(
+            "s-test",
+            variable_path="user.profile",
+            thread_name="main",
+            frame_index=0,
+            depth=2,
+        )
+        assert result["variable_path"] == "user"
+        bridge.request.assert_awaited_once_with(
+            "inspect_variable",
+            {
+                "thread_name": "main",
+                "frame_index": 0,
+                "variable_path": "user.profile",
+                "depth": 2,
+            },
+        )
+
+    @pytest.mark.asyncio
+    async def test_evaluate_forwards_rpc(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(return_value={"expression": "user.id", "result": 42})
+        manager._bridges["s-test"] = bridge
+
+        result = await manager.evaluate(
+            "s-test",
+            expression="user.id",
+            thread_name="main",
+            frame_index=0,
+        )
+        assert result["expression"] == "user.id"
+        bridge.request.assert_awaited_once_with(
+            "evaluate",
+            {
+                "thread_name": "main",
+                "frame_index": 0,
+                "expression": "user.id",
+            },
+        )
+
+    @pytest.mark.asyncio
     async def test_step_over_forwards_rpc(self) -> None:
         manager = DebugManager()
         self._attach_session(manager)
@@ -672,3 +743,31 @@ class TestMilestone2DebugMethods:
         assert len(queued) == 1
         assert queued[0]["type"] == "breakpoint_hit"
         assert queued[0]["breakpoint_id"] == 3
+
+
+class TestBridgeErrorMapping:
+    """Tests for JSON-RPC error mapping in debug manager."""
+
+    def test_object_collected_error_is_mapped(self) -> None:
+        with pytest.raises(AgentError) as exc_info:
+            DebugManager._ensure_bridge_result(
+                {"error": {"code": -32010, "message": "ERR_OBJECT_COLLECTED: stale object id"}},
+                method="inspect_variable",
+            )
+        assert exc_info.value.code == "ERR_OBJECT_COLLECTED"
+
+    def test_not_suspended_error_is_mapped(self) -> None:
+        with pytest.raises(AgentError) as exc_info:
+            DebugManager._ensure_bridge_result(
+                {"error": {"code": -32011, "message": "ERR_NOT_SUSPENDED: thread not paused"}},
+                method="stack_trace",
+            )
+        assert exc_info.value.code == "ERR_NOT_SUSPENDED"
+
+    def test_eval_unsupported_error_is_mapped(self) -> None:
+        with pytest.raises(AgentError) as exc_info:
+            DebugManager._ensure_bridge_result(
+                {"error": {"code": -32012, "message": "ERR_EVAL_UNSUPPORTED: method call forbidden"}},
+                method="evaluate",
+            )
+        assert exc_info.value.code == "ERR_EVAL_UNSUPPORTED"

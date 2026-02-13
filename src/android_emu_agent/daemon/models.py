@@ -319,3 +319,24 @@ class DebugStepRequest(BaseModel):
 class DebugResumeRequest(BaseModel):
     session_id: str
     thread: str | None = None
+
+
+class DebugStackRequest(BaseModel):
+    session_id: str
+    thread: str = "main"
+    max_frames: int = 10
+
+
+class DebugInspectRequest(BaseModel):
+    session_id: str
+    variable_path: str
+    thread: str = "main"
+    frame: int = 0
+    depth: int = 1
+
+
+class DebugEvalRequest(BaseModel):
+    session_id: str
+    expression: str
+    thread: str = "main"
+    frame: int = 0

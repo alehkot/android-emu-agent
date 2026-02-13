@@ -10,6 +10,7 @@ import com.sun.jdi.StackFrame
 import com.sun.jdi.StringReference
 import com.sun.jdi.ThreadReference
 import com.sun.jdi.Value
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -26,10 +27,13 @@ class Inspector(
     private val maxCollectionItems: Int = 10,
     private val maxObjectFields: Int = 10,
 ) {
+    private val noopObjectIdProvider: (ObjectReference) -> String = { "" }
+
     fun inspectFrame(
         thread: ThreadReference,
         frameIndex: Int = 0,
         tokenBudget: Int = TokenBudget.DEFAULT_MAX_TOKENS,
+        objectIdProvider: (ObjectReference) -> String = noopObjectIdProvider,
     ): JsonObject {
         if (frameIndex < 0) {
             throw RpcException(INVALID_PARAMS, "frame_index must be >= 0")
@@ -59,7 +63,11 @@ class Inspector(
         }
 
         val budget = TokenBudget(tokenBudget)
-        val locals = serializeLocals(frame, budget)
+        val locals = serializeLocals(
+            frame = frame,
+            budget = budget,
+            objectIdProvider = objectIdProvider,
+        )
         return buildJsonObject {
             put("locals", locals)
             put("token_usage_estimate", budget.tokenUsageEstimate())
@@ -67,7 +75,36 @@ class Inspector(
         }
     }
 
-    private fun serializeLocals(frame: StackFrame, budget: TokenBudget): JsonElement {
+    fun inspectValue(
+        value: Value?,
+        depth: Int = 1,
+        tokenBudget: Int = TokenBudget.DEFAULT_MAX_TOKENS,
+        objectIdProvider: (ObjectReference) -> String = noopObjectIdProvider,
+    ): JsonObject {
+        if (depth < 0) {
+            throw RpcException(INVALID_PARAMS, "depth must be >= 0")
+        }
+
+        val budget = TokenBudget(tokenBudget)
+        val serialized = serializeValue(
+            value = value,
+            budget = budget,
+            depth = depth,
+            objectIdProvider = objectIdProvider,
+            visited = emptySet(),
+        )
+        return buildJsonObject {
+            put("value", serialized)
+            put("token_usage_estimate", budget.tokenUsageEstimate())
+            put("truncated", budget.truncated)
+        }
+    }
+
+    private fun serializeLocals(
+        frame: StackFrame,
+        budget: TokenBudget,
+        objectIdProvider: (ObjectReference) -> String,
+    ): JsonElement {
         val variables = try {
             frame.visibleVariables()
         } catch (_: AbsentInformationException) {
@@ -93,13 +130,28 @@ class Inspector(
                 add(buildJsonObject {
                     put("name", variable.name())
                     put("type", variable.typeName())
-                    put("value", serializeValue(value, budget, depth = 1))
+                    put(
+                        "value",
+                        serializeValue(
+                            value = value,
+                            budget = budget,
+                            depth = 1,
+                            objectIdProvider = objectIdProvider,
+                            visited = emptySet(),
+                        ),
+                    )
                 })
             }
         }
     }
 
-    private fun serializeValue(value: Value?, budget: TokenBudget, depth: Int): JsonElement {
+    private fun serializeValue(
+        value: Value?,
+        budget: TokenBudget,
+        depth: Int,
+        objectIdProvider: (ObjectReference) -> String,
+        visited: Set<Long>,
+    ): JsonElement {
         if (value == null) {
             budget.tryConsume(4)
             return JsonNull
@@ -108,8 +160,20 @@ class Inspector(
         return when (value) {
             is PrimitiveValue -> serializePrimitive(value, budget)
             is StringReference -> serializeString(value, budget)
-            is ArrayReference -> serializeArray(value, budget, depth)
-            is ObjectReference -> serializeObject(value, budget, depth)
+            is ArrayReference -> serializeArray(
+                value = value,
+                budget = budget,
+                depth = depth,
+                objectIdProvider = objectIdProvider,
+                visited = visited,
+            )
+            is ObjectReference -> serializeObject(
+                value = value,
+                budget = budget,
+                depth = depth,
+                objectIdProvider = objectIdProvider,
+                visited = visited,
+            )
             else -> serializeFallback(value.toString(), budget)
         }
     }
@@ -129,10 +193,24 @@ class Inspector(
         return JsonPrimitive(text)
     }
 
-    private fun serializeArray(value: ArrayReference, budget: TokenBudget, depth: Int): JsonElement {
+    private fun serializeArray(
+        value: ArrayReference,
+        budget: TokenBudget,
+        depth: Int,
+        objectIdProvider: (ObjectReference) -> String,
+        visited: Set<Long>,
+    ): JsonElement {
+        val objectId = objectIdProvider(value)
+        val className = value.referenceType().name()
+        val nextVisited = visited + value.uniqueID()
+
         if (depth <= 0) {
             budget.tryConsume(20)
             return buildJsonObject {
+                if (objectId.isNotEmpty()) {
+                    put("object_id", objectId)
+                }
+                put("class", className)
                 put("length", value.length())
             }
         }
@@ -148,25 +226,66 @@ class Inspector(
         }
 
         return buildJsonObject {
+            if (objectId.isNotEmpty()) {
+                put("object_id", objectId)
+            }
+            put("class", className)
             put("length", values.size)
             put("items", buildJsonArray {
                 for (item in shown) {
-                    add(serializeValue(item, budget, depth - 1))
+                    add(
+                        serializeValue(
+                            value = item,
+                            budget = budget,
+                            depth = depth - 1,
+                            objectIdProvider = objectIdProvider,
+                            visited = nextVisited,
+                        ),
+                    )
                 }
             })
         }
     }
 
-    private fun serializeObject(value: ObjectReference, budget: TokenBudget, depth: Int): JsonElement {
+    private fun serializeObject(
+        value: ObjectReference,
+        budget: TokenBudget,
+        depth: Int,
+        objectIdProvider: (ObjectReference) -> String,
+        visited: Set<Long>,
+    ): JsonElement {
+        val uniqueId = value.uniqueID()
+        if (visited.contains(uniqueId)) {
+            return buildJsonObject {
+                val objectId = objectIdProvider(value)
+                if (objectId.isNotEmpty()) {
+                    put("object_id", objectId)
+                }
+                put("class", value.referenceType().name())
+                put("circular", true)
+            }
+        }
+
         val className = value.referenceType().name()
         if (!budget.tryConsume(className.length + 12)) {
             return buildJsonObject {
+                val objectId = objectIdProvider(value)
+                if (objectId.isNotEmpty()) {
+                    put("object_id", objectId)
+                }
                 put("class", className)
             }
         }
 
+        val objectId = objectIdProvider(value)
         if (isListLike(className)) {
-            val listLike = serializeListLike(value, budget, depth)
+            val listLike = serializeListLike(
+                value = value,
+                budget = budget,
+                depth = depth,
+                objectIdProvider = objectIdProvider,
+                visited = visited + uniqueId,
+            )
             if (listLike != null) {
                 return listLike
             }
@@ -174,6 +293,9 @@ class Inspector(
 
         if (depth <= 0) {
             return buildJsonObject {
+                if (objectId.isNotEmpty()) {
+                    put("object_id", objectId)
+                }
                 put("class", className)
             }
         }
@@ -185,6 +307,9 @@ class Inspector(
         }
 
         return buildJsonObject {
+            if (objectId.isNotEmpty()) {
+                put("object_id", objectId)
+            }
             put("class", className)
             put("fields", buildJsonObject {
                 for (field in shownFields) {
@@ -197,7 +322,16 @@ class Inspector(
                     } catch (_: Exception) {
                         null
                     }
-                    put(field.name(), serializeValue(fieldValue, budget, depth - 1))
+                    put(
+                        field.name(),
+                        serializeValue(
+                            value = fieldValue,
+                            budget = budget,
+                            depth = depth - 1,
+                            objectIdProvider = objectIdProvider,
+                            visited = visited + uniqueId,
+                        ),
+                    )
                 }
             })
         }
@@ -207,6 +341,8 @@ class Inspector(
         value: ObjectReference,
         budget: TokenBudget,
         depth: Int,
+        objectIdProvider: (ObjectReference) -> String,
+        visited: Set<Long>,
     ): JsonElement? {
         val fields = value.referenceType().allFields()
         val sizeField = fields.firstOrNull { it.name() == "size" } ?: return null
@@ -237,10 +373,23 @@ class Inspector(
         }
 
         return buildJsonObject {
+            val objectId = objectIdProvider(value)
+            if (objectId.isNotEmpty()) {
+                put("object_id", objectId)
+            }
+            put("class", value.referenceType().name())
             put("length", if (length >= 0) length else allValues.size)
             put("items", buildJsonArray {
                 for (item in shown) {
-                    add(serializeValue(item, budget, depth - 1))
+                    add(
+                        serializeValue(
+                            value = item,
+                            budget = budget,
+                            depth = depth - 1,
+                            objectIdProvider = objectIdProvider,
+                            visited = visited,
+                        ),
+                    )
                 }
             })
         }

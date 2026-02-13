@@ -116,6 +116,41 @@ object Commands {
                 successResponse(request.id, result)
             }
 
+            "stack_trace" -> {
+                val threadName = request.params["thread_name"]?.jsonPrimitive?.content ?: "main"
+                val maxFrames = request.params["max_frames"]?.jsonPrimitive?.intOrNull ?: 10
+                val result = s.stackTrace(threadName, maxFrames)
+                successResponse(request.id, result)
+            }
+
+            "inspect_variable" -> {
+                val threadName = request.params["thread_name"]?.jsonPrimitive?.content ?: "main"
+                val frameIndex = request.params["frame_index"]?.jsonPrimitive?.intOrNull ?: 0
+                val variablePath = request.params["variable_path"]?.jsonPrimitive?.content
+                    ?: throw RpcException(INVALID_PARAMS, "Missing required param: variable_path")
+                val depth = request.params["depth"]?.jsonPrimitive?.intOrNull ?: 1
+                val result = s.inspectVariable(
+                    threadName = threadName,
+                    frameIndex = frameIndex,
+                    variablePath = variablePath,
+                    depth = depth,
+                )
+                successResponse(request.id, result)
+            }
+
+            "evaluate" -> {
+                val threadName = request.params["thread_name"]?.jsonPrimitive?.content ?: "main"
+                val frameIndex = request.params["frame_index"]?.jsonPrimitive?.intOrNull ?: 0
+                val expression = request.params["expression"]?.jsonPrimitive?.content
+                    ?: throw RpcException(INVALID_PARAMS, "Missing required param: expression")
+                val result = s.evaluate(
+                    threadName = threadName,
+                    frameIndex = frameIndex,
+                    expression = expression,
+                )
+                successResponse(request.id, result)
+            }
+
             else -> null
         }
     }
