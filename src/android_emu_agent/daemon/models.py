@@ -293,6 +293,7 @@ class DebugAttachRequest(BaseModel):
     session_id: str
     package: str
     process: str | None = None
+    keep_suspended: bool = False
 
 
 class DebugDetachRequest(BaseModel):
@@ -305,6 +306,8 @@ class DebugBreakpointSetRequest(BaseModel):
     line: int
     condition: str | None = None
     log_message: str | None = None
+    capture_stack: bool = False
+    stack_max_frames: int = 8
 
 
 class DebugBreakpointRemoveRequest(BaseModel):

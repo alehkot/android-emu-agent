@@ -104,12 +104,23 @@ debugger to the app at startup:
 ### Debug
 
 - `debug ping <session_id>` Start the JDI bridge (if needed) and verify JSON-RPC roundtrip.
-- `debug attach --session <session_id> --package <package> [--process <process_name>]` Attach via
-  JDWP and return VM status.
+- `debug attach --session <session_id> --package <package> [--process <process_name>] [--keep-suspended]`
+  Attach via JDWP and return VM status.
 - `debug status --session <session_id>` Show current debugger connection state.
-- `debug break set <class_pattern> <line> --session <session_id>` Set a breakpoint.
+- `debug break set <class_pattern> <line> --session <session_id> [--condition <expr>]`
+  `[--log-message <template>] [--capture-stack] [--stack-max-frames <n>]` Set a breakpoint,
+  conditional breakpoint, or non-suspending logpoint.
 - `debug break list --session <session_id>` List breakpoints and their IDs/status.
+- `debug break hits --session <session_id> [--breakpoint-id <id>] [--limit <n>]`
+  `[--since-timestamp-ms <epoch_ms>]` Inspect buffered non-suspending logpoint hits without draining
+  the event queue.
 - `debug break remove <breakpoint_id> --session <session_id>` Remove a breakpoint.
+- `debug break-exception set --session <session_id> [--class <pattern>] [--caught/--no-caught]`
+  `[--uncaught/--no-uncaught]` Set an exception breakpoint (`--class '*'` catches all exception
+  types).
+- `debug break-exception list --session <session_id>` List exception breakpoints and IDs/status.
+- `debug break-exception remove <breakpoint_id> --session <session_id>` Remove an exception
+  breakpoint by ID.
 - `debug threads --session <session_id> [--all]` List VM threads (use `--all` to include daemon
   threads).
 - `debug stack --session <session_id> [--thread <name>] [--max-frames <n>]` Show coroutine-filtered
@@ -130,18 +141,33 @@ debugger to the app at startup:
 - `debug resume --session <session_id> [--thread <name>]` Resume one thread (when set) or all
   threads.
 - `debug events --session <session_id>` Drain queued debugger events (for example `breakpoint_hit`,
-  `breakpoint_resolved`).
+  `breakpoint_resolved`, `logpoint_hit`, `breakpoint_condition_error`, `exception_hit`,
+  `exception_breakpoint_resolved`).
 - `debug detach --session <session_id>` Detach debugger and clean up ADB forwarding.
 
 Use `--process` when multiple debuggable processes are present (for example
 `com.example.app:remote`). If omitted, the main package process is chosen when possible.
+
+Use `--keep-suspended` when attaching to an app started with `--wait-debugger` and you need to set
+breakpoints before any app code resumes.
 
 Step commands return an Observe-Act-Verify payload with `status`, `location`, `method`, `thread`,
 `locals`, `token_usage_estimate`, and `truncated`. If stepping times out, `status=timeout` includes
 an actionable remediation hint.
 
 `debug break set` may return `status=pending` when the class is not loaded yet. Keep execution
-running and use `debug events` to wait for `breakpoint_resolved` / `breakpoint_hit`.
+running and use `debug events` to wait for `breakpoint_resolved` / `breakpoint_hit`. Exception
+breakpoints can also resolve later via `exception_breakpoint_resolved`.
+
+`--condition` evaluates on hit and only suspends when truthy. If condition evaluation fails, the
+bridge emits `breakpoint_condition_error` and auto-resumes.
+
+`--log-message` makes a logpoint (non-suspending). Use `{hitCount}` and frame expressions like
+`{user.id}` in the template; resolved output arrives as `logpoint_hit`.
+
+`--capture-stack` adds stack frames to each `logpoint_hit`. Use `--stack-max-frames` to limit
+capture cost. Buffered logpoint history is retained per session and can be queried later with
+`debug break hits`.
 
 `debug inspect` returns object IDs (`obj_1`, `obj_2`, ...) for object values. These IDs are valid
 only while execution remains suspended; after resume/step they are invalidated and must be

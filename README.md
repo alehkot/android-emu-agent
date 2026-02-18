@@ -261,6 +261,9 @@ uv run android-emu-agent app launch s-abc123 com.example.app --wait-debugger
 # Attach the debugger (finds PID, sets up ADB forward, connects via JDI)
 uv run android-emu-agent debug attach --session s-abc123 --package com.example.app
 
+# Keep the VM suspended after attach (useful with app launch --wait-debugger)
+uv run android-emu-agent debug attach --session s-abc123 --package com.example.app --keep-suspended
+
 # If multiple debuggable processes exist, pick one explicitly
 uv run android-emu-agent debug attach --session s-abc123 --package com.example.app --process com.example.app:remote
 
@@ -306,6 +309,99 @@ when a step cannot complete. If the main thread has been suspended for too long,
 an ANR warning so you can resume before Android's ANR threshold. When a mapping file is loaded,
 stack class/method names and inspect field names are deobfuscated. Mapping state is per attached
 bridge instance and clears on detach.
+
+Example debugger workflows
+
+Launch suspended, attach, set breakpoints, then resume
+
+```bash
+# Start app in wait-for-debugger mode (process is paused before app code runs)
+uv run android-emu-agent app launch s-abc123 com.example.app --wait-debugger
+
+# Attach and keep VM suspended (do not auto-resume on attach)
+uv run android-emu-agent debug attach --session s-abc123 --package com.example.app --keep-suspended
+
+# Set breakpoints while execution is still paused
+uv run android-emu-agent debug break set com.example.app.MainActivity 42 --session s-abc123
+uv run android-emu-agent debug break set com.example.checkout.CartViewModel 118 --session s-abc123 --condition "cart.total > 10000"
+
+# Optional: verify configured breakpoints before continuing
+uv run android-emu-agent debug break list --session s-abc123
+
+# Resume only after breakpoints are in place
+uv run android-emu-agent debug resume --session s-abc123
+```
+
+Conditional breakpoint for state-specific bugs
+
+```bash
+# Attach
+uv run android-emu-agent app launch s-abc123 com.example.app --wait-debugger
+uv run android-emu-agent debug attach --session s-abc123 --package com.example.app
+
+# Stop only when cart total crosses threshold
+uv run android-emu-agent debug break set com.example.checkout.CartViewModel 118 --session s-abc123 --condition "cart.total > 10000"
+uv run android-emu-agent debug resume --session s-abc123
+
+# Wait for hit, then inspect state
+uv run android-emu-agent debug events --session s-abc123
+uv run android-emu-agent debug stack --session s-abc123 --thread main --max-frames 15
+uv run android-emu-agent debug inspect cart.total --session s-abc123 --thread main --frame 0
+uv run android-emu-agent debug resume --session s-abc123
+```
+
+Non-suspending logpoint trace
+
+```bash
+# Attach and set a logpoint (does not suspend thread)
+uv run android-emu-agent debug attach --session s-abc123 --package com.example.app
+uv run android-emu-agent debug break set com.example.login.LoginViewModel 87 --session s-abc123 --log-message "attempt={hitCount} user={username} locked={isLocked}" --capture-stack --stack-max-frames 8
+
+# Keep app running; hits are buffered with timestamps (and optional stack)
+uv run android-emu-agent debug resume --session s-abc123
+uv run android-emu-agent debug break hits --session s-abc123 --limit 100
+uv run android-emu-agent debug break hits --session s-abc123 --breakpoint-id 1
+
+# Clean up
+uv run android-emu-agent debug break list --session s-abc123
+uv run android-emu-agent debug break remove 1 --session s-abc123
+```
+
+Buffered logpoint example use cases
+
+```bash
+# 1) High-frequency callback tracing without pausing app execution
+uv run android-emu-agent debug break set com.example.sync.SyncWorker 214 --session s-abc123 --log-message "sync run={hitCount} state={state}" --capture-stack --stack-max-frames 6
+uv run android-emu-agent debug resume --session s-abc123
+uv run android-emu-agent debug break hits --session s-abc123 --breakpoint-id 1 --limit 50
+
+# 2) Investigate only hits after a known incident timestamp (epoch ms)
+uv run android-emu-agent debug break hits --session s-abc123 --since-timestamp-ms 1735689600000 --limit 200
+
+# 3) Compare two non-suspending logpoints independently
+uv run android-emu-agent debug break set com.example.login.LoginViewModel 87 --session s-abc123 --log-message "attempt={hitCount} user={username}"
+uv run android-emu-agent debug break set com.example.session.SessionStore 55 --session s-abc123 --log-message "refresh={hitCount} token={tokenState}"
+uv run android-emu-agent debug break hits --session s-abc123 --breakpoint-id 1 --limit 100
+uv run android-emu-agent debug break hits --session s-abc123 --breakpoint-id 2 --limit 100
+```
+
+Crash triage with exception breakpoints
+
+```bash
+# Attach and break on uncaught exceptions
+uv run android-emu-agent app launch s-abc123 com.example.app --wait-debugger
+uv run android-emu-agent debug attach --session s-abc123 --package com.example.app
+uv run android-emu-agent debug break-exception set --session s-abc123 --class '*' --no-caught --uncaught
+
+# Reproduce crash path, then inspect exception event
+uv run android-emu-agent debug resume --session s-abc123
+uv run android-emu-agent debug events --session s-abc123
+uv run android-emu-agent debug stack --session s-abc123 --thread main --max-frames 20
+
+# Optional: narrow to one exception class after first capture
+uv run android-emu-agent debug break-exception remove 1 --session s-abc123
+uv run android-emu-agent debug break-exception set --session s-abc123 --class java.lang.NullPointerException --caught --uncaught
+```
 
 Under the hood, the daemon spawns a **JDI Bridge** sidecar (a Kotlin/JVM subprocess in
 `jdi-bridge/`) that speaks JSON-RPC over stdin/stdout. The bridge connects to the target app via

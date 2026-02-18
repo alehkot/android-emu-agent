@@ -7,6 +7,7 @@ import contextlib
 import os
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,7 @@ logger = structlog.get_logger()
 # Default relative path from project root when developing locally.
 _DEV_JAR_RELATIVE = Path("jdi-bridge/build/libs")
 _JAR_GLOB = "jdi-bridge-*-all.jar"
+_MAX_LOGPOINT_HISTORY = 2000
 
 
 @dataclass(frozen=True)
@@ -72,6 +74,7 @@ class DebugManager:
         self._debug_sessions: dict[str, DebugSessionState] = {}
         self._event_tasks: dict[str, asyncio.Task[None]] = {}
         self._event_queues: dict[str, list[dict[str, Any]]] = {}
+        self._logpoint_histories: dict[str, list[dict[str, Any]]] = {}
         self._jar_path: Path | None = None
         self._java_path: Path | None = None
         self._downloader = BridgeDownloader()
@@ -178,6 +181,7 @@ class DebugManager:
             await self.stop_bridge(session_id)
         self._debug_sessions.clear()
         self._event_queues.clear()
+        self._logpoint_histories.clear()
 
     async def ping(self, session_id: str) -> dict[str, Any]:
         """Start a bridge (if needed) and ping it."""
@@ -191,6 +195,7 @@ class DebugManager:
         package: str,
         adb_device: Any,
         process_name: str | None = None,
+        keep_suspended: bool = False,
     ) -> dict[str, Any]:
         """Attach the debugger to a running app."""
         if session_id in self._debug_sessions:
@@ -204,7 +209,14 @@ class DebugManager:
 
         try:
             bridge = await self.start_bridge(session_id)
-            result = await bridge.request("attach", {"host": "localhost", "port": local_port})
+            result = await bridge.request(
+                "attach",
+                {
+                    "host": "localhost",
+                    "port": local_port,
+                    "keep_suspended": keep_suspended,
+                },
+            )
         except Exception as exc:
             await self._remove_forward(local_port, adb_device)
             await self.stop_bridge(session_id)
@@ -229,6 +241,10 @@ class DebugManager:
         thread_count = thread_count_raw if isinstance(thread_count_raw, int) else None
         suspended_raw = result.get("suspended")
         suspended = suspended_raw if isinstance(suspended_raw, bool) else None
+        keep_suspended_raw = result.get("keep_suspended")
+        keep_suspended_result = (
+            keep_suspended_raw if isinstance(keep_suspended_raw, bool) else keep_suspended
+        )
 
         ds = DebugSessionState(
             session_id=session_id,
@@ -244,6 +260,7 @@ class DebugManager:
         )
         self._debug_sessions[session_id] = ds
         self._event_queues[session_id] = []
+        self._logpoint_histories[session_id] = []
 
         self._event_tasks[session_id] = asyncio.create_task(
             self._monitor_events(session_id, bridge, adb_device)
@@ -271,6 +288,7 @@ class DebugManager:
             "threads": thread_count,
             "thread_count": thread_count,
             "suspended": suspended,
+            "keep_suspended": keep_suspended_result,
         }
 
     async def detach(self, session_id: str, adb_device: Any) -> dict[str, Any]:
@@ -347,6 +365,9 @@ class DebugManager:
         line: int,
         condition: str | None = None,
         log_message: str | None = None,
+        *,
+        capture_stack: bool = False,
+        stack_max_frames: int = 8,
     ) -> dict[str, Any]:
         """Set a breakpoint by class pattern and line number."""
         bridge = await self.get_bridge(session_id)
@@ -355,6 +376,9 @@ class DebugManager:
             payload["condition"] = condition
         if log_message is not None:
             payload["log_message"] = log_message
+        if capture_stack:
+            payload["capture_stack"] = True
+            payload["stack_max_frames"] = stack_max_frames
         result = await bridge.request("set_breakpoint", payload)
         return self._ensure_bridge_result(
             result,
@@ -615,6 +639,41 @@ class DebugManager:
             "events": events,
         }
 
+    async def list_logpoint_hits(
+        self,
+        session_id: str,
+        *,
+        breakpoint_id: int | None = None,
+        limit: int = 100,
+        since_timestamp_ms: int | None = None,
+    ) -> dict[str, Any]:
+        """Return buffered non-suspending logpoint hits without draining them."""
+        ds = self._debug_sessions.get(session_id)
+        if ds is None:
+            raise debug_not_attached_error(session_id)
+
+        history = self._logpoint_histories.setdefault(session_id, [])
+        filtered: list[dict[str, Any]] = []
+        for hit in history:
+            if breakpoint_id is not None and hit.get("breakpoint_id") != breakpoint_id:
+                continue
+            ts_raw = hit.get("timestamp_ms")
+            ts = ts_raw if isinstance(ts_raw, int) else None
+            if since_timestamp_ms is not None and (ts is None or ts < since_timestamp_ms):
+                continue
+            filtered.append(hit)
+
+        if limit < len(filtered):
+            filtered = filtered[-limit:]
+
+        return {
+            "status": ds.state,
+            "session_id": session_id,
+            "count": len(filtered),
+            "hits": filtered,
+            "buffer_count": len(history),
+        }
+
     async def _find_pid(
         self,
         package: str,
@@ -798,6 +857,7 @@ class DebugManager:
         if ds:
             await self._remove_forward(ds.local_forward_port, adb_device)
         self._event_queues.pop(session_id, None)
+        self._logpoint_histories.pop(session_id, None)
 
         await self.stop_bridge(session_id)
 
@@ -818,6 +878,7 @@ class DebugManager:
                 if event_type in {
                     "breakpoint_hit",
                     "breakpoint_resolved",
+                    "logpoint_hit",
                     "breakpoint_condition_error",
                     "exception_hit",
                     "exception_breakpoint_resolved",
@@ -875,9 +936,21 @@ class DebugManager:
     ) -> None:
         """Append a normalized event payload to the per-session event queue."""
         queue = self._event_queues.setdefault(session_id, [])
-        event = {"type": event_type}
+        event: dict[str, Any] = {"type": event_type}
         event.update({k: v for k, v in payload.items() if k != "type"})
+        if not isinstance(event.get("timestamp_ms"), int):
+            event["timestamp_ms"] = int(time.time() * 1000)
         queue.append(event)
+
+        if event_type == "logpoint_hit":
+            self._record_logpoint_hit(session_id, event)
+
+    def _record_logpoint_hit(self, session_id: str, event: dict[str, Any]) -> None:
+        history = self._logpoint_histories.setdefault(session_id, [])
+        history.append(dict(event))
+        overflow = len(history) - _MAX_LOGPOINT_HISTORY
+        if overflow > 0:
+            del history[:overflow]
 
     @staticmethod
     def _looks_not_debuggable(message: str) -> bool:

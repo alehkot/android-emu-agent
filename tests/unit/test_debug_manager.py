@@ -151,6 +151,7 @@ class TestAttach:
         assert result["vm_name"] == "Dalvik"
         assert result["threads"] == 8
         assert result["process_name"] == "com.example.app"
+        assert result["keep_suspended"] is False
         assert "s-test" in manager._debug_sessions
         ds = manager._debug_sessions["s-test"]
         assert ds.package == "com.example.app"
@@ -158,6 +159,49 @@ class TestAttach:
         assert ds.pid == 12345
         assert ds.state == "attached"
         assert manager._event_queues["s-test"] == []
+        mock_bridge.request.assert_awaited_once_with(
+            "attach",
+            {"host": "localhost", "port": 54321, "keep_suspended": False},
+        )
+
+    @pytest.mark.asyncio
+    async def test_attach_forwards_keep_suspended(self) -> None:
+        manager = DebugManager()
+
+        mock_adb = MagicMock()
+        mock_bridge = AsyncMock()
+        mock_bridge.is_alive = True
+        mock_bridge.request = AsyncMock(
+            return_value={
+                "status": "attached",
+                "vm_name": "Dalvik",
+                "vm_version": "1.0",
+                "thread_count": 8,
+                "suspended": True,
+            }
+        )
+        mock_bridge.next_event = AsyncMock()
+
+        with (
+            patch.object(manager, "_find_pid", AsyncMock(return_value=(12345, "com.example.app"))),
+            patch.object(manager, "_setup_forward", AsyncMock(return_value=54321)),
+            patch.object(manager, "start_bridge", AsyncMock(return_value=mock_bridge)),
+            patch.object(manager, "_monitor_events", AsyncMock()),
+        ):
+            result = await manager.attach(
+                session_id="s-test",
+                device_serial="emulator-5554",
+                package="com.example.app",
+                adb_device=mock_adb,
+                keep_suspended=True,
+            )
+
+        assert result["suspended"] is True
+        assert result["keep_suspended"] is True
+        mock_bridge.request.assert_awaited_once_with(
+            "attach",
+            {"host": "localhost", "port": 54321, "keep_suspended": True},
+        )
 
     @pytest.mark.asyncio
     async def test_attach_already_attached_raises(self) -> None:
@@ -614,6 +658,42 @@ class TestMilestone2DebugMethods:
         )
 
     @pytest.mark.asyncio
+    async def test_set_breakpoint_with_logpoint_stack_capture_forwards_rpc(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(return_value={
+            "status": "set",
+            "breakpoint_id": 5,
+            "log_message": "x={x}",
+            "capture_stack": True,
+            "stack_max_frames": 12,
+        })
+        manager._bridges["s-test"] = bridge
+
+        result = await manager.set_breakpoint(
+            "s-test",
+            "com.example.MainActivity",
+            41,
+            log_message="x={x}",
+            capture_stack=True,
+            stack_max_frames=12,
+        )
+        assert result["status"] == "set"
+        bridge.request.assert_awaited_once_with(
+            "set_breakpoint",
+            {
+                "class_pattern": "com.example.MainActivity",
+                "line": 41,
+                "log_message": "x={x}",
+                "capture_stack": True,
+                "stack_max_frames": 12,
+            },
+        )
+
+    @pytest.mark.asyncio
     async def test_list_threads_forwards_rpc(self) -> None:
         manager = DebugManager()
         self._attach_session(manager)
@@ -855,6 +935,65 @@ class TestMilestone2DebugMethods:
         assert len(queued) == 1
         assert queued[0]["type"] == "breakpoint_hit"
         assert queued[0]["breakpoint_id"] == 3
+        assert isinstance(queued[0]["timestamp_ms"], int)
+
+    @pytest.mark.asyncio
+    async def test_monitor_events_records_logpoint_history(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = MagicMock()
+        bridge.next_event = AsyncMock(
+            side_effect=[
+                {
+                    "jsonrpc": "2.0",
+                    "method": "event",
+                    "params": {
+                        "type": "logpoint_hit",
+                        "breakpoint_id": 9,
+                        "message": "x=3",
+                        "hit_count": 1,
+                        "thread": "main",
+                        "location": "com.example.MainActivity:55",
+                    },
+                },
+                asyncio.CancelledError(),
+            ]
+        )
+
+        adb = MagicMock()
+        await manager._monitor_events("s-test", bridge, adb)
+
+        queued = manager._event_queues.get("s-test", [])
+        assert len(queued) == 1
+        assert queued[0]["type"] == "logpoint_hit"
+        assert isinstance(queued[0]["timestamp_ms"], int)
+
+        history = manager._logpoint_histories.get("s-test", [])
+        assert len(history) == 1
+        assert history[0]["type"] == "logpoint_hit"
+        assert history[0]["breakpoint_id"] == 9
+
+    @pytest.mark.asyncio
+    async def test_list_logpoint_hits_filters_by_breakpoint(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+        manager._logpoint_histories["s-test"] = [
+            {"type": "logpoint_hit", "breakpoint_id": 1, "timestamp_ms": 1000, "message": "a"},
+            {"type": "logpoint_hit", "breakpoint_id": 2, "timestamp_ms": 2000, "message": "b"},
+            {"type": "logpoint_hit", "breakpoint_id": 1, "timestamp_ms": 3000, "message": "c"},
+        ]
+
+        result = await manager.list_logpoint_hits(
+            "s-test",
+            breakpoint_id=1,
+            limit=10,
+            since_timestamp_ms=1500,
+        )
+
+        assert result["count"] == 1
+        assert result["hits"][0]["message"] == "c"
+        assert result["buffer_count"] == 3
 
 
 class TestBridgeErrorMapping:

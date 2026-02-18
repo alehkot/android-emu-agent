@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import urlencode
+
 import typer
 
 from android_emu_agent.cli.daemon_client import DaemonClient, format_json
@@ -47,6 +49,11 @@ def debug_attach(
         "--process",
         help="Optional process name (e.g. com.example.app:remote) when multiple are debuggable",
     ),
+    keep_suspended: bool = typer.Option(
+        False,
+        "--keep-suspended",
+        help="Do not auto-resume a fully suspended VM on attach",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Attach the debugger to a running app's JVM."""
@@ -54,7 +61,12 @@ def debug_attach(
     resp = client.request(
         "POST",
         "/debug/attach",
-        json_body={"session_id": session_id, "package": package, "process": process},
+        json_body={
+            "session_id": session_id,
+            "package": package,
+            "process": process,
+            "keep_suspended": keep_suspended,
+        },
     )
     client.close()
     handle_response(resp, json_output=json_output)
@@ -99,6 +111,17 @@ def debug_break_set(
         "--log-message",
         help="Log message template with {expr} placeholders (non-suspending logpoint)",
     ),
+    capture_stack: bool = typer.Option(
+        False,
+        "--capture-stack",
+        help="Capture stack on logpoint hit",
+    ),
+    stack_max_frames: int = typer.Option(
+        8,
+        "--stack-max-frames",
+        min=1,
+        help="Frames to capture per logpoint hit",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Set a breakpoint by class pattern and line number."""
@@ -112,6 +135,11 @@ def debug_break_set(
         body["condition"] = condition
     if log_message is not None:
         body["log_message"] = log_message
+    capture_stack_enabled = capture_stack if isinstance(capture_stack, bool) else False
+    resolved_stack_max_frames = stack_max_frames if isinstance(stack_max_frames, int) else 8
+    if capture_stack_enabled:
+        body["capture_stack"] = True
+        body["stack_max_frames"] = resolved_stack_max_frames
     resp = client.request(
         "POST",
         "/debug/breakpoint/set",
@@ -150,10 +178,43 @@ def debug_break_list(
     handle_response(resp, json_output=json_output)
 
 
+@break_app.command("hits")
+def debug_break_hits(
+    session_id: str = typer.Option(..., "--session", help="Session ID"),
+    breakpoint_id: int | None = typer.Option(
+        None,
+        "--breakpoint-id",
+        help="Optional breakpoint ID filter",
+    ),
+    limit: int = typer.Option(100, "--limit", help="Maximum buffered hits to return"),
+    since_timestamp_ms: int | None = typer.Option(
+        None,
+        "--since-timestamp-ms",
+        help="Optional lower-bound timestamp filter (epoch milliseconds)",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """List buffered non-suspending breakpoint hits."""
+    query_params: dict[str, int | str] = {"session_id": session_id, "limit": limit}
+    if breakpoint_id is not None:
+        query_params["breakpoint_id"] = breakpoint_id
+    if since_timestamp_ms is not None:
+        query_params["since_timestamp_ms"] = since_timestamp_ms
+
+    client = DaemonClient(timeout=30.0)
+    resp = client.request("GET", f"/debug/logpoint_hits?{urlencode(query_params)}")
+    client.close()
+    handle_response(resp, json_output=json_output)
+
+
 @break_exception_app.command("set")
 def debug_break_exception_set(
     session_id: str = typer.Option(..., "--session", help="Session ID"),
-    class_pattern: str = typer.Option("*", "--class", help="Exception class pattern (e.g. java.lang.NullPointerException) or '*' for all"),
+    class_pattern: str = typer.Option(
+        "*",
+        "--class",
+        help="Exception class pattern or '*' for all",
+    ),
     caught: bool = typer.Option(True, "--caught/--no-caught", help="Break on caught exceptions"),
     uncaught: bool = typer.Option(True, "--uncaught/--no-uncaught", help="Break on uncaught exceptions"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),

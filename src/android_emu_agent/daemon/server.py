@@ -1946,6 +1946,7 @@ async def debug_attach(req: DebugAttachRequest) -> EndpointResponse:
             package=req.package,
             adb_device=adb_device,
             process_name=req.process,
+            keep_suspended=req.keep_suspended,
         )
     except AgentError as exc:
         return _error_response(exc, status_code=400)
@@ -2013,6 +2014,27 @@ async def debug_breakpoint_set(req: DebugBreakpointSetRequest) -> EndpointRespon
             status_code=400,
         )
 
+    if req.capture_stack and not req.log_message:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_STACK_CAPTURE",
+                message="Stack capture requires a non-suspending logpoint",
+                remediation="Set --log-message when using --capture-stack.",
+            ),
+            status_code=400,
+        )
+
+    if req.stack_max_frames <= 0:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_STACK_MAX_FRAMES",
+                message=f"Invalid stack_max_frames: {req.stack_max_frames}",
+                context={"stack_max_frames": req.stack_max_frames},
+                remediation="Use a positive frame limit, for example --stack-max-frames 8.",
+            ),
+            status_code=400,
+        )
+
     try:
         result = await core.debug_manager.set_breakpoint(
             session_id=req.session_id,
@@ -2020,6 +2042,8 @@ async def debug_breakpoint_set(req: DebugBreakpointSetRequest) -> EndpointRespon
             line=req.line,
             condition=req.condition,
             log_message=req.log_message,
+            capture_stack=req.capture_stack,
+            stack_max_frames=req.stack_max_frames,
         )
     except AgentError as exc:
         return _error_response(exc, status_code=400)
@@ -2121,6 +2145,65 @@ async def debug_events(session_id: str) -> EndpointResponse:
 
     try:
         result = await core.debug_manager.drain_events(session_id)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", **result}
+
+
+@app.get("/debug/logpoint_hits", response_model=None)
+async def debug_logpoint_hits(
+    session_id: str,
+    breakpoint_id: int | None = None,
+    limit: int = 100,
+    since_timestamp_ms: int | None = None,
+) -> EndpointResponse:
+    """Return buffered non-suspending breakpoint hits for a session."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(session_id)
+    if not session:
+        return _error_response(session_expired_error(session_id), status_code=404)
+
+    if breakpoint_id is not None and breakpoint_id <= 0:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_BREAKPOINT_ID",
+                message=f"Invalid breakpoint id: {breakpoint_id}",
+                context={"breakpoint_id": breakpoint_id},
+                remediation="Use a positive breakpoint id from 'debug break list'.",
+            ),
+            status_code=400,
+        )
+
+    if limit <= 0:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_LIMIT",
+                message=f"Invalid limit: {limit}",
+                context={"limit": limit},
+                remediation="Use a positive limit, for example --limit 100.",
+            ),
+            status_code=400,
+        )
+
+    if since_timestamp_ms is not None and since_timestamp_ms < 0:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_SINCE_TIMESTAMP",
+                message=f"Invalid since_timestamp_ms: {since_timestamp_ms}",
+                context={"since_timestamp_ms": since_timestamp_ms},
+                remediation="Use epoch milliseconds >= 0.",
+            ),
+            status_code=400,
+        )
+
+    try:
+        result = await core.debug_manager.list_logpoint_hits(
+            session_id,
+            breakpoint_id=breakpoint_id,
+            limit=limit,
+            since_timestamp_ms=since_timestamp_ms,
+        )
     except AgentError as exc:
         return _error_response(exc, status_code=400)
 

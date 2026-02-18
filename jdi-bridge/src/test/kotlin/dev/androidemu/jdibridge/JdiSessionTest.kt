@@ -1,6 +1,8 @@
 package dev.androidemu.jdibridge
 
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.int
@@ -89,6 +91,20 @@ class JdiSessionTest {
     }
 
     @Test
+    fun `attach resumes fully suspended vm by default`() {
+        val result = session.attach("localhost", targetPort).jsonObject
+        val keepSuspended = result["keep_suspended"]?.jsonPrimitive?.booleanOrNull
+        assertEquals(false, keepSuspended)
+    }
+
+    @Test
+    fun `attach can keep vm suspended`() {
+        val result = session.attach("localhost", targetPort, keepSuspended = true).jsonObject
+        val keepSuspended = result["keep_suspended"]?.jsonPrimitive?.booleanOrNull
+        assertEquals(true, keepSuspended)
+    }
+
+    @Test
     fun `status after attach returns attached`() {
         session.attach("localhost", targetPort)
         val status = session.status().jsonObject
@@ -127,6 +143,33 @@ class JdiSessionTest {
 
         val after = session.listBreakpoints().jsonObject
         assertEquals(0, after["count"]?.jsonPrimitive?.int)
+    }
+
+    @Test
+    fun `logpoint breakpoint persists stack capture settings`() {
+        session.attach("localhost", targetPort)
+
+        val set =
+            session.setBreakpoint(
+                "dev.androidemu.jdibridge.TestTarget",
+                12,
+                logMessage = "hit={hitCount}",
+                captureStack = true,
+                stackMaxFrames = 6,
+            ).jsonObject
+        val status = set["status"]?.jsonPrimitive?.content
+        assertTrue(status == "set" || status == "pending")
+        assertEquals("hit={hitCount}", set["log_message"]?.jsonPrimitive?.content)
+        assertEquals(true, set["capture_stack"]?.jsonPrimitive?.booleanOrNull)
+        assertEquals(6, set["stack_max_frames"]?.jsonPrimitive?.int)
+
+        val listed = session.listBreakpoints().jsonObject
+        val breakpoints = listed["breakpoints"]?.jsonArray
+        assertNotNull(breakpoints)
+        val bp = breakpoints?.firstOrNull()?.jsonObject
+        assertEquals("hit={hitCount}", bp?.get("log_message")?.jsonPrimitive?.content)
+        assertEquals(true, bp?.get("capture_stack")?.jsonPrimitive?.booleanOrNull)
+        assertEquals(6, bp?.get("stack_max_frames")?.jsonPrimitive?.int)
     }
 
     @Test

@@ -138,6 +138,7 @@ android-emu-agent debug [OPTIONS] COMMAND [ARGS]...
 - `step-out`: Step out and return stopped state atomically.
 - `resume`: Resume one thread or all threads.
 - `break`: Breakpoint commands
+- `break-exception`: Exception breakpoint commands
 - `mapping`: ProGuard/R8 mapping commands
 
 ### `android-emu-agent debug ping`
@@ -174,6 +175,7 @@ android-emu-agent debug attach [OPTIONS]
 - `--session TEXT`: Session ID [required]
 - `--package TEXT`: App package name [required]
 - `--process TEXT`: Optional process name (e.g. com.example.app:remote) when multiple are debuggable
+- `--keep-suspended`: Do not auto-resume a fully suspended VM on attach
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 
@@ -395,6 +397,7 @@ android-emu-agent debug break [OPTIONS] COMMAND [ARGS]...
 - `set`: Set a breakpoint by class pattern and line...
 - `remove`: Remove a breakpoint by ID.
 - `list`: List active breakpoints.
+- `hits`: List buffered non-suspending breakpoint hits.
 
 #### `android-emu-agent debug break set`
 
@@ -414,6 +417,10 @@ android-emu-agent debug break set [OPTIONS] CLASS_PATTERN LINE
 **Options**:
 
 - `--session TEXT`: Session ID [required]
+- `--condition TEXT`: Condition expression
+- `--log-message TEXT`: Log message template with {expr} placeholders (non-suspending logpoint)
+- `--capture-stack`: Capture stack on logpoint hit
+- `--stack-max-frames INTEGER RANGE`: Frames to capture per logpoint hit [default: 8; x&gt;=1]
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 
@@ -445,6 +452,100 @@ List active breakpoints.
 
 ```console
 android-emu-agent debug break list [OPTIONS]
+```
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+#### `android-emu-agent debug break hits`
+
+List buffered non-suspending breakpoint hits.
+
+**Usage**:
+
+```console
+android-emu-agent debug break hits [OPTIONS]
+```
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--breakpoint-id INTEGER`: Optional breakpoint ID filter
+- `--limit INTEGER`: Maximum buffered hits to return [default: 100]
+- `--since-timestamp-ms INTEGER`: Optional lower-bound timestamp filter (epoch milliseconds)
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent debug break-exception`
+
+Exception breakpoint commands
+
+**Usage**:
+
+```console
+android-emu-agent debug break-exception [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+- `--help`: Show this message and exit.
+
+**Commands**:
+
+- `set`: Set an exception breakpoint by class pattern.
+- `remove`: Remove an exception breakpoint by ID.
+- `list`: List active exception breakpoints.
+
+#### `android-emu-agent debug break-exception set`
+
+Set an exception breakpoint by class pattern.
+
+**Usage**:
+
+```console
+android-emu-agent debug break-exception set [OPTIONS]
+```
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--class TEXT`: Exception class pattern or &#x27;_&#x27; for all [default: _]
+- `--caught / --no-caught`: Break on caught exceptions [default: caught]
+- `--uncaught / --no-uncaught`: Break on uncaught exceptions [default: uncaught]
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+#### `android-emu-agent debug break-exception remove`
+
+Remove an exception breakpoint by ID.
+
+**Usage**:
+
+```console
+android-emu-agent debug break-exception remove [OPTIONS] BREAKPOINT_ID
+```
+
+**Arguments**:
+
+- `BREAKPOINT_ID`: Exception breakpoint ID [required]
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+#### `android-emu-agent debug break-exception list`
+
+List active exception breakpoints.
+
+**Usage**:
+
+```console
+android-emu-agent debug break-exception list [OPTIONS]
 ```
 
 **Options**:

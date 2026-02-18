@@ -38,7 +38,12 @@ object Commands {
                                                         INVALID_PARAMS,
                                                         "Missing required param: port"
                                                 )
-                                val result = s.attach(host, port)
+                                val keepSuspended =
+                                        request.params["keep_suspended"]
+                                                ?.jsonPrimitive
+                                                ?.booleanOrNull
+                                                ?: false
+                                val result = s.attach(host, port, keepSuspended)
                                 successResponse(request.id, result)
                         }
                         "detach" -> {
@@ -65,8 +70,25 @@ object Commands {
                                 val condition = request.params["condition"]?.jsonPrimitive?.content
                                 val logMessage =
                                         request.params["log_message"]?.jsonPrimitive?.content
+                                val captureStack =
+                                        request.params["capture_stack"]
+                                                ?.jsonPrimitive
+                                                ?.booleanOrNull
+                                                ?: false
+                                val stackMaxFrames =
+                                        request.params["stack_max_frames"]
+                                                ?.jsonPrimitive
+                                                ?.intOrNull
+                                                ?: JdiSession.DEFAULT_LOGPOINT_STACK_FRAMES
                                 val result =
-                                        s.setBreakpoint(classPattern, line, condition, logMessage)
+                                        s.setBreakpoint(
+                                                classPattern = classPattern,
+                                                line = line,
+                                                condition = condition,
+                                                logMessage = logMessage,
+                                                captureStack = captureStack,
+                                                stackMaxFrames = stackMaxFrames,
+                                        )
                                 successResponse(request.id, result)
                         }
                         "remove_breakpoint" -> {

@@ -57,6 +57,7 @@ def test_debug_attach_builds_payload_with_process() -> None:
             session_id="s-abc123",
             package="com.example.app",
             process="com.example.app:remote",
+            keep_suspended=False,
             json_output=False,
         )
 
@@ -67,6 +68,44 @@ def test_debug_attach_builds_payload_with_process() -> None:
             "session_id": "s-abc123",
             "package": "com.example.app",
             "process": "com.example.app:remote",
+            "keep_suspended": False,
+        },
+    )
+
+
+def test_debug_attach_builds_payload_with_keep_suspended() -> None:
+    from android_emu_agent.cli.commands import debug
+
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+            calls.append((method, path, json_body))
+            return DummyResponse({"status": "done"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(debug, "DaemonClient", DummyClient):
+        debug.debug_attach(
+            session_id="s-abc123",
+            package="com.example.app",
+            process=None,
+            keep_suspended=True,
+            json_output=False,
+        )
+
+    assert calls[0] == (
+        "POST",
+        "/debug/attach",
+        {
+            "session_id": "s-abc123",
+            "package": "com.example.app",
+            "process": None,
+            "keep_suspended": True,
         },
     )
 
@@ -228,6 +267,48 @@ def test_debug_break_set_with_log_message_builds_payload() -> None:
     )
 
 
+def test_debug_break_set_with_stack_capture_builds_payload() -> None:
+    from android_emu_agent.cli.commands import debug
+
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+            calls.append((method, path, json_body))
+            return DummyResponse({"status": "done"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(debug, "DaemonClient", DummyClient):
+        debug.debug_break_set(
+            class_pattern="com.example.MainActivity",
+            line=51,
+            session_id="s-abc123",
+            condition=None,
+            log_message="hit {hitCount}",
+            capture_stack=True,
+            stack_max_frames=12,
+            json_output=False,
+        )
+
+    assert calls[0] == (
+        "POST",
+        "/debug/breakpoint/set",
+        {
+            "session_id": "s-abc123",
+            "class_pattern": "com.example.MainActivity",
+            "line": 51,
+            "log_message": "hit {hitCount}",
+            "capture_stack": True,
+            "stack_max_frames": 12,
+        },
+    )
+
+
 def test_debug_break_remove_builds_payload() -> None:
     from android_emu_agent.cli.commands import debug
 
@@ -278,6 +359,39 @@ def test_debug_break_list_calls_endpoint() -> None:
         debug.debug_break_list(session_id="s-abc123", json_output=False)
 
     assert calls[0] == ("GET", "/debug/breakpoints?session_id=s-abc123", None)
+
+
+def test_debug_break_hits_calls_endpoint() -> None:
+    from android_emu_agent.cli.commands import debug
+
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+            calls.append((method, path, json_body))
+            return DummyResponse({"status": "done"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(debug, "DaemonClient", DummyClient):
+        debug.debug_break_hits(
+            session_id="s-abc123",
+            breakpoint_id=7,
+            limit=50,
+            since_timestamp_ms=1700000000000,
+            json_output=False,
+        )
+
+    assert (
+        calls[0][0] == "GET"
+        and calls[0][1]
+        == "/debug/logpoint_hits?session_id=s-abc123&limit=50&breakpoint_id=7&since_timestamp_ms=1700000000000"
+        and calls[0][2] is None
+    )
 
 
 def test_debug_threads_default_calls_endpoint() -> None:

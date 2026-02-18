@@ -61,6 +61,7 @@ class JdiSession(
 ) {
     companion object {
         const val DEFAULT_STEP_TIMEOUT_SECONDS = 10.0
+        const val DEFAULT_LOGPOINT_STACK_FRAMES = 8
         const val ANR_WARNING_SECONDS = 8.0
         private const val ERR_NOT_SUSPENDED = "ERR_NOT_SUSPENDED"
         private const val ERR_OBJECT_COLLECTED = "ERR_OBJECT_COLLECTED"
@@ -77,6 +78,8 @@ class JdiSession(
             var prepareRequest: ClassPrepareRequest? = null,
             val condition: String? = null,
             val logMessage: String? = null,
+            val captureStack: Boolean = false,
+            val stackMaxFrames: Int = DEFAULT_LOGPOINT_STACK_FRAMES,
             var hitCount: Long = 0,
     )
 
@@ -120,7 +123,7 @@ class JdiSession(
     val isAttached: Boolean
         get() = vm != null && !disconnected
 
-    fun attach(host: String, port: Int): JsonElement {
+    fun attach(host: String, port: Int, keepSuspended: Boolean = false): JsonElement {
         if (vm != null) {
             throw RpcException(INVALID_REQUEST, "Already attached to a VM; detach first")
         }
@@ -155,8 +158,8 @@ class JdiSession(
             invalidateObjectCacheLocked()
         }
 
-        // If the VM is fully suspended (wait-for-debugger), resume it
-        if (machine.allThreads().all { it.isSuspended }) {
+        // If the VM is fully suspended (wait-for-debugger), resume it unless explicitly requested.
+        if (!keepSuspended && machine.allThreads().all { it.isSuspended }) {
             log("vm fully suspended, resuming")
             machine.resume()
         }
@@ -169,6 +172,7 @@ class JdiSession(
             put("vm_version", machine.version())
             put("thread_count", machine.allThreads().size)
             put("suspended", machine.allThreads().all { it.isSuspended })
+            put("keep_suspended", keepSuspended)
         }
     }
 
@@ -246,9 +250,20 @@ class JdiSession(
             line: Int,
             condition: String? = null,
             logMessage: String? = null,
+            captureStack: Boolean = false,
+            stackMaxFrames: Int = DEFAULT_LOGPOINT_STACK_FRAMES,
     ): JsonElement {
         if (line <= 0) {
             throw RpcException(INVALID_PARAMS, "line must be > 0")
+        }
+        if (stackMaxFrames <= 0) {
+            throw RpcException(INVALID_PARAMS, "stack_max_frames must be > 0")
+        }
+        if (captureStack && logMessage.isNullOrBlank()) {
+            throw RpcException(
+                    INVALID_PARAMS,
+                    "capture_stack requires a non-suspending logpoint (--log-message)",
+            )
         }
 
         val machine = requireAttachedMachine()
@@ -274,6 +289,8 @@ class JdiSession(
                                 request = request,
                                 condition = condition,
                                 logMessage = logMessage,
+                                captureStack = captureStack,
+                                stackMaxFrames = stackMaxFrames,
                         )
             }
             return buildJsonObject {
@@ -285,6 +302,8 @@ class JdiSession(
                 }
                 if (logMessage != null) {
                     put("log_message", logMessage)
+                    put("capture_stack", captureStack)
+                    put("stack_max_frames", stackMaxFrames)
                 }
             }
         }
@@ -307,6 +326,8 @@ class JdiSession(
                             prepareRequest = prepareRequest,
                             condition = condition,
                             logMessage = logMessage,
+                            captureStack = captureStack,
+                            stackMaxFrames = stackMaxFrames,
                     )
         }
 
@@ -321,6 +342,8 @@ class JdiSession(
             }
             if (logMessage != null) {
                 put("log_message", logMessage)
+                put("capture_stack", captureStack)
+                put("stack_max_frames", stackMaxFrames)
             }
         }
     }
@@ -373,6 +396,8 @@ class JdiSession(
                                 location = it.location,
                                 condition = it.condition,
                                 logMessage = it.logMessage,
+                                captureStack = it.captureStack,
+                                stackMaxFrames = it.stackMaxFrames,
                                 hitCount = it.hitCount,
                         )
                     }
@@ -397,6 +422,8 @@ class JdiSession(
                                     }
                                     if (bp.logMessage != null) {
                                         put("log_message", bp.logMessage)
+                                        put("capture_stack", bp.captureStack)
+                                        put("stack_max_frames", bp.stackMaxFrames)
                                         put("hit_count", bp.hitCount)
                                     }
                                 }
@@ -1319,16 +1346,16 @@ class JdiSession(
         val locationText = formatLocation(event.location())
         val thread = event.thread()
 
-        // Fetch condition and logMessage together.
-        val (condition, logMessage) =
+        val breakpointState =
                 if (requestId != null) {
-                    synchronized(stateLock) {
-                        val bp = breakpoints[requestId]
-                        Pair(bp?.condition, bp?.logMessage)
-                    }
+                    synchronized(stateLock) { breakpoints[requestId] }
                 } else {
-                    Pair(null, null)
+                    null
                 }
+        val condition = breakpointState?.condition
+        val logMessage = breakpointState?.logMessage
+        val captureStack = breakpointState?.captureStack ?: false
+        val stackMaxFrames = breakpointState?.stackMaxFrames ?: DEFAULT_LOGPOINT_STACK_FRAMES
 
         if (condition != null && condition.isNotBlank()) {
             val conditionResult = evaluateCondition(thread, condition)
@@ -1378,6 +1405,13 @@ class JdiSession(
                     }
 
             val resolvedMessage = evaluateLogMessage(thread, logMessage, hitCount)
+            val timestampMs = System.currentTimeMillis()
+            val stackPayload =
+                    if (captureStack) {
+                        buildLogpointStack(thread, stackMaxFrames)
+                    } else {
+                        null
+                    }
 
             emitEvent(
                     type = "logpoint_hit",
@@ -1390,6 +1424,10 @@ class JdiSession(
                                 put("hit_count", hitCount)
                                 put("location", locationText)
                                 put("thread", thread.name())
+                                put("timestamp_ms", timestampMs)
+                                if (stackPayload != null) {
+                                    put("stack", stackPayload)
+                                }
                             },
             )
 
@@ -1599,6 +1637,57 @@ class JdiSession(
             if (warning != null) {
                 put("warning", warning)
             }
+        }
+    }
+
+    private fun buildLogpointStack(thread: ThreadReference, maxFrames: Int): JsonObject {
+        val frames =
+                try {
+                    thread.frames()
+                } catch (_: Exception) {
+                    emptyList()
+                }
+        val activeMapping = mapping
+        val shown = minOf(maxFrames, frames.size)
+        val frameEntries = buildJsonArray {
+            for (index in 0 until shown) {
+                val frame = frames[index]
+                val location = frame.location()
+                val rawClassName = location.declaringType().name()
+                val method = location.method()
+                val methodArity = runCatching { method.argumentTypeNames().size }.getOrNull()
+                add(
+                        buildJsonObject {
+                            put("index", index)
+                            put(
+                                    "class",
+                                    activeMapping?.deobfuscateClass(rawClassName) ?: rawClassName,
+                            )
+                            put(
+                                    "method",
+                                    activeMapping?.deobfuscateMethod(
+                                            rawClassName,
+                                            method.name(),
+                                            methodArity,
+                                    )
+                                            ?: method.name(),
+                            )
+                            put("line", location.lineNumber())
+                            val source = runCatching { location.sourceName() }.getOrNull()
+                            if (source != null) {
+                                put("source", source)
+                            }
+                        },
+                )
+            }
+        }
+
+        return buildJsonObject {
+            put("frame_count", frames.size)
+            put("shown_frames", shown)
+            put("max_frames", maxFrames)
+            put("truncated", frames.size > shown)
+            put("frames", frameEntries)
         }
     }
 
