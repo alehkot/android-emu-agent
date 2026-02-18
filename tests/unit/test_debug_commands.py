@@ -570,3 +570,95 @@ def test_debug_mapping_clear_calls_endpoint() -> None:
         debug.debug_mapping_clear(session_id="s-abc123", json_output=False)
 
     assert calls[0] == ("POST", "/debug/mapping/clear", {"session_id": "s-abc123"})
+
+
+def test_debug_break_exception_set_builds_payload() -> None:
+    from android_emu_agent.cli.commands import debug
+
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+            calls.append((method, path, json_body))
+            return DummyResponse({"status": "done"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(debug, "DaemonClient", DummyClient):
+        debug.debug_break_exception_set(
+            session_id="s-abc123",
+            class_pattern="java.lang.NullPointerException",
+            caught=True,
+            uncaught=False,
+            json_output=False,
+        )
+
+    assert calls[0] == (
+        "POST",
+        "/debug/exception_breakpoint/set",
+        {
+            "session_id": "s-abc123",
+            "class_pattern": "java.lang.NullPointerException",
+            "caught": True,
+            "uncaught": False,
+        },
+    )
+
+
+def test_debug_break_exception_remove_builds_payload() -> None:
+    from android_emu_agent.cli.commands import debug
+
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+            calls.append((method, path, json_body))
+            return DummyResponse({"status": "done"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(debug, "DaemonClient", DummyClient):
+        debug.debug_break_exception_remove(
+            breakpoint_id=3,
+            session_id="s-abc123",
+            json_output=False,
+        )
+
+    assert calls[0] == (
+        "POST",
+        "/debug/exception_breakpoint/remove",
+        {"session_id": "s-abc123", "breakpoint_id": 3},
+    )
+
+
+def test_debug_break_exception_list_builds_payload() -> None:
+    from android_emu_agent.cli.commands import debug
+
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+            calls.append((method, path, json_body))
+            return DummyResponse({"status": "done"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(debug, "DaemonClient", DummyClient):
+        debug.debug_break_exception_list(
+            session_id="s-abc123",
+            json_output=False,
+        )
+
+    assert calls[0] == ("GET", "/debug/exception_breakpoints?session_id=s-abc123", None)

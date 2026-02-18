@@ -18,12 +18,14 @@ import com.sun.jdi.VirtualMachine
 import com.sun.jdi.connect.AttachingConnector
 import com.sun.jdi.event.BreakpointEvent
 import com.sun.jdi.event.ClassPrepareEvent
+import com.sun.jdi.event.ExceptionEvent
 import com.sun.jdi.event.StepEvent
 import com.sun.jdi.event.VMDeathEvent
 import com.sun.jdi.event.VMDisconnectEvent
 import com.sun.jdi.request.BreakpointRequest
 import com.sun.jdi.request.ClassPrepareRequest
 import com.sun.jdi.request.EventRequest
+import com.sun.jdi.request.ExceptionRequest
 import com.sun.jdi.request.StepRequest
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -68,6 +70,16 @@ class JdiSession(
         var prepareRequest: ClassPrepareRequest? = null,
     )
 
+    private data class ExceptionBreakpointState(
+        val id: Int,
+        val classPattern: String,
+        val caught: Boolean,
+        val uncaught: Boolean,
+        var status: String,
+        var request: ExceptionRequest? = null,
+        var prepareRequest: ClassPrepareRequest? = null,
+    )
+
     private data class PendingStep(
         val action: String,
         val threadName: String,
@@ -89,6 +101,7 @@ class JdiSession(
 
     private val stateLock = Any()
     private val breakpoints = linkedMapOf<Int, BreakpointState>()
+    private val exceptionBreakpoints = linkedMapOf<Int, ExceptionBreakpointState>()
     private var nextBreakpointId = 1
     private var activeStep: PendingStep? = null
     private val inspector = Inspector()
@@ -157,6 +170,7 @@ class JdiSession(
 
         stopEventLoop()
         clearBreakpointRequests(machine)
+        clearExceptionBreakpointRequests(machine)
         try {
             machine.dispose()
         } catch (_: Exception) {
@@ -342,6 +356,149 @@ class JdiSession(
                     if (bp.location != null) {
                         put("location", bp.location)
                     }
+                }
+            }))
+        }
+    }
+
+    fun setExceptionBreakpoint(
+        classPattern: String,
+        caught: Boolean,
+        uncaught: Boolean,
+    ): JsonElement {
+        if (!caught && !uncaught) {
+            throw RpcException(INVALID_PARAMS, "At least one of caught or uncaught must be true")
+        }
+
+        val machine = requireAttachedMachine()
+        val breakpointId = synchronized(stateLock) {
+            val id = nextBreakpointId
+            nextBreakpointId += 1
+            id
+        }
+
+        // Try to find the exception class if it's already loaded.
+        val refType = if (classPattern == "*" || classPattern.isEmpty()) {
+            null // null means "all exceptions"
+        } else {
+            machine.classesByName(classPattern).firstOrNull()
+        }
+
+        val isWildcard = classPattern == "*" || classPattern.isEmpty()
+
+        if (refType != null || isWildcard) {
+            val exReq = machine.eventRequestManager().createExceptionRequest(
+                refType, caught, uncaught,
+            ).apply {
+                setSuspendPolicy(EventRequest.SUSPEND_EVENT_THREAD)
+                putProperty("breakpoint_id", breakpointId)
+                enable()
+            }
+
+            synchronized(stateLock) {
+                exceptionBreakpoints[breakpointId] = ExceptionBreakpointState(
+                    id = breakpointId,
+                    classPattern = if (isWildcard) "*" else classPattern,
+                    caught = caught,
+                    uncaught = uncaught,
+                    status = "set",
+                    request = exReq,
+                )
+            }
+
+            return buildJsonObject {
+                put("status", "set")
+                put("breakpoint_id", breakpointId)
+                put("class_pattern", if (isWildcard) "*" else classPattern)
+                put("caught", caught)
+                put("uncaught", uncaught)
+            }
+        }
+
+        // Class not yet loaded — register deferred.
+        val prepareReq = machine.eventRequestManager().createClassPrepareRequest().apply {
+            addClassFilter(classPattern)
+            setSuspendPolicy(EventRequest.SUSPEND_NONE)
+            putProperty("exception_breakpoint_id", breakpointId)
+            enable()
+        }
+
+        synchronized(stateLock) {
+            exceptionBreakpoints[breakpointId] = ExceptionBreakpointState(
+                id = breakpointId,
+                classPattern = classPattern,
+                caught = caught,
+                uncaught = uncaught,
+                status = "pending",
+                prepareRequest = prepareReq,
+            )
+        }
+
+        return buildJsonObject {
+            put("status", "pending")
+            put("breakpoint_id", breakpointId)
+            put("reason", "class_not_loaded")
+            put("class_pattern", classPattern)
+            put("caught", caught)
+            put("uncaught", uncaught)
+        }
+    }
+
+    fun removeExceptionBreakpoint(breakpointId: Int): JsonElement {
+        if (breakpointId <= 0) {
+            throw RpcException(INVALID_PARAMS, "breakpoint_id must be > 0")
+        }
+
+        val machine = requireAttachedMachine()
+        val state = synchronized(stateLock) {
+            exceptionBreakpoints.remove(breakpointId)
+        } ?: throw RpcException(INVALID_REQUEST, "Unknown exception breakpoint_id: $breakpointId")
+
+        val manager = machine.eventRequestManager()
+        state.request?.let {
+            try {
+                manager.deleteEventRequest(it)
+            } catch (_: Exception) {
+                // Best effort cleanup
+            }
+        }
+        state.prepareRequest?.let {
+            try {
+                manager.deleteEventRequest(it)
+            } catch (_: Exception) {
+                // Best effort cleanup
+            }
+        }
+
+        return buildJsonObject {
+            put("status", "removed")
+            put("breakpoint_id", breakpointId)
+        }
+    }
+
+    fun listExceptionBreakpoints(): JsonElement {
+        requireAttachedMachine()
+        val snapshot = synchronized(stateLock) {
+            exceptionBreakpoints.values.map {
+                ExceptionBreakpointState(
+                    id = it.id,
+                    classPattern = it.classPattern,
+                    caught = it.caught,
+                    uncaught = it.uncaught,
+                    status = it.status,
+                )
+            }
+        }
+
+        return buildJsonObject {
+            put("count", snapshot.size)
+            put("exception_breakpoints", JsonArray(snapshot.map { bp ->
+                buildJsonObject {
+                    put("breakpoint_id", bp.id)
+                    put("class_pattern", bp.classPattern)
+                    put("caught", bp.caught)
+                    put("uncaught", bp.uncaught)
+                    put("status", bp.status)
                 }
             }))
         }
@@ -782,6 +939,11 @@ class JdiSession(
                                     }
                                 }
                                 is ClassPrepareEvent -> handleClassPrepareEvent(machine, event)
+                            is ExceptionEvent -> {
+                                if (!handleExceptionEvent(event)) {
+                                    shouldResumeSet = false
+                                }
+                            }
                                 is StepEvent -> {
                                     if (!handleStepEvent(machine, event)) {
                                         shouldResumeSet = false
@@ -873,6 +1035,9 @@ class JdiSession(
     }
 
     private fun handleClassPrepareEvent(machine: VirtualMachine, event: ClassPrepareEvent) {
+        // Also check for deferred exception breakpoints.
+        handleClassPrepareForExceptionBreakpoints(machine, event)
+
         val className = event.referenceType().name()
         val pendingIds = synchronized(stateLock) {
             breakpoints.values
@@ -913,6 +1078,119 @@ class JdiSession(
                 },
             )
         }
+    }
+
+    private fun handleClassPrepareForExceptionBreakpoints(
+        machine: VirtualMachine,
+        event: ClassPrepareEvent,
+    ) {
+        val className = event.referenceType().name()
+        val pendingIds = synchronized(stateLock) {
+            exceptionBreakpoints.values
+                .filter {
+                    it.status == "pending" && classPatternMatches(className, it.classPattern)
+                }
+                .map { it.id }
+        }
+
+        if (pendingIds.isEmpty()) return
+
+        for (id in pendingIds) {
+            val state = synchronized(stateLock) { exceptionBreakpoints[id] } ?: continue
+            val refType = event.referenceType()
+            val exReq = machine.eventRequestManager().createExceptionRequest(
+                refType, state.caught, state.uncaught,
+            ).apply {
+                setSuspendPolicy(EventRequest.SUSPEND_EVENT_THREAD)
+                putProperty("breakpoint_id", id)
+                enable()
+            }
+
+            synchronized(stateLock) {
+                val current = exceptionBreakpoints[id] ?: return@synchronized
+                current.status = "set"
+                current.request = exReq
+                current.prepareRequest?.let {
+                    try {
+                        machine.eventRequestManager().deleteEventRequest(it)
+                    } catch (_: Exception) {
+                        // Best effort cleanup
+                    }
+                }
+                current.prepareRequest = null
+            }
+
+            emitEvent(
+                type = "exception_breakpoint_resolved",
+                extraParams = buildJsonObject {
+                    put("breakpoint_id", id)
+                    put("class_pattern", className)
+                },
+            )
+        }
+    }
+
+    private fun handleExceptionEvent(event: ExceptionEvent): Boolean {
+        val request = event.request() as? ExceptionRequest
+        val requestId = request?.getProperty("breakpoint_id") as? Int
+        val thread = event.thread()
+        val exceptionRef = event.exception()
+
+        // If there's no matching breakpoint ID, ignore.
+        if (requestId == null) return true
+
+        val exists = synchronized(stateLock) {
+            exceptionBreakpoints.containsKey(requestId)
+        }
+        if (!exists) return true
+
+        markThreadSuspended(thread)
+
+        val exceptionClass = try {
+            exceptionRef.referenceType().name()
+        } catch (_: Exception) {
+            "<unknown>"
+        }
+
+        val exceptionMessage = try {
+            val msgField = exceptionRef.referenceType().fieldByName("detailMessage")
+            if (msgField != null) {
+                val msgValue = exceptionRef.getValue(msgField)
+                (msgValue as? StringReference)?.value()
+            } else {
+                null
+            }
+        } catch (_: Exception) {
+            null
+        }
+
+        val throwLocation = formatLocation(event.location())
+        val catchLocation = event.catchLocation()?.let { formatLocation(it) }
+
+        val stopped = buildStoppedPayload(thread, event.location())
+
+        emitEvent(
+            type = "exception_hit",
+            extraParams = buildJsonObject {
+                put("breakpoint_id", requestId)
+                put("exception_class", exceptionClass)
+                if (exceptionMessage != null) {
+                    put("exception_message", exceptionMessage)
+                }
+                put("throw_location", throwLocation)
+                if (catchLocation != null) {
+                    put("catch_location", catchLocation)
+                } else {
+                    put("catch_location", JsonNull)
+                }
+                for ((key, value) in stopped) {
+                    put(key, value)
+                }
+            },
+        )
+
+        // Keep thread suspended for inspection.
+        return false
     }
 
     private fun handleBreakpointEvent(event: BreakpointEvent): Boolean {
@@ -1133,6 +1411,29 @@ class JdiSession(
             activeStep = null
             suspendedAtMs.clear()
             invalidateObjectCacheLocked()
+        }
+    }
+
+    private fun clearExceptionBreakpointRequests(machine: VirtualMachine) {
+        synchronized(stateLock) {
+            val manager = machine.eventRequestManager()
+            exceptionBreakpoints.values.forEach { bp ->
+                bp.request?.let {
+                    try {
+                        manager.deleteEventRequest(it)
+                    } catch (_: Exception) {
+                        // Best effort cleanup.
+                    }
+                }
+                bp.prepareRequest?.let {
+                    try {
+                        manager.deleteEventRequest(it)
+                    } catch (_: Exception) {
+                        // Best effort cleanup.
+                    }
+                }
+            }
+            exceptionBreakpoints.clear()
         }
     }
 

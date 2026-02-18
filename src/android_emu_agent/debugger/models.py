@@ -64,3 +64,15 @@ class DebugEvalRequest(BaseModel):
     expression: str
     thread: str = "main"
     frame: int = 0
+
+
+class DebugExceptionBreakpointSetRequest(BaseModel):
+    session_id: str
+    class_pattern: str = "*"
+    caught: bool = True
+    uncaught: bool = True
+
+
+class DebugExceptionBreakpointRemoveRequest(BaseModel):
+    session_id: str
+    breakpoint_id: int

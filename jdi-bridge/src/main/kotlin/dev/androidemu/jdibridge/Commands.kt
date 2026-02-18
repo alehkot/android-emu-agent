@@ -163,6 +163,26 @@ object Commands {
                 successResponse(request.id, result)
             }
 
+            "set_exception_breakpoint" -> {
+                val classPattern = request.params["class_pattern"]?.jsonPrimitive?.content ?: "*"
+                val caught = request.params["caught"]?.jsonPrimitive?.booleanOrNull ?: true
+                val uncaught = request.params["uncaught"]?.jsonPrimitive?.booleanOrNull ?: true
+                val result = s.setExceptionBreakpoint(classPattern, caught, uncaught)
+                successResponse(request.id, result)
+            }
+
+            "remove_exception_breakpoint" -> {
+                val breakpointId = request.params["breakpoint_id"]?.jsonPrimitive?.int
+                    ?: throw RpcException(INVALID_PARAMS, "Missing required param: breakpoint_id")
+                val result = s.removeExceptionBreakpoint(breakpointId)
+                successResponse(request.id, result)
+            }
+
+            "list_exception_breakpoints" -> {
+                val result = s.listExceptionBreakpoints()
+                successResponse(request.id, result)
+            }
+
             else -> null
         }
     }

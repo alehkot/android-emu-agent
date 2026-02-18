@@ -349,3 +349,15 @@ class DebugMappingLoadRequest(BaseModel):
 
 class DebugMappingClearRequest(BaseModel):
     session_id: str
+
+
+class DebugExceptionBreakpointSetRequest(BaseModel):
+    session_id: str
+    class_pattern: str = "*"
+    caught: bool = True
+    uncaught: bool = True
+
+
+class DebugExceptionBreakpointRemoveRequest(BaseModel):
+    session_id: str
+    breakpoint_id: int

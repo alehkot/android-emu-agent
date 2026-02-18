@@ -37,6 +37,8 @@ from android_emu_agent.daemon.models import (
     DebugBreakpointSetRequest,
     DebugDetachRequest,
     DebugEvalRequest,
+    DebugExceptionBreakpointRemoveRequest,
+    DebugExceptionBreakpointSetRequest,
     DebugInspectRequest,
     DebugMappingClearRequest,
     DebugMappingLoadRequest,
@@ -2476,6 +2478,87 @@ async def debug_mapping_clear(req: DebugMappingClearRequest) -> EndpointResponse
         return _error_response(exc, status_code=400)
 
     return {"status": "done", **result}
+
+
+@app.post("/debug/exception_breakpoint/set", response_model=None)
+async def debug_exception_breakpoint_set(
+    req: DebugExceptionBreakpointSetRequest,
+) -> EndpointResponse:
+    """Set an exception breakpoint for a debug session."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    if not req.caught and not req.uncaught:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_EXCEPTION_BREAKPOINT",
+                message="At least one of caught or uncaught must be true",
+                remediation="Set --caught and/or --uncaught flag.",
+            ),
+            status_code=400,
+        )
+
+    try:
+        result = await core.debug_manager.set_exception_breakpoint(
+            session_id=req.session_id,
+            class_pattern=req.class_pattern,
+            caught=req.caught,
+            uncaught=req.uncaught,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", **result}
+
+
+@app.post("/debug/exception_breakpoint/remove", response_model=None)
+async def debug_exception_breakpoint_remove(
+    req: DebugExceptionBreakpointRemoveRequest,
+) -> EndpointResponse:
+    """Remove an exception breakpoint by ID."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    if req.breakpoint_id <= 0:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_BREAKPOINT_ID",
+                message=f"Invalid breakpoint id: {req.breakpoint_id}",
+                context={"breakpoint_id": req.breakpoint_id},
+                remediation="Use a positive breakpoint id from 'debug break-exception list'.",
+            ),
+            status_code=400,
+        )
+
+    try:
+        result = await core.debug_manager.remove_exception_breakpoint(
+            session_id=req.session_id,
+            breakpoint_id=req.breakpoint_id,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", **result}
+
+
+@app.get("/debug/exception_breakpoints", response_model=None)
+async def debug_exception_breakpoint_list(session_id: str) -> EndpointResponse:
+    """List active exception breakpoints for a session."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(session_id)
+    if not session:
+        return _error_response(session_expired_error(session_id), status_code=404)
+
+    try:
+        result = await core.debug_manager.list_exception_breakpoints(session_id)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", "session_id": session_id, **result}
 
 
 @app.post("/actions/swipe", response_model=None)

@@ -9,8 +9,10 @@ from android_emu_agent.cli.utils import handle_response
 
 app = typer.Typer(help="Debugger commands (JDI Bridge)")
 break_app = typer.Typer(help="Breakpoint commands")
+break_exception_app = typer.Typer(help="Exception breakpoint commands")
 mapping_app = typer.Typer(help="ProGuard/R8 mapping commands")
 app.add_typer(break_app, name="break")
+app.add_typer(break_exception_app, name="break-exception")
 app.add_typer(mapping_app, name="mapping")
 
 
@@ -133,6 +135,59 @@ def debug_break_list(
     """List active breakpoints."""
     client = DaemonClient(timeout=30.0)
     resp = client.request("GET", f"/debug/breakpoints?session_id={session_id}")
+    client.close()
+    handle_response(resp, json_output=json_output)
+
+
+@break_exception_app.command("set")
+def debug_break_exception_set(
+    session_id: str = typer.Option(..., "--session", help="Session ID"),
+    class_pattern: str = typer.Option("*", "--class", help="Exception class pattern (e.g. java.lang.NullPointerException) or '*' for all"),
+    caught: bool = typer.Option(True, "--caught/--no-caught", help="Break on caught exceptions"),
+    uncaught: bool = typer.Option(True, "--uncaught/--no-uncaught", help="Break on uncaught exceptions"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Set an exception breakpoint by class pattern."""
+    client = DaemonClient(timeout=30.0)
+    resp = client.request(
+        "POST",
+        "/debug/exception_breakpoint/set",
+        json_body={
+            "session_id": session_id,
+            "class_pattern": class_pattern,
+            "caught": caught,
+            "uncaught": uncaught,
+        },
+    )
+    client.close()
+    handle_response(resp, json_output=json_output)
+
+
+@break_exception_app.command("remove")
+def debug_break_exception_remove(
+    breakpoint_id: int = typer.Argument(..., help="Exception breakpoint ID"),
+    session_id: str = typer.Option(..., "--session", help="Session ID"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Remove an exception breakpoint by ID."""
+    client = DaemonClient(timeout=30.0)
+    resp = client.request(
+        "POST",
+        "/debug/exception_breakpoint/remove",
+        json_body={"session_id": session_id, "breakpoint_id": breakpoint_id},
+    )
+    client.close()
+    handle_response(resp, json_output=json_output)
+
+
+@break_exception_app.command("list")
+def debug_break_exception_list(
+    session_id: str = typer.Option(..., "--session", help="Session ID"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """List active exception breakpoints."""
+    client = DaemonClient(timeout=30.0)
+    resp = client.request("GET", f"/debug/exception_breakpoints?session_id={session_id}")
     client.close()
     handle_response(resp, json_output=json_output)
 

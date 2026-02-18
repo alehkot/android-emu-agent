@@ -826,3 +826,120 @@ class TestBridgeErrorMapping:
                 error_context={"class_pattern": "com.example.MainActivity", "line": 42},
             )
         assert exc_info.value.code == "ERR_BREAKPOINT_INVALID_LINE"
+
+
+class TestExceptionBreakpoints:
+    """Tests for exception breakpoint DebugManager proxy methods."""
+
+    @staticmethod
+    def _attach_session(manager: DebugManager, session_id: str = "s-test") -> None:
+        manager._debug_sessions[session_id] = DebugSessionState(
+            session_id=session_id,
+            package="com.example.app",
+            process_name="com.example.app",
+            pid=123,
+            jdwp_port=123,
+            local_forward_port=54321,
+            device_serial="emulator-5554",
+            state="attached",
+        )
+
+    @pytest.mark.asyncio
+    async def test_set_exception_breakpoint_forwards_rpc(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(return_value={
+            "status": "set",
+            "breakpoint_id": 1,
+            "class_pattern": "java.lang.NullPointerException",
+            "caught": True,
+            "uncaught": False,
+        })
+        manager._bridges["s-test"] = bridge
+
+        result = await manager.set_exception_breakpoint(
+            "s-test",
+            "java.lang.NullPointerException",
+            caught=True,
+            uncaught=False,
+        )
+        assert result["status"] == "set"
+        assert result["breakpoint_id"] == 1
+        bridge.request.assert_awaited_once_with(
+            "set_exception_breakpoint",
+            {
+                "class_pattern": "java.lang.NullPointerException",
+                "caught": True,
+                "uncaught": False,
+            },
+        )
+
+    @pytest.mark.asyncio
+    async def test_set_exception_breakpoint_wildcard_forwards_rpc(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(return_value={
+            "status": "set",
+            "breakpoint_id": 2,
+            "class_pattern": "*",
+            "caught": True,
+            "uncaught": True,
+        })
+        manager._bridges["s-test"] = bridge
+
+        result = await manager.set_exception_breakpoint("s-test")
+        assert result["status"] == "set"
+        assert result["class_pattern"] == "*"
+        bridge.request.assert_awaited_once_with(
+            "set_exception_breakpoint",
+            {"class_pattern": "*", "caught": True, "uncaught": True},
+        )
+
+    @pytest.mark.asyncio
+    async def test_remove_exception_breakpoint_forwards_rpc(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(return_value={"status": "removed", "breakpoint_id": 1})
+        manager._bridges["s-test"] = bridge
+
+        result = await manager.remove_exception_breakpoint("s-test", 1)
+        assert result["status"] == "removed"
+        bridge.request.assert_awaited_once_with(
+            "remove_exception_breakpoint",
+            {"breakpoint_id": 1},
+        )
+
+    @pytest.mark.asyncio
+    async def test_list_exception_breakpoints_forwards_rpc(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(return_value={
+            "count": 1,
+            "exception_breakpoints": [
+                {
+                    "breakpoint_id": 1,
+                    "class_pattern": "*",
+                    "caught": True,
+                    "uncaught": True,
+                    "status": "set",
+                },
+            ],
+        })
+        manager._bridges["s-test"] = bridge
+
+        result = await manager.list_exception_breakpoints("s-test")
+        assert result["status"] == "attached"
+        assert result["count"] == 1
+        bridge.request.assert_awaited_once_with("list_exception_breakpoints")

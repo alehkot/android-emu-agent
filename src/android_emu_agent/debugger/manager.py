@@ -463,6 +463,50 @@ class DebugManager:
         result = await bridge.request("clear_mapping")
         return self._ensure_bridge_result(result, method="clear_mapping")
 
+    async def set_exception_breakpoint(
+        self,
+        session_id: str,
+        class_pattern: str = "*",
+        *,
+        caught: bool = True,
+        uncaught: bool = True,
+    ) -> dict[str, Any]:
+        """Set an exception breakpoint by class pattern."""
+        bridge = await self.get_bridge(session_id)
+        result = await bridge.request(
+            "set_exception_breakpoint",
+            {"class_pattern": class_pattern, "caught": caught, "uncaught": uncaught},
+        )
+        return self._ensure_bridge_result(
+            result,
+            method="set_exception_breakpoint",
+            error_context={"class_pattern": class_pattern},
+        )
+
+    async def remove_exception_breakpoint(
+        self,
+        session_id: str,
+        breakpoint_id: int,
+    ) -> dict[str, Any]:
+        """Remove an exception breakpoint by ID."""
+        bridge = await self.get_bridge(session_id)
+        result = await bridge.request(
+            "remove_exception_breakpoint",
+            {"breakpoint_id": breakpoint_id},
+        )
+        return self._ensure_bridge_result(
+            result,
+            method="remove_exception_breakpoint",
+            error_context={"breakpoint_id": breakpoint_id},
+        )
+
+    async def list_exception_breakpoints(self, session_id: str) -> dict[str, Any]:
+        """List exception breakpoints for an attached debug session."""
+        bridge = await self.get_bridge(session_id)
+        result = await bridge.request("list_exception_breakpoints")
+        mapped = self._ensure_bridge_result(result, method="list_exception_breakpoints")
+        return {"status": "attached", **mapped}
+
     async def step_over(
         self,
         session_id: str,
@@ -767,7 +811,12 @@ class DebugManager:
                 if method == "event":
                     event_type = str(params_obj.get("type", ""))
 
-                if event_type in {"breakpoint_hit", "breakpoint_resolved"}:
+                if event_type in {
+                    "breakpoint_hit",
+                    "breakpoint_resolved",
+                    "exception_hit",
+                    "exception_breakpoint_resolved",
+                }:
                     self._queue_event(session_id, params_obj, event_type=event_type)
                     logger.info(
                         "debug_event_queued",
