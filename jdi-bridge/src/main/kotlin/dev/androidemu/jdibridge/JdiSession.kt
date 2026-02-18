@@ -76,6 +76,8 @@ class JdiSession(
             var request: BreakpointRequest? = null,
             var prepareRequest: ClassPrepareRequest? = null,
             val condition: String? = null,
+            val logMessage: String? = null,
+            var hitCount: Long = 0,
     )
 
     private data class ExceptionBreakpointState(
@@ -239,7 +241,12 @@ class JdiSession(
         }
     }
 
-    fun setBreakpoint(classPattern: String, line: Int, condition: String? = null): JsonElement {
+    fun setBreakpoint(
+            classPattern: String,
+            line: Int,
+            condition: String? = null,
+            logMessage: String? = null,
+    ): JsonElement {
         if (line <= 0) {
             throw RpcException(INVALID_PARAMS, "line must be > 0")
         }
@@ -266,6 +273,7 @@ class JdiSession(
                                 location = locationText,
                                 request = request,
                                 condition = condition,
+                                logMessage = logMessage,
                         )
             }
             return buildJsonObject {
@@ -274,6 +282,9 @@ class JdiSession(
                 put("location", locationText)
                 if (condition != null) {
                     put("condition", condition)
+                }
+                if (logMessage != null) {
+                    put("log_message", logMessage)
                 }
             }
         }
@@ -295,6 +306,7 @@ class JdiSession(
                             status = "pending",
                             prepareRequest = prepareRequest,
                             condition = condition,
+                            logMessage = logMessage,
                     )
         }
 
@@ -306,6 +318,9 @@ class JdiSession(
             put("line", line)
             if (condition != null) {
                 put("condition", condition)
+            }
+            if (logMessage != null) {
+                put("log_message", logMessage)
             }
         }
     }
@@ -357,6 +372,8 @@ class JdiSession(
                                 status = it.status,
                                 location = it.location,
                                 condition = it.condition,
+                                logMessage = it.logMessage,
+                                hitCount = it.hitCount,
                         )
                     }
                 }
@@ -377,6 +394,10 @@ class JdiSession(
                                     }
                                     if (bp.condition != null) {
                                         put("condition", bp.condition)
+                                    }
+                                    if (bp.logMessage != null) {
+                                        put("log_message", bp.logMessage)
+                                        put("hit_count", bp.hitCount)
                                     }
                                 }
                             }
@@ -1298,12 +1319,15 @@ class JdiSession(
         val locationText = formatLocation(event.location())
         val thread = event.thread()
 
-        // Check if this breakpoint has a condition.
-        val condition =
+        // Fetch condition and logMessage together.
+        val (condition, logMessage) =
                 if (requestId != null) {
-                    synchronized(stateLock) { breakpoints[requestId]?.condition }
+                    synchronized(stateLock) {
+                        val bp = breakpoints[requestId]
+                        Pair(bp?.condition, bp?.logMessage)
+                    }
                 } else {
-                    null
+                    Pair(null, null)
                 }
 
         if (condition != null && condition.isNotBlank()) {
@@ -1333,6 +1357,44 @@ class JdiSession(
                     // Condition is true — proceed with normal breakpoint hit.
                 }
             }
+        }
+
+        // Logpoint: log the message and auto-resume without suspending.
+        if (logMessage != null && logMessage.isNotBlank()) {
+            val hitCount =
+                    if (requestId != null) {
+                        synchronized(stateLock) {
+                            val bp = breakpoints[requestId]
+                            if (bp != null) {
+                                bp.hitCount += 1
+                                bp.location = locationText
+                                bp.hitCount
+                            } else {
+                                1L
+                            }
+                        }
+                    } else {
+                        1L
+                    }
+
+            val resolvedMessage = evaluateLogMessage(thread, logMessage, hitCount)
+
+            emitEvent(
+                    type = "logpoint_hit",
+                    extraParams =
+                            buildJsonObject {
+                                if (requestId != null) {
+                                    put("breakpoint_id", requestId)
+                                }
+                                put("message", resolvedMessage)
+                                put("hit_count", hitCount)
+                                put("location", locationText)
+                                put("thread", thread.name())
+                            },
+            )
+
+            // Auto-resume — don't keep thread suspended.
+            return true
         }
 
         val stopped = buildStoppedPayload(thread, event.location())
@@ -1396,6 +1458,38 @@ class JdiSession(
             is DoubleValue -> value.value() != 0.0
             is CharValue -> value.value() != '\u0000'
             else -> true // Non-null object references are truthy.
+        }
+    }
+
+    /**
+     * Evaluate a log message template, resolving `{expr}` placeholders.
+     *
+     * Placeholders:
+     * - `{hitCount}` → the current hit count for this breakpoint
+     * - `{varName}` or `{obj.field}` → resolved via [resolveValuePath] + [renderToString]
+     *
+     * Unresolvable placeholders are replaced with `<error: message>`.
+     */
+    private fun evaluateLogMessage(
+            thread: ThreadReference,
+            template: String,
+            hitCount: Long,
+    ): String {
+        val pattern = Regex("""\{([^}]+)}""")
+        return pattern.replace(template) { match ->
+            val expr = match.groupValues[1].trim()
+            when (expr) {
+                "hitCount" -> hitCount.toString()
+                else -> {
+                    try {
+                        val frame = thread.frame(0)
+                        val value = resolveValuePath(frame, expr)
+                        renderToString(thread, value)
+                    } catch (e: Exception) {
+                        "<error: ${e.message ?: "unknown"}>"
+                    }
+                }
+            }
         }
     }
 

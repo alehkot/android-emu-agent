@@ -345,13 +345,17 @@ class DebugManager:
         session_id: str,
         class_pattern: str,
         line: int,
+        condition: str | None = None,
+        log_message: str | None = None,
     ) -> dict[str, Any]:
         """Set a breakpoint by class pattern and line number."""
         bridge = await self.get_bridge(session_id)
-        result = await bridge.request(
-            "set_breakpoint",
-            {"class_pattern": class_pattern, "line": line},
-        )
+        payload: dict[str, Any] = {"class_pattern": class_pattern, "line": line}
+        if condition is not None:
+            payload["condition"] = condition
+        if log_message is not None:
+            payload["log_message"] = log_message
+        result = await bridge.request("set_breakpoint", payload)
         return self._ensure_bridge_result(
             result,
             method="set_breakpoint",
@@ -814,6 +818,7 @@ class DebugManager:
                 if event_type in {
                     "breakpoint_hit",
                     "breakpoint_resolved",
+                    "breakpoint_condition_error",
                     "exception_hit",
                     "exception_breakpoint_resolved",
                 }:

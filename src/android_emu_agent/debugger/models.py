@@ -27,6 +27,8 @@ class DebugBreakpointSetRequest(BaseModel):
     session_id: str
     class_pattern: str
     line: int
+    condition: str | None = None
+    log_message: str | None = None
 
 
 class DebugBreakpointRemoveRequest(BaseModel):

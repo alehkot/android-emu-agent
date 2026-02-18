@@ -93,18 +93,29 @@ def debug_break_set(
     class_pattern: str = typer.Argument(..., help="Class pattern (e.g. com.example.MainActivity)"),
     line: int = typer.Argument(..., help="1-based source line number"),
     session_id: str = typer.Option(..., "--session", help="Session ID"),
+    condition: str | None = typer.Option(None, "--condition", help="Condition expression"),
+    log_message: str | None = typer.Option(
+        None,
+        "--log-message",
+        help="Log message template with {expr} placeholders (non-suspending logpoint)",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Set a breakpoint by class pattern and line number."""
     client = DaemonClient(timeout=30.0)
+    body: dict[str, object] = {
+        "session_id": session_id,
+        "class_pattern": class_pattern,
+        "line": line,
+    }
+    if condition is not None:
+        body["condition"] = condition
+    if log_message is not None:
+        body["log_message"] = log_message
     resp = client.request(
         "POST",
         "/debug/breakpoint/set",
-        json_body={
-            "session_id": session_id,
-            "class_pattern": class_pattern,
-            "line": line,
-        },
+        json_body=body,
     )
     client.close()
     handle_response(resp, json_output=json_output)

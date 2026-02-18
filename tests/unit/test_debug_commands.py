@@ -136,6 +136,8 @@ def test_debug_break_set_builds_payload() -> None:
             class_pattern="com.example.MainActivity",
             line=25,
             session_id="s-abc123",
+            condition=None,
+            log_message=None,
             json_output=False,
         )
 
@@ -146,6 +148,82 @@ def test_debug_break_set_builds_payload() -> None:
             "session_id": "s-abc123",
             "class_pattern": "com.example.MainActivity",
             "line": 25,
+        },
+    )
+
+
+def test_debug_break_set_with_condition_builds_payload() -> None:
+    from android_emu_agent.cli.commands import debug
+
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+            calls.append((method, path, json_body))
+            return DummyResponse({"status": "done"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(debug, "DaemonClient", DummyClient):
+        debug.debug_break_set(
+            class_pattern="com.example.MainActivity",
+            line=42,
+            session_id="s-abc123",
+            condition="counter > 5",
+            log_message=None,
+            json_output=False,
+        )
+
+    assert calls[0] == (
+        "POST",
+        "/debug/breakpoint/set",
+        {
+            "session_id": "s-abc123",
+            "class_pattern": "com.example.MainActivity",
+            "line": 42,
+            "condition": "counter > 5",
+        },
+    )
+
+
+def test_debug_break_set_with_log_message_builds_payload() -> None:
+    from android_emu_agent.cli.commands import debug
+
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+            calls.append((method, path, json_body))
+            return DummyResponse({"status": "done"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(debug, "DaemonClient", DummyClient):
+        debug.debug_break_set(
+            class_pattern="com.example.MainActivity",
+            line=50,
+            session_id="s-abc123",
+            condition=None,
+            log_message="hit {hitCount} times, val={myVar}",
+            json_output=False,
+        )
+
+    assert calls[0] == (
+        "POST",
+        "/debug/breakpoint/set",
+        {
+            "session_id": "s-abc123",
+            "class_pattern": "com.example.MainActivity",
+            "line": 50,
+            "log_message": "hit {hitCount} times, val={myVar}",
         },
     )
 

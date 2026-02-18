@@ -2018,6 +2018,8 @@ async def debug_breakpoint_set(req: DebugBreakpointSetRequest) -> EndpointRespon
             session_id=req.session_id,
             class_pattern=req.class_pattern,
             line=req.line,
+            condition=req.condition,
+            log_message=req.log_message,
         )
     except AgentError as exc:
         return _error_response(exc, status_code=400)

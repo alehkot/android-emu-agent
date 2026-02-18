@@ -530,6 +530,90 @@ class TestMilestone2DebugMethods:
         )
 
     @pytest.mark.asyncio
+    async def test_set_breakpoint_with_condition_forwards_rpc(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(return_value={
+            "status": "set",
+            "breakpoint_id": 2,
+            "condition": "counter > 5",
+        })
+        manager._bridges["s-test"] = bridge
+
+        result = await manager.set_breakpoint(
+            "s-test", "com.example.MainActivity", 30, condition="counter > 5",
+        )
+        assert result["status"] == "set"
+        assert result["condition"] == "counter > 5"
+        bridge.request.assert_awaited_once_with(
+            "set_breakpoint",
+            {"class_pattern": "com.example.MainActivity", "line": 30, "condition": "counter > 5"},
+        )
+
+    @pytest.mark.asyncio
+    async def test_set_breakpoint_with_log_message_forwards_rpc(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(return_value={
+            "status": "set",
+            "breakpoint_id": 3,
+            "log_message": "hit {hitCount} times, val={myVar}",
+        })
+        manager._bridges["s-test"] = bridge
+
+        result = await manager.set_breakpoint(
+            "s-test", "com.example.MainActivity", 35,
+            log_message="hit {hitCount} times, val={myVar}",
+        )
+        assert result["status"] == "set"
+        assert result["log_message"] == "hit {hitCount} times, val={myVar}"
+        bridge.request.assert_awaited_once_with(
+            "set_breakpoint",
+            {
+                "class_pattern": "com.example.MainActivity",
+                "line": 35,
+                "log_message": "hit {hitCount} times, val={myVar}",
+            },
+        )
+
+    @pytest.mark.asyncio
+    async def test_set_breakpoint_with_condition_and_log_message_forwards_rpc(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(return_value={
+            "status": "set",
+            "breakpoint_id": 4,
+            "condition": "x > 0",
+            "log_message": "x={x}",
+        })
+        manager._bridges["s-test"] = bridge
+
+        result = await manager.set_breakpoint(
+            "s-test", "com.example.MainActivity", 40,
+            condition="x > 0",
+            log_message="x={x}",
+        )
+        assert result["status"] == "set"
+        bridge.request.assert_awaited_once_with(
+            "set_breakpoint",
+            {
+                "class_pattern": "com.example.MainActivity",
+                "line": 40,
+                "condition": "x > 0",
+                "log_message": "x={x}",
+            },
+        )
+
+    @pytest.mark.asyncio
     async def test_list_threads_forwards_rpc(self) -> None:
         manager = DebugManager()
         self._attach_session(manager)
