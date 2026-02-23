@@ -66,6 +66,7 @@ class JdiSession(
         private const val ERR_NOT_SUSPENDED = "ERR_NOT_SUSPENDED"
         private const val ERR_OBJECT_COLLECTED = "ERR_OBJECT_COLLECTED"
         private const val ERR_EVAL_UNSUPPORTED = "ERR_EVAL_UNSUPPORTED"
+        private const val ERR_CONDITION_SYNTAX = "ERR_CONDITION_SYNTAX"
     }
 
     private data class BreakpointState(
@@ -77,6 +78,7 @@ class JdiSession(
             var request: BreakpointRequest? = null,
             var prepareRequest: ClassPrepareRequest? = null,
             val condition: String? = null,
+            val compiledCondition: ConditionExpression? = null,
             val logMessage: String? = null,
             val captureStack: Boolean = false,
             val stackMaxFrames: Int = DEFAULT_LOGPOINT_STACK_FRAMES,
@@ -265,6 +267,23 @@ class JdiSession(
                     "capture_stack requires a non-suspending logpoint (--log-message)",
             )
         }
+        val normalizedCondition = condition?.trim()
+        if (normalizedCondition != null && normalizedCondition.isEmpty()) {
+            throw RpcException(INVALID_PARAMS, "$ERR_CONDITION_SYNTAX: condition must not be blank")
+        }
+        val compiledCondition =
+                if (normalizedCondition != null) {
+                    try {
+                        ConditionExpression.parse(normalizedCondition)
+                    } catch (e: ConditionSyntaxException) {
+                        throw RpcException(
+                                INVALID_PARAMS,
+                                "$ERR_CONDITION_SYNTAX: ${e.message ?: "invalid condition"}",
+                        )
+                    }
+                } else {
+                    null
+                }
 
         val machine = requireAttachedMachine()
         val breakpointId =
@@ -287,7 +306,8 @@ class JdiSession(
                                 status = "set",
                                 location = locationText,
                                 request = request,
-                                condition = condition,
+                                condition = normalizedCondition,
+                                compiledCondition = compiledCondition,
                                 logMessage = logMessage,
                                 captureStack = captureStack,
                                 stackMaxFrames = stackMaxFrames,
@@ -297,8 +317,8 @@ class JdiSession(
                 put("status", "set")
                 put("breakpoint_id", breakpointId)
                 put("location", locationText)
-                if (condition != null) {
-                    put("condition", condition)
+                if (normalizedCondition != null) {
+                    put("condition", normalizedCondition)
                 }
                 if (logMessage != null) {
                     put("log_message", logMessage)
@@ -324,7 +344,8 @@ class JdiSession(
                             line = line,
                             status = "pending",
                             prepareRequest = prepareRequest,
-                            condition = condition,
+                            condition = normalizedCondition,
+                            compiledCondition = compiledCondition,
                             logMessage = logMessage,
                             captureStack = captureStack,
                             stackMaxFrames = stackMaxFrames,
@@ -337,8 +358,8 @@ class JdiSession(
             put("reason", "class_not_loaded")
             put("class_pattern", classPattern)
             put("line", line)
-            if (condition != null) {
-                put("condition", condition)
+            if (normalizedCondition != null) {
+                put("condition", normalizedCondition)
             }
             if (logMessage != null) {
                 put("log_message", logMessage)
@@ -1353,12 +1374,31 @@ class JdiSession(
                     null
                 }
         val condition = breakpointState?.condition
+        val compiledCondition = breakpointState?.compiledCondition
         val logMessage = breakpointState?.logMessage
         val captureStack = breakpointState?.captureStack ?: false
         val stackMaxFrames = breakpointState?.stackMaxFrames ?: DEFAULT_LOGPOINT_STACK_FRAMES
 
         if (condition != null && condition.isNotBlank()) {
-            val conditionResult = evaluateCondition(thread, condition)
+            val conditionExpression =
+                    compiledCondition
+                            ?: runCatching { ConditionExpression.parse(condition) }.getOrNull()
+            if (conditionExpression == null) {
+                emitEvent(
+                        type = "breakpoint_condition_error",
+                        extraParams =
+                                buildJsonObject {
+                                    if (requestId != null) {
+                                        put("breakpoint_id", requestId)
+                                    }
+                                    put("condition", condition)
+                                    put("error", "condition expression is unavailable")
+                                    put("location", locationText)
+                                },
+                )
+                return true
+            }
+            val conditionResult = evaluateCondition(thread, conditionExpression)
             when (conditionResult) {
                 ConditionResult.FALSE -> {
                     // Condition is false — auto-resume, don't emit event.
@@ -1473,29 +1513,40 @@ class JdiSession(
      * Evaluate a condition expression on the given thread's top frame. Returns TRUE if the value is
      * truthy, FALSE if falsy, or ERROR if evaluation fails.
      */
-    private fun evaluateCondition(thread: ThreadReference, condition: String): ConditionResult {
+    private fun evaluateCondition(
+            thread: ThreadReference,
+            condition: ConditionExpression,
+    ): ConditionResult {
         return try {
             val frame = thread.frame(0)
-            val value = resolveValuePath(frame, condition.trim())
-            if (isValueTruthy(value)) ConditionResult.TRUE else ConditionResult.FALSE
+            val matched =
+                    condition.evaluate { path ->
+                        toConditionRuntimeValue(resolveValuePath(frame, path))
+                    }
+            if (matched) ConditionResult.TRUE else ConditionResult.FALSE
         } catch (e: Exception) {
             ConditionResult.ERROR(e.message ?: "condition evaluation failed")
         }
     }
 
-    /** Check if a JDI Value is "truthy" (non-null, non-false, non-zero). */
-    private fun isValueTruthy(value: Value?): Boolean {
-        if (value == null) return false
+    private fun toConditionRuntimeValue(value: Value?): ConditionExpression.RuntimeValue {
+        if (value == null) {
+            return ConditionExpression.RuntimeValue.Null
+        }
         return when (value) {
-            is BooleanValue -> value.value()
-            is ByteValue -> value.value().toInt() != 0
-            is ShortValue -> value.value().toInt() != 0
-            is IntegerValue -> value.value() != 0
-            is LongValue -> value.value() != 0L
-            is FloatValue -> value.value() != 0.0f
-            is DoubleValue -> value.value() != 0.0
-            is CharValue -> value.value() != '\u0000'
-            else -> true // Non-null object references are truthy.
+            is BooleanValue -> ConditionExpression.RuntimeValue.Bool(value.value())
+            is ByteValue -> ConditionExpression.RuntimeValue.Number(value.value().toDouble())
+            is ShortValue -> ConditionExpression.RuntimeValue.Number(value.value().toDouble())
+            is IntegerValue -> ConditionExpression.RuntimeValue.Number(value.value().toDouble())
+            is LongValue -> ConditionExpression.RuntimeValue.Number(value.value().toDouble())
+            is FloatValue -> ConditionExpression.RuntimeValue.Number(value.value().toDouble())
+            is DoubleValue -> ConditionExpression.RuntimeValue.Number(value.value())
+            is CharValue -> ConditionExpression.RuntimeValue.Number(value.value().code.toDouble())
+            is StringReference -> ConditionExpression.RuntimeValue.Text(value.value())
+            else -> {
+                val typeName = runCatching { value.type().name() }.getOrNull()
+                ConditionExpression.RuntimeValue.Object(typeName)
+            }
         }
     }
 

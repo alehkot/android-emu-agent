@@ -159,8 +159,13 @@ an actionable remediation hint.
 running and use `debug events` to wait for `breakpoint_resolved` / `breakpoint_hit`. Exception
 breakpoints can also resolve later via `exception_breakpoint_resolved`.
 
-`--condition` evaluates on hit and only suspends when truthy. If condition evaluation fails, the
-bridge emits `breakpoint_condition_error` and auto-resumes.
+`--condition` is parsed at set time and supports value paths, literals (`null`, booleans, numbers,
+strings), boolean operators (`!`, `&&`, `||`), comparisons (`==`, `!=`, `>`, `>=`, `<`, `<=`), and
+parentheses. Malformed syntax is rejected immediately.
+
+On hit, condition evaluation suspends only when truthy. If runtime evaluation fails (for example a
+missing local/field or invalid operand types), the bridge emits `breakpoint_condition_error` and
+auto-resumes.
 
 `--log-message` makes a logpoint (non-suspending). Use `{hitCount}` and frame expressions like
 `{user.id}` in the template; resolved output arrives as `logpoint_hit`.

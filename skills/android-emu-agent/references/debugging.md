@@ -59,6 +59,9 @@ Use `--condition` to suspend only when an expression is truthy:
 
 - Example:
   `debug break set com.example.CheckoutViewModel 118 --session <id> --condition "cart.total > 10000"`
+- Supported syntax: value paths (`user.id`), literals (`null`, booleans, numbers, strings), boolean
+  operators (`!`, `&&`, `||`), comparisons (`==`, `!=`, `>`, `>=`, `<`, `<=`), and parentheses.
+- Malformed condition syntax is rejected at set time.
 - Truthy values stop execution; falsy values auto-resume.
 - If condition evaluation fails, no stop occurs; `debug events` reports
   `breakpoint_condition_error`.

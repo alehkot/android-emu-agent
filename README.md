@@ -350,6 +350,11 @@ uv run android-emu-agent debug inspect cart.total --session s-abc123 --thread ma
 uv run android-emu-agent debug resume --session s-abc123
 ```
 
+Condition syntax supports value paths, literals (`null`, booleans, numbers, strings), boolean
+operators (`!`, `&&`, `||`), comparisons (`==`, `!=`, `>`, `>=`, `<`, `<=`), and parentheses.
+Malformed condition syntax fails fast during `debug break set`. Runtime evaluation failures emit
+`breakpoint_condition_error` and auto-resume.
+
 Non-suspending logpoint trace
 
 ```bash

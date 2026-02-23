@@ -1086,6 +1086,25 @@ class TestBridgeErrorMapping:
             )
         assert exc_info.value.code == "ERR_BREAKPOINT_INVALID_LINE"
 
+    def test_invalid_condition_error_is_mapped(self) -> None:
+        with pytest.raises(AgentError) as exc_info:
+            DebugManager._ensure_bridge_result(
+                {
+                    "error": {
+                        "code": -32602,
+                        "message": "ERR_CONDITION_SYNTAX: Expected value at position 10",
+                    }
+                },
+                method="set_breakpoint",
+                error_context={
+                    "class_pattern": "com.example.MainActivity",
+                    "line": 42,
+                    "condition": "counter >",
+                },
+            )
+        assert exc_info.value.code == "ERR_INVALID_CONDITION"
+        assert exc_info.value.context.get("condition") == "counter >"
+
 
 class TestExceptionBreakpoints:
     """Tests for exception breakpoint DebugManager proxy methods."""

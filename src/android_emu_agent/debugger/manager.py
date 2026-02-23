@@ -25,6 +25,7 @@ from android_emu_agent.errors import (
     bridge_not_running_error,
     class_not_found_error,
     debug_not_attached_error,
+    invalid_condition_error,
     jdk_not_found_error,
     not_suspended_error,
     object_collected_error,
@@ -383,7 +384,7 @@ class DebugManager:
         return self._ensure_bridge_result(
             result,
             method="set_breakpoint",
-            error_context={"class_pattern": class_pattern, "line": line},
+            error_context={"class_pattern": class_pattern, "line": line, "condition": condition},
         )
 
     async def remove_breakpoint(self, session_id: str, breakpoint_id: int) -> dict[str, Any]:
@@ -1064,6 +1065,13 @@ class DebugManager:
                 if isinstance(line_raw, int):
                     line = line_raw
             raise _attach_context(breakpoint_invalid_line_error(class_pattern, line))
+        if "err_condition_syntax" in lowered:
+            condition = None
+            if error_context is not None:
+                raw_condition = error_context.get("condition")
+                if isinstance(raw_condition, str):
+                    condition = raw_condition
+            raise _attach_context(invalid_condition_error(condition=condition, reason=message))
         if "unsupported expression" in lowered or "err_eval_unsupported" in lowered:
             raise _attach_context(
                 AgentError(

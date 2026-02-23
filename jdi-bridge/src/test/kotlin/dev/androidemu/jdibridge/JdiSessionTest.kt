@@ -173,6 +173,40 @@ class JdiSessionTest {
     }
 
     @Test
+    fun `breakpoint condition is preserved in list output`() {
+        session.attach("localhost", targetPort)
+
+        val set =
+            session.setBreakpoint(
+                "dev.androidemu.jdibridge.TestTarget",
+                12,
+                condition = "isReady || retries >= 2",
+            ).jsonObject
+        val status = set["status"]?.jsonPrimitive?.content
+        assertTrue(status == "set" || status == "pending")
+
+        val listed = session.listBreakpoints().jsonObject
+        val breakpoints = listed["breakpoints"]?.jsonArray
+        val bp = breakpoints?.firstOrNull()?.jsonObject
+        assertEquals("isReady || retries >= 2", bp?.get("condition")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `malformed breakpoint condition is rejected at set time`() {
+        session.attach("localhost", targetPort)
+
+        val error = assertThrows<RpcException> {
+            session.setBreakpoint(
+                "dev.androidemu.jdibridge.TestTarget",
+                12,
+                condition = "retries >",
+            )
+        }
+        assertEquals(INVALID_PARAMS, error.code)
+        assertTrue((error.message ?: "").contains("ERR_CONDITION_SYNTAX"))
+    }
+
+    @Test
     fun `detach after attach succeeds`() {
         session.attach("localhost", targetPort)
         assertTrue(session.isAttached)

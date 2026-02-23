@@ -358,6 +358,19 @@ def breakpoint_invalid_line_error(class_pattern: str, line: int) -> AgentError:
     )
 
 
+def invalid_condition_error(condition: str | None = None, reason: str = "") -> AgentError:
+    """Create error for malformed breakpoint conditions."""
+    return AgentError(
+        code="ERR_INVALID_CONDITION",
+        message="Invalid breakpoint condition syntax",
+        context={"condition": condition, "reason": reason},
+        remediation=(
+            "Use a valid expression with value paths, literals, boolean operators (!, &&, ||), "
+            "comparisons (==, !=, >, >=, <, <=), and parentheses."
+        ),
+    )
+
+
 def adb_forward_failed_error(pid: int, reason: str) -> AgentError:
     """Create error for ADB port forwarding failure."""
     return AgentError(
