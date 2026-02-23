@@ -551,6 +551,8 @@ The `./scripts/dev.sh` helper centralizes common development tasks. Make it exec
 | `./scripts/dev.sh test`             | Run all tests                                            |
 | `./scripts/dev.sh test-unit`        | Run unit tests only                                      |
 | `./scripts/dev.sh test-integration` | Run integration tests (requires emulator)                |
+| `./scripts/dev.sh build-bridge`     | Build the JDI Bridge fat JAR (jdi-bridge/)               |
+| `./scripts/dev.sh test-bridge`      | Run JDI Bridge Kotlin tests                              |
 | `./scripts/dev.sh lint`             | Run linter                                               |
 | `./scripts/dev.sh format`           | Format code                                              |
 | `./scripts/dev.sh format-md`        | Format Markdown                                          |
