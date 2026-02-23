@@ -382,6 +382,7 @@ def test_debug_break_hits_calls_endpoint() -> None:
             session_id="s-abc123",
             breakpoint_id=7,
             limit=50,
+            since=None,
             since_timestamp_ms=1700000000000,
             json_output=False,
         )
@@ -390,6 +391,40 @@ def test_debug_break_hits_calls_endpoint() -> None:
         calls[0][0] == "GET"
         and calls[0][1]
         == "/debug/logpoint_hits?session_id=s-abc123&limit=50&breakpoint_id=7&since_timestamp_ms=1700000000000"
+        and calls[0][2] is None
+    )
+
+
+def test_debug_break_hits_with_since_calls_endpoint() -> None:
+    from android_emu_agent.cli.commands import debug
+
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+            calls.append((method, path, json_body))
+            return DummyResponse({"status": "done"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(debug, "DaemonClient", DummyClient):
+        debug.debug_break_hits(
+            session_id="s-abc123",
+            breakpoint_id=7,
+            limit=50,
+            since="10m ago",
+            since_timestamp_ms=None,
+            json_output=False,
+        )
+
+    assert (
+        calls[0][0] == "GET"
+        and calls[0][1]
+        == "/debug/logpoint_hits?session_id=s-abc123&limit=50&breakpoint_id=7&since_timestamp_ms=10m+ago"
         and calls[0][2] is None
     )
 

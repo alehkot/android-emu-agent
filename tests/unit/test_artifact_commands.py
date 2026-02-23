@@ -55,4 +55,3 @@ def test_artifact_logs_builds_payload_with_filters() -> None:
         "since": "10m",
         "follow": True,
     }
-

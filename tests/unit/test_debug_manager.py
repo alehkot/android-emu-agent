@@ -87,7 +87,9 @@ class TestFindJar:
         with (
             patch.dict(os.environ, {}, clear=True),
             patch("pathlib.Path.cwd", return_value=tmp_path / "empty"),
-            patch("android_emu_agent.debugger.manager._DEV_JAR_RELATIVE", Path("missing/build/libs")),
+            patch(
+                "android_emu_agent.debugger.manager._DEV_JAR_RELATIVE", Path("missing/build/libs")
+            ),
             patch.object(manager._downloader, "resolve", return_value=downloaded) as resolve,
         ):
             result = manager._find_jar()
@@ -580,15 +582,20 @@ class TestMilestone2DebugMethods:
 
         bridge = AsyncMock()
         bridge.is_alive = True
-        bridge.request = AsyncMock(return_value={
-            "status": "set",
-            "breakpoint_id": 2,
-            "condition": "counter > 5",
-        })
+        bridge.request = AsyncMock(
+            return_value={
+                "status": "set",
+                "breakpoint_id": 2,
+                "condition": "counter > 5",
+            }
+        )
         manager._bridges["s-test"] = bridge
 
         result = await manager.set_breakpoint(
-            "s-test", "com.example.MainActivity", 30, condition="counter > 5",
+            "s-test",
+            "com.example.MainActivity",
+            30,
+            condition="counter > 5",
         )
         assert result["status"] == "set"
         assert result["condition"] == "counter > 5"
@@ -604,15 +611,19 @@ class TestMilestone2DebugMethods:
 
         bridge = AsyncMock()
         bridge.is_alive = True
-        bridge.request = AsyncMock(return_value={
-            "status": "set",
-            "breakpoint_id": 3,
-            "log_message": "hit {hitCount} times, val={myVar}",
-        })
+        bridge.request = AsyncMock(
+            return_value={
+                "status": "set",
+                "breakpoint_id": 3,
+                "log_message": "hit {hitCount} times, val={myVar}",
+            }
+        )
         manager._bridges["s-test"] = bridge
 
         result = await manager.set_breakpoint(
-            "s-test", "com.example.MainActivity", 35,
+            "s-test",
+            "com.example.MainActivity",
+            35,
             log_message="hit {hitCount} times, val={myVar}",
         )
         assert result["status"] == "set"
@@ -633,16 +644,20 @@ class TestMilestone2DebugMethods:
 
         bridge = AsyncMock()
         bridge.is_alive = True
-        bridge.request = AsyncMock(return_value={
-            "status": "set",
-            "breakpoint_id": 4,
-            "condition": "x > 0",
-            "log_message": "x={x}",
-        })
+        bridge.request = AsyncMock(
+            return_value={
+                "status": "set",
+                "breakpoint_id": 4,
+                "condition": "x > 0",
+                "log_message": "x={x}",
+            }
+        )
         manager._bridges["s-test"] = bridge
 
         result = await manager.set_breakpoint(
-            "s-test", "com.example.MainActivity", 40,
+            "s-test",
+            "com.example.MainActivity",
+            40,
             condition="x > 0",
             log_message="x={x}",
         )
@@ -664,13 +679,15 @@ class TestMilestone2DebugMethods:
 
         bridge = AsyncMock()
         bridge.is_alive = True
-        bridge.request = AsyncMock(return_value={
-            "status": "set",
-            "breakpoint_id": 5,
-            "log_message": "x={x}",
-            "capture_stack": True,
-            "stack_max_frames": 12,
-        })
+        bridge.request = AsyncMock(
+            return_value={
+                "status": "set",
+                "breakpoint_id": 5,
+                "log_message": "x={x}",
+                "capture_stack": True,
+                "stack_max_frames": 12,
+            }
+        )
         manager._bridges["s-test"] = bridge
 
         result = await manager.set_breakpoint(
@@ -700,7 +717,9 @@ class TestMilestone2DebugMethods:
 
         bridge = AsyncMock()
         bridge.is_alive = True
-        bridge.request = AsyncMock(return_value={"threads": [], "total_threads": 0, "truncated": False})
+        bridge.request = AsyncMock(
+            return_value={"threads": [], "total_threads": 0, "truncated": False}
+        )
         manager._bridges["s-test"] = bridge
 
         result = await manager.list_threads("s-test", include_daemon=True, max_threads=100)
@@ -734,7 +753,9 @@ class TestMilestone2DebugMethods:
 
         bridge = AsyncMock()
         bridge.is_alive = True
-        bridge.request = AsyncMock(return_value={"variable_path": "user", "value": {"class": "User"}})
+        bridge.request = AsyncMock(
+            return_value={"variable_path": "user", "value": {"class": "User"}}
+        )
         manager._bridges["s-test"] = bridge
 
         result = await manager.inspect_variable(
@@ -1018,7 +1039,12 @@ class TestBridgeErrorMapping:
     def test_eval_unsupported_error_is_mapped(self) -> None:
         with pytest.raises(AgentError) as exc_info:
             DebugManager._ensure_bridge_result(
-                {"error": {"code": -32012, "message": "ERR_EVAL_UNSUPPORTED: method call forbidden"}},
+                {
+                    "error": {
+                        "code": -32012,
+                        "message": "ERR_EVAL_UNSUPPORTED: method call forbidden",
+                    }
+                },
                 method="evaluate",
             )
         assert exc_info.value.code == "ERR_EVAL_UNSUPPORTED"
@@ -1026,7 +1052,12 @@ class TestBridgeErrorMapping:
     def test_step_timeout_error_is_mapped(self) -> None:
         with pytest.raises(AgentError) as exc_info:
             DebugManager._ensure_bridge_result(
-                {"error": {"code": -32020, "message": "ERR_STEP_TIMEOUT: step did not complete within 8s"}},
+                {
+                    "error": {
+                        "code": -32020,
+                        "message": "ERR_STEP_TIMEOUT: step did not complete within 8s",
+                    }
+                },
                 method="step_over",
                 error_context={"thread_name": "main", "timeout_seconds": 8.0},
             )
@@ -1044,7 +1075,12 @@ class TestBridgeErrorMapping:
     def test_breakpoint_invalid_line_error_is_mapped(self) -> None:
         with pytest.raises(AgentError) as exc_info:
             DebugManager._ensure_bridge_result(
-                {"error": {"code": -32031, "message": "ERR_BREAKPOINT_INVALID_LINE: no executable code"}},
+                {
+                    "error": {
+                        "code": -32031,
+                        "message": "ERR_BREAKPOINT_INVALID_LINE: no executable code",
+                    }
+                },
                 method="set_breakpoint",
                 error_context={"class_pattern": "com.example.MainActivity", "line": 42},
             )
@@ -1074,13 +1110,15 @@ class TestExceptionBreakpoints:
 
         bridge = AsyncMock()
         bridge.is_alive = True
-        bridge.request = AsyncMock(return_value={
-            "status": "set",
-            "breakpoint_id": 1,
-            "class_pattern": "java.lang.NullPointerException",
-            "caught": True,
-            "uncaught": False,
-        })
+        bridge.request = AsyncMock(
+            return_value={
+                "status": "set",
+                "breakpoint_id": 1,
+                "class_pattern": "java.lang.NullPointerException",
+                "caught": True,
+                "uncaught": False,
+            }
+        )
         manager._bridges["s-test"] = bridge
 
         result = await manager.set_exception_breakpoint(
@@ -1107,13 +1145,15 @@ class TestExceptionBreakpoints:
 
         bridge = AsyncMock()
         bridge.is_alive = True
-        bridge.request = AsyncMock(return_value={
-            "status": "set",
-            "breakpoint_id": 2,
-            "class_pattern": "*",
-            "caught": True,
-            "uncaught": True,
-        })
+        bridge.request = AsyncMock(
+            return_value={
+                "status": "set",
+                "breakpoint_id": 2,
+                "class_pattern": "*",
+                "caught": True,
+                "uncaught": True,
+            }
+        )
         manager._bridges["s-test"] = bridge
 
         result = await manager.set_exception_breakpoint("s-test")
@@ -1148,18 +1188,20 @@ class TestExceptionBreakpoints:
 
         bridge = AsyncMock()
         bridge.is_alive = True
-        bridge.request = AsyncMock(return_value={
-            "count": 1,
-            "exception_breakpoints": [
-                {
-                    "breakpoint_id": 1,
-                    "class_pattern": "*",
-                    "caught": True,
-                    "uncaught": True,
-                    "status": "set",
-                },
-            ],
-        })
+        bridge.request = AsyncMock(
+            return_value={
+                "count": 1,
+                "exception_breakpoints": [
+                    {
+                        "breakpoint_id": 1,
+                        "class_pattern": "*",
+                        "caught": True,
+                        "uncaught": True,
+                        "status": "set",
+                    },
+                ],
+            }
+        )
         manager._bridges["s-test"] = bridge
 
         result = await manager.list_exception_breakpoints("s-test")

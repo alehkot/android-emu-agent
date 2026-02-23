@@ -107,4 +107,3 @@ def test_reliability_gfxinfo_builds_payload() -> None:
     assert method == "POST"
     assert path == "/reliability/gfxinfo"
     assert payload == {"serial": "emulator-5554", "package": "com.example.app"}
-

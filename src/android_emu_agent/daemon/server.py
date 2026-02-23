@@ -95,6 +95,7 @@ from android_emu_agent.errors import (
 from android_emu_agent.files.manager import FileMatch
 from android_emu_agent.reliability.manager import DEFAULT_EVENTS_PATTERN, TRIM_LEVELS, require_root
 from android_emu_agent.ui.ref_resolver import LocatorBundle
+from android_emu_agent.utils.time_parser import parse_datetime
 from android_emu_agent.validation import validate_package, validate_uri
 
 logger = structlog.get_logger()
@@ -2156,7 +2157,7 @@ async def debug_logpoint_hits(
     session_id: str,
     breakpoint_id: int | None = None,
     limit: int = 100,
-    since_timestamp_ms: int | None = None,
+    since_timestamp_ms: str | int | None = None,
 ) -> EndpointResponse:
     """Return buffered non-suspending breakpoint hits for a session."""
     core: DaemonCore = app.state.core
@@ -2186,23 +2187,17 @@ async def debug_logpoint_hits(
             status_code=400,
         )
 
-    if since_timestamp_ms is not None and since_timestamp_ms < 0:
-        return _error_response(
-            AgentError(
-                code="ERR_INVALID_SINCE_TIMESTAMP",
-                message=f"Invalid since_timestamp_ms: {since_timestamp_ms}",
-                context={"since_timestamp_ms": since_timestamp_ms},
-                remediation="Use epoch milliseconds >= 0.",
-            ),
-            status_code=400,
-        )
+    try:
+        parsed_since = parse_datetime(since_timestamp_ms)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
 
     try:
         result = await core.debug_manager.list_logpoint_hits(
             session_id,
             breakpoint_id=breakpoint_id,
             limit=limit,
-            since_timestamp_ms=since_timestamp_ms,
+            since_timestamp_ms=parsed_since,
         )
     except AgentError as exc:
         return _error_response(exc, status_code=400)

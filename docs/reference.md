@@ -475,7 +475,7 @@ android-emu-agent debug break hits [OPTIONS]
 - `--session TEXT`: Session ID [required]
 - `--breakpoint-id INTEGER`: Optional breakpoint ID filter
 - `--limit INTEGER`: Maximum buffered hits to return [default: 100]
-- `--since-timestamp-ms INTEGER`: Optional lower-bound timestamp filter (epoch milliseconds)
+- `--since TEXT`: Lower-bound timestamp (epoch ms, ISO 8601, or relative e.g. &#x27;10m ago&#x27;)
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 

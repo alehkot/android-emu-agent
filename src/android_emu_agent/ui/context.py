@@ -73,7 +73,10 @@ class ContextResolver:
 
         output = await asyncio.to_thread(_run)
         if not output.strip():
-            logger.warning("focused_activity_empty", hint="grep returned no match for mResumedActivity/mFocusedActivity — field name may have changed in this Android version")
+            logger.warning(
+                "focused_activity_empty",
+                hint="grep returned no match for mResumedActivity/mFocusedActivity — field name may have changed in this Android version",
+            )
         result: dict[str, str] = {}
 
         # Parse mResumedActivity: ActivityRecord{... com.foo/.MainActivity ...}
@@ -98,7 +101,10 @@ class ContextResolver:
 
         output = await asyncio.to_thread(_run)
         if not output.strip():
-            logger.warning("window_info_empty", hint="grep returned no match for mCurrentFocus/mFocusedApp/SurfaceOrientation — field name may have changed in this Android version")
+            logger.warning(
+                "window_info_empty",
+                hint="grep returned no match for mCurrentFocus/mFocusedApp/SurfaceOrientation — field name may have changed in this Android version",
+            )
         result: dict[str, str | bool] = {"focused": True}
 
         focus_match = re.search(r"mCurrentFocus=Window\{([^}]+)\}", output)

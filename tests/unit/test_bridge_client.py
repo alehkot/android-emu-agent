@@ -36,13 +36,14 @@ class TestBridgeClientRequestFormat:
         mock_proc.stdin.drain = AsyncMock()
 
         # Mock stdout: return a ping response then EOF
-        response_line = json.dumps(
-            {"jsonrpc": "2.0", "id": 1, "result": {"pong": True}, "error": None}
-        ).encode() + b"\n"
-        mock_proc.stdout = MagicMock()
-        mock_proc.stdout.readline = AsyncMock(
-            side_effect=[response_line, b""]
+        response_line = (
+            json.dumps(
+                {"jsonrpc": "2.0", "id": 1, "result": {"pong": True}, "error": None}
+            ).encode()
+            + b"\n"
         )
+        mock_proc.stdout = MagicMock()
+        mock_proc.stdout.readline = AsyncMock(side_effect=[response_line, b""])
 
         # Mock stderr: immediate EOF
         mock_proc.stderr = MagicMock()

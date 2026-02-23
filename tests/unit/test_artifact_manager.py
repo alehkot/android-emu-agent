@@ -67,4 +67,3 @@ class TestPullLogs:
         assert "ignore" not in output
         second_call = mock_device.shell.call_args_list[1][0][0]
         assert " -d " not in f" {second_call} "
-

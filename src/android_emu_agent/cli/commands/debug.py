@@ -32,7 +32,11 @@ def debug_ping(
         return
 
     data = resp.json()
-    if isinstance(data, dict) and isinstance(data.get("bridge"), dict) and data.get("status") == "done":
+    if (
+        isinstance(data, dict)
+        and isinstance(data.get("bridge"), dict)
+        and data.get("status") == "done"
+    ):
         bridge = data["bridge"]
         typer.echo(format_json({"status": "pong", "session_id": session_id, **bridge}))
         return
@@ -187,10 +191,16 @@ def debug_break_hits(
         help="Optional breakpoint ID filter",
     ),
     limit: int = typer.Option(100, "--limit", help="Maximum buffered hits to return"),
+    since: str | None = typer.Option(
+        None,
+        "--since",
+        help="Lower-bound timestamp (epoch ms, ISO 8601, or relative e.g. '10m ago')",
+    ),
     since_timestamp_ms: int | None = typer.Option(
         None,
         "--since-timestamp-ms",
-        help="Optional lower-bound timestamp filter (epoch milliseconds)",
+        help="Deprecated: Use --since instead",
+        hidden=True,
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
@@ -198,8 +208,10 @@ def debug_break_hits(
     query_params: dict[str, int | str] = {"session_id": session_id, "limit": limit}
     if breakpoint_id is not None:
         query_params["breakpoint_id"] = breakpoint_id
-    if since_timestamp_ms is not None:
-        query_params["since_timestamp_ms"] = since_timestamp_ms
+
+    val_since = since if since is not None else since_timestamp_ms
+    if val_since is not None:
+        query_params["since_timestamp_ms"] = val_since
 
     client = DaemonClient(timeout=30.0)
     resp = client.request("GET", f"/debug/logpoint_hits?{urlencode(query_params)}")
@@ -216,7 +228,9 @@ def debug_break_exception_set(
         help="Exception class pattern or '*' for all",
     ),
     caught: bool = typer.Option(True, "--caught/--no-caught", help="Break on caught exceptions"),
-    uncaught: bool = typer.Option(True, "--uncaught/--no-uncaught", help="Break on uncaught exceptions"),
+    uncaught: bool = typer.Option(
+        True, "--uncaught/--no-uncaught", help="Break on uncaught exceptions"
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Set an exception breakpoint by class pattern."""
@@ -326,7 +340,9 @@ def debug_stack(
 
 @app.command("inspect")
 def debug_inspect(
-    variable_path: str = typer.Argument(..., help="Variable path (e.g. user.profile.name or obj_1)"),
+    variable_path: str = typer.Argument(
+        ..., help="Variable path (e.g. user.profile.name or obj_1)"
+    ),
     session_id: str = typer.Option(..., "--session", help="Session ID"),
     thread: str = typer.Option("main", "--thread", help="Thread name"),
     frame: int = typer.Option(0, "--frame", help="Zero-based frame index"),

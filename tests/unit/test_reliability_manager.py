@@ -70,4 +70,3 @@ class TestMemGfxInfo:
 
         assert output == "GFXINFO"
         shell_mock.assert_awaited_once_with(mock_device, "dumpsys gfxinfo com.example.app")
-
