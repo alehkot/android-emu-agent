@@ -2,6 +2,7 @@ package dev.androidemu.jdibridge
 
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -145,6 +146,41 @@ class JdiSessionConditionTest {
         val event = waitForEvent("breakpoint_condition_error", timeoutMs = 10_000)
         assertTrue((event["error"]?.jsonPrimitive?.content ?: "").contains("missingVar"))
         assertMainNotSuspended()
+    }
+
+    @Test
+    fun `logpoint emits templated message with captured stack`() {
+        session.attach("localhost", targetPort)
+        notifications.clear()
+
+        val set =
+            session.setBreakpoint(
+                MAIN_CLASS,
+                MAIN_LOOP_LINE,
+                logMessage = "hit={hitCount} seed={helper.seed}",
+                captureStack = true,
+                stackMaxFrames = 2,
+            ).jsonObject
+        val status = set["status"]?.jsonPrimitive?.content ?: "unknown"
+        assertTrue(status == "set" || status == "pending")
+        if (status == "pending") {
+            waitForEvent("breakpoint_resolved", timeoutMs = 10_000)
+        }
+
+        session.resume(null)
+        val event = waitForEvent("logpoint_hit", timeoutMs = 10_000)
+        val message = event["message"]?.jsonPrimitive?.content ?: ""
+        assertTrue(message.contains("hit=1"), "Expected hit count interpolation in: $message")
+        assertTrue(message.contains("seed="), "Expected field interpolation in: $message")
+
+        val stack = event["stack"]?.jsonObject
+            ?: throw AssertionError("Expected stack payload in logpoint event")
+        assertEquals(2, stack["max_frames"]?.jsonPrimitive?.int)
+        val shown = stack["shown_frames"]?.jsonPrimitive?.int ?: 0
+        assertTrue(shown in 1..2)
+        val frames = stack["frames"]?.jsonArray ?: throw AssertionError("Expected stack frames")
+        assertTrue(frames.isNotEmpty())
+        assertMainNotSuspended(timeoutMs = 4_000)
     }
 
     private fun waitForMainSuspended(timeoutMs: Long) {
