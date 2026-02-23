@@ -157,7 +157,8 @@ class ArtifactLogsRequest(BaseModel):
     session_id: str
     package: str | None = None
     level: str | None = None
-    since: str | None = None
+    log_type: str | None = None
+    since: str | int | None = None
     follow: bool = False
 
 

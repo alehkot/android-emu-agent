@@ -56,12 +56,21 @@ def artifact_screenshot(
 def artifact_logs(
     session_id: str | None = typer.Argument(None, help="Session ID"),
     session: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
-    package: str | None = typer.Option(None, "--package", "-p", help="Filter by package"),
+    package: str | None = typer.Option(
+        None, "--package", "--app", "-p", help="Filter to logs for one app package"
+    ),
     level: str | None = typer.Option(
-        None, "--level", help="Log level (v|d|i|w|e|f|s or verbose/debug/...)"
+        None,
+        "--level",
+        help="Deprecated alias for --type (v|d|i|w|e|f|s or verbose/debug/...)",
+    ),
+    log_type: str | None = typer.Option(
+        None, "--type", help="Log type (errors, warnings, info, debug, verbose, fatal, silent)"
     ),
     since: str | None = typer.Option(
-        None, "--since", help="Logcat -t value: timestamp (MM-DD HH:MM:SS.mmm) or line count"
+        None,
+        "--since",
+        help="Since filter: line count, logcat timestamp, ISO 8601, or relative (e.g. '10m ago')",
     ),
     follow: bool = typer.Option(False, "--follow", help="Follow logs (live stream)"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
@@ -76,17 +85,17 @@ def artifact_logs(
         raise typer.Exit(code=1) from None
 
     client = DaemonClient(timeout=3600.0 if follow else 10.0)
-    resp = client.request(
-        "POST",
-        "/artifacts/logs",
-        json_body={
-            "session_id": resolved_session,
-            "package": package,
-            "level": level,
-            "since": since,
-            "follow": follow,
-        },
-    )
+    payload: dict[str, str | bool | None] = {
+        "session_id": resolved_session,
+        "package": package,
+        "level": level,
+        "since": since,
+        "follow": follow,
+    }
+    if log_type is not None:
+        payload["log_type"] = log_type
+
+    resp = client.request("POST", "/artifacts/logs", json_body=payload)
     client.close()
     handle_response(resp, json_output=json_output)
 

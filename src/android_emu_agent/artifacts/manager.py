@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import shlex
 import zipfile
 from datetime import datetime
@@ -11,10 +12,91 @@ from typing import TYPE_CHECKING
 
 import structlog
 
+from android_emu_agent.errors import AgentError
+from android_emu_agent.utils.time_parser import parse_datetime
+
 if TYPE_CHECKING:
     import uiautomator2 as u2
 
 logger = structlog.get_logger()
+
+LOG_PRIORITY_ALIASES = {
+    "v": "V",
+    "verbose": "V",
+    "d": "D",
+    "debug": "D",
+    "i": "I",
+    "info": "I",
+    "w": "W",
+    "warn": "W",
+    "warning": "W",
+    "warnings": "W",
+    "e": "E",
+    "error": "E",
+    "errors": "E",
+    "f": "F",
+    "fatal": "F",
+    "fatals": "F",
+    "wtf": "F",
+    "s": "S",
+    "silent": "S",
+}
+
+_LOGCAT_TIMESTAMP_RE = re.compile(
+    r"^(?:\d{2}-\d{2}|\d{4}-\d{2}-\d{2})\s+\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?$"
+)
+_RELATIVE_SHORT_RE = re.compile(r"^(\d+)\s*(m|min|mins|minutes?|h|hr|hours?|d|days?)$")
+
+
+def normalize_log_priority(value: str | None) -> str | None:
+    """Normalize log level/type aliases into logcat priority letters."""
+    if not value:
+        return None
+    return LOG_PRIORITY_ALIASES.get(value.strip().lower())
+
+
+def resolve_logcat_since(since: str | int | None) -> tuple[str | None, bool]:
+    """Resolve user-friendly logcat --since into a command-ready value.
+
+    Returns (value, is_datetime), where value is ready for logcat -t/-T.
+    """
+    if since is None:
+        return None, False
+
+    raw_value = str(since).strip()
+    if not raw_value:
+        return None, False
+
+    # Preserve legacy behavior: integers are treated as line counts.
+    if raw_value.isdigit():
+        return raw_value, False
+
+    if _LOGCAT_TIMESTAMP_RE.fullmatch(raw_value):
+        return raw_value, True
+
+    parse_input = raw_value
+    short_relative = _RELATIVE_SHORT_RE.fullmatch(raw_value.lower())
+    if short_relative:
+        parse_input = f"{short_relative.group(1)} {short_relative.group(2)} ago"
+
+    try:
+        since_ms = parse_datetime(parse_input)
+    except AgentError as exc:
+        raise AgentError(
+            code="ERR_INVALID_LOGCAT_SINCE",
+            message=f"Invalid logcat since value: {since}",
+            context={"since": since},
+            remediation=(
+                "Use line count (e.g. 200), logcat timestamp (MM-DD HH:MM:SS.mmm), "
+                "ISO 8601, or relative time (e.g. '10m ago')."
+            ),
+        ) from exc
+
+    if since_ms is None:  # Defensive; parse_datetime currently returns int for non-empty values.
+        return None, False
+
+    resolved_time = datetime.fromtimestamp(since_ms / 1000).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    return resolved_time, True
 
 
 class ArtifactManager:
@@ -53,7 +135,7 @@ class ArtifactManager:
         session_id: str,
         package: str | None = None,
         level: str | None = None,
-        since: str | None = None,
+        since: str | int | None = None,
         follow: bool = False,
         filename: str | None = None,
     ) -> Path:
@@ -68,10 +150,12 @@ class ArtifactManager:
             cmd_parts = ["logcat"]
             if not follow:
                 cmd_parts.append("-d")
-            if since:
-                cmd_parts.extend(["-t", since])
+            resolved_since, since_is_datetime = resolve_logcat_since(since)
+            if resolved_since:
+                since_flag = "-T" if follow and since_is_datetime else "-t"
+                cmd_parts.extend([since_flag, resolved_since])
 
-            normalized_level = self._normalize_log_level(level)
+            normalized_level = normalize_log_priority(level)
             if normalized_level:
                 cmd_parts.append(f"*:{normalized_level}")
 
@@ -117,28 +201,7 @@ class ArtifactManager:
 
     @staticmethod
     def _normalize_log_level(level: str | None) -> str | None:
-        if not level:
-            return None
-
-        value = level.strip().lower()
-        level_map = {
-            "v": "V",
-            "verbose": "V",
-            "d": "D",
-            "debug": "D",
-            "i": "I",
-            "info": "I",
-            "w": "W",
-            "warn": "W",
-            "warning": "W",
-            "e": "E",
-            "error": "E",
-            "f": "F",
-            "fatal": "F",
-            "s": "S",
-            "silent": "S",
-        }
-        return level_map.get(value)
+        return normalize_log_priority(level)
 
     async def save_snapshot(
         self,

@@ -20,6 +20,7 @@ from android_emu_agent.actions.selector import (
     RefSelector,
     parse_selector,
 )
+from android_emu_agent.artifacts.manager import normalize_log_priority
 from android_emu_agent.daemon.core import DaemonCore
 from android_emu_agent.daemon.models import (
     ActionRequest,
@@ -818,45 +819,63 @@ async def pull_logs(req: ArtifactLogsRequest) -> EndpointResponse:
         except AgentError as exc:
             return _error_response(exc, status_code=400)
 
-    if req.level and req.level.strip().lower() not in {
-        "v",
-        "verbose",
-        "d",
-        "debug",
-        "i",
-        "info",
-        "w",
-        "warn",
-        "warning",
-        "e",
-        "error",
-        "f",
-        "fatal",
-        "s",
-        "silent",
-    }:
+    resolved_level = normalize_log_priority(req.level)
+    if req.level and resolved_level is None:
         return _error_response(
             AgentError(
                 code="ERR_INVALID_LOG_LEVEL",
                 message=f"Invalid log level: {req.level}",
                 context={"level": req.level},
-                remediation="Use one of: v,d,i,w,e,f,s or verbose/debug/info/warn/error/fatal/silent",
+                remediation=(
+                    "Use one of: v,d,i,w,e,f,s or verbose/debug/info/warn/error/fatal/silent"
+                ),
             ),
             status_code=400,
         )
+
+    resolved_type = normalize_log_priority(req.log_type)
+    if req.log_type and resolved_type is None:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_LOG_TYPE",
+                message=f"Invalid log type: {req.log_type}",
+                context={"log_type": req.log_type},
+                remediation=(
+                    "Use one of: verbose,debug,info,warn,warning,warnings,error,errors,"
+                    "fatal,silent (or v/d/i/w/e/f/s)."
+                ),
+            ),
+            status_code=400,
+        )
+
+    if resolved_level and resolved_type and resolved_level != resolved_type:
+        return _error_response(
+            AgentError(
+                code="ERR_CONFLICTING_LOG_FILTERS",
+                message="--level and --type resolve to different priorities",
+                context={"level": req.level, "log_type": req.log_type},
+                remediation="Use one of --level or --type, or make them equivalent.",
+            ),
+            status_code=400,
+        )
+
+    effective_level = resolved_type or resolved_level
 
     device = await core.device_manager.get_u2_device(session.device_serial)
     if not device:
         return _error_response(device_offline_error(session.device_serial), status_code=404)
 
-    path = await core.artifact_manager.pull_logs(
-        device,
-        req.session_id,
-        package=req.package,
-        level=req.level,
-        since=req.since,
-        follow=req.follow,
-    )
+    try:
+        path = await core.artifact_manager.pull_logs(
+            device,
+            req.session_id,
+            package=req.package,
+            level=effective_level,
+            since=req.since,
+            follow=req.follow,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
     return {"status": "done", "path": str(path)}
 
 

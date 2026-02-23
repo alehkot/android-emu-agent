@@ -1606,9 +1606,11 @@ android-emu-agent artifact logs [OPTIONS] [SESSION_ID]
 **Options**:
 
 - `-s, --session TEXT`: Session ID
-- `-p, --package TEXT`: Filter by package
-- `--level TEXT`: Log level (v|d|i|w|e|f|s or verbose/debug/...)
-- `--since TEXT`: Logcat -t value: timestamp (MM-DD HH:MM:SS.mmm) or line count
+- `-p, --package, --app TEXT`: Filter to logs for one app package
+- `--level TEXT`: Deprecated alias for --type (v|d|i|w|e|f|s or verbose/debug/...)
+- `--type TEXT`: Log type (errors, warnings, info, debug, verbose, fatal, silent)
+- `--since TEXT`: Since filter: line count, logcat timestamp, ISO 8601, or relative (e.g. &#x27;10m
+  ago&#x27;)
 - `--follow`: Follow logs (live stream)
 - `--json`: Output JSON
 - `--help`: Show this message and exit.

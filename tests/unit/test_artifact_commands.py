@@ -39,6 +39,7 @@ def test_artifact_logs_builds_payload_with_filters() -> None:
             session="s-abc123",
             package="com.example.app",
             level="error",
+            log_type=None,
             since="10m",
             follow=True,
             json_output=False,
@@ -54,4 +55,44 @@ def test_artifact_logs_builds_payload_with_filters() -> None:
         "level": "error",
         "since": "10m",
         "follow": True,
+    }
+
+
+def test_artifact_logs_builds_payload_with_log_type() -> None:
+    """Should send log_type payload when --type is provided."""
+    from android_emu_agent.cli.commands import artifact
+
+    calls: list[tuple[str, str, dict[str, Any] | None, float | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, timeout: float = 10.0, **__: Any) -> None:
+            self.timeout = timeout
+
+        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+            calls.append((method, path, json_body, self.timeout))
+            return DummyResponse({"status": "done", "path": "/tmp/logcat.txt"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(artifact, "DaemonClient", DummyClient):
+        artifact.artifact_logs(
+            session_id=None,
+            session="s-abc123",
+            package="com.example.app",
+            level=None,
+            log_type="errors",
+            since="10m ago",
+            follow=False,
+            json_output=False,
+        )
+
+    _method, _path, payload, _timeout = calls[0]
+    assert payload == {
+        "session_id": "s-abc123",
+        "package": "com.example.app",
+        "level": None,
+        "log_type": "errors",
+        "since": "10m ago",
+        "follow": False,
     }
