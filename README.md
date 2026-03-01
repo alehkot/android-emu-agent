@@ -447,7 +447,7 @@ In practice, these are usually safe on non-root devices:
 - UI snapshots and screenshots
 - Actions (tap, set-text, swipe, scroll, back/home/recents)
 - Wait commands
-- App list/install/launch/intent/force-stop/reset/deeplink
+- App list/install/uninstall/launch/intent/force-stop/reset/deeplink
 - File `push` and `pull` to shared storage
 
 Emulator-only commands are `emulator snapshot save|restore`. Root-required commands are listed

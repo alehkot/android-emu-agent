@@ -99,6 +99,7 @@ Skip confirmation when the user specifically asked for the action:
 - User says "tap Submit" → tap Submit without asking
 - User says "enter my email as `alice@example.com`" → `set-text` without asking
 - User says "reset the app" → `app reset` without asking
+- User says "uninstall the app" → `app uninstall` without asking
 - User says "delete the item" → tap "Delete" without asking
 
 **Key test:** Did the user specifically ask for this action, or is the agent deciding autonomously?
@@ -126,6 +127,12 @@ Should I proceed? (yes / no / modify)
 ```text
 I'm about to run `app reset com.example.app`.
 This will clear all app data including login state.
+Should I proceed? (yes / no / modify)
+```
+
+```text
+I'm about to run `app uninstall com.example.app`.
+This will remove the app from the device and may delete its local data.
 Should I proceed? (yes / no / modify)
 ```
 

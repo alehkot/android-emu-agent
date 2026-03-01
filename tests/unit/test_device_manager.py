@@ -219,6 +219,62 @@ class TestAppInstall:
         )
 
 
+class TestAppUninstall:
+    """Tests for app_uninstall."""
+
+    @pytest.mark.asyncio
+    async def test_uninstall_default_flags(self) -> None:
+        """Should uninstall package without keeping data by default."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        mock_device = MagicMock()
+        run_adb = AsyncMock(
+            return_value=subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout="Success\n",
+                stderr="",
+            )
+        )
+
+        with (
+            patch.object(manager, "get_adb_device", return_value=mock_device),
+            patch.object(manager, "_run_adb", run_adb),
+        ):
+            output = await manager.app_uninstall("emulator-5554", "com.example.app")
+
+        assert output == "Success"
+        run_adb.assert_awaited_once_with("emulator-5554", ["uninstall", "com.example.app"])
+
+    @pytest.mark.asyncio
+    async def test_uninstall_keep_data_flag(self) -> None:
+        """Should include keep-data flag when requested."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        mock_device = MagicMock()
+        run_adb = AsyncMock(
+            return_value=subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout="Success\n",
+                stderr="",
+            )
+        )
+
+        with (
+            patch.object(manager, "get_adb_device", return_value=mock_device),
+            patch.object(manager, "_run_adb", run_adb),
+        ):
+            await manager.app_uninstall("emulator-5554", "com.example.app", keep_data=True)
+
+        run_adb.assert_awaited_once_with(
+            "emulator-5554",
+            ["uninstall", "-k", "com.example.app"],
+        )
+
+
 class TestAppLaunch:
     """Tests for app_launch."""
 

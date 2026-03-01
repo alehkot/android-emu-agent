@@ -34,6 +34,7 @@ from android_emu_agent.daemon.models import (
     AppListRequest,
     AppResetRequest,
     AppResolveIntentRequest,
+    AppUninstallRequest,
     ArtifactLogsRequest,
     DebugAttachRequest,
     DebugBreakpointRemoveRequest,
@@ -1903,6 +1904,40 @@ async def app_install(req: AppInstallRequest) -> EndpointResponse:
         "replace": req.replace,
         "grant_permissions": req.grant_permissions,
         "allow_downgrade": req.allow_downgrade,
+        "output": output,
+    }
+
+
+@app.post("/app/uninstall", response_model=None)
+async def app_uninstall(req: AppUninstallRequest) -> EndpointResponse:
+    """Uninstall a package from a device."""
+    core: DaemonCore = app.state.core
+    resolved = await _resolve_device_target(core, req.session_id, req.serial)
+    if isinstance(resolved, JSONResponse):
+        return resolved
+    serial, _, _ = resolved
+
+    try:
+        validate_package(req.package)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    try:
+        output = await core.device_manager.app_uninstall(
+            serial,
+            req.package,
+            keep_data=req.keep_data,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+    except Exception:
+        return _error_response(device_offline_error(serial), status_code=404)
+
+    return {
+        "status": "done",
+        "serial": serial,
+        "package": req.package,
+        "keep_data": req.keep_data,
         "output": output,
     }
 

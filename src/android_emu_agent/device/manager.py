@@ -21,6 +21,7 @@ from android_emu_agent.errors import (
     adb_not_found_error,
     console_connect_error,
     file_not_found_error,
+    package_not_found_error,
     snapshot_failed_error,
 )
 from android_emu_agent.validation import get_console_port
@@ -227,6 +228,28 @@ class DeviceManager:
         args.append(str(local_apk))
 
         result = await self._run_adb(serial, args)
+        output = (result.stdout or result.stderr or "").strip()
+        return output or "Success"
+
+    async def app_uninstall(self, serial: str, package: str, *, keep_data: bool = False) -> str:
+        """Uninstall a package from a connected device."""
+        device = await self.get_adb_device(serial)
+        if not device:
+            raise RuntimeError(f"Device not found: {serial}")
+
+        args = ["uninstall"]
+        if keep_data:
+            args.append("-k")
+        args.append(package)
+
+        try:
+            result = await self._run_adb(serial, args)
+        except AgentError as exc:
+            reason = str(exc.context.get("reason", "")).lower()
+            if exc.code == "ERR_ADB_COMMAND" and "unknown package" in reason:
+                raise package_not_found_error(package) from exc
+            raise
+
         output = (result.stdout or result.stderr or "").strip()
         return output or "Success"
 

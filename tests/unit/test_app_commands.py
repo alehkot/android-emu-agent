@@ -56,6 +56,42 @@ def test_app_install_builds_payload() -> None:
     }
 
 
+def test_app_uninstall_builds_payload() -> None:
+    """Should send uninstall payload to the daemon."""
+    from android_emu_agent.cli.commands import app_cmd
+
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+            calls.append((method, path, json_body))
+            return DummyResponse({"status": "done", "output": "Success"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(app_cmd, "DaemonClient", DummyClient):
+        app_cmd.app_uninstall(
+            "com.example.app",
+            device="emulator-5554",
+            session_id=None,
+            keep_data=True,
+            json_output=False,
+        )
+
+    method, path, payload = calls[0]
+    assert method == "POST"
+    assert path == "/app/uninstall"
+    assert payload == {
+        "serial": "emulator-5554",
+        "package": "com.example.app",
+        "keep_data": True,
+    }
+
+
 def test_app_launch_wait_debugger_builds_payload() -> None:
     """Should include wait_debugger for app launch."""
     from android_emu_agent.cli.commands import app_cmd

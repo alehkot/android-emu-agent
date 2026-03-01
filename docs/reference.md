@@ -1303,6 +1303,7 @@ android-emu-agent app [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 - `install`: Install an APK on the target device.
+- `uninstall`: Uninstall a package from the target device.
 - `reset`: Clear app data for a package.
 - `launch`: Launch an app.
 - `force-stop`: Force stop an app.
@@ -1334,6 +1335,28 @@ android-emu-agent app install [OPTIONS] APK_PATH
 - `--replace / --no-replace`: Replace existing app [default: replace]
 - `--grant-permissions`: Grant all runtime permissions
 - `--allow-downgrade`: Allow version-code downgrade
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent app uninstall`
+
+Uninstall a package from the target device.
+
+**Usage**:
+
+```console
+android-emu-agent app uninstall [OPTIONS] PACKAGE
+```
+
+**Arguments**:
+
+- `PACKAGE`: Package name [required]
+
+**Options**:
+
+- `-d, --device TEXT`: Device serial
+- `-s, --session TEXT`: Session ID
+- `--keep-data`: Keep app data and cache directories
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 

@@ -194,6 +194,11 @@ class AppInstallRequest(DeviceTargetRequest):
     allow_downgrade: bool = False
 
 
+class AppUninstallRequest(DeviceTargetRequest):
+    package: str
+    keep_data: bool = False
+
+
 class ReliabilityPackageRequest(DeviceTargetRequest):
     package: str
 

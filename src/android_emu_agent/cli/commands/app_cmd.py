@@ -46,6 +46,23 @@ def app_install(
     handle_output_response(resp, json_output=json_output)
 
 
+@app.command("uninstall")
+def app_uninstall(
+    package: str = typer.Argument(..., help="Package name"),
+    device: str | None = typer.Option(None, "--device", "-d", help="Device serial"),
+    session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
+    keep_data: bool = typer.Option(False, "--keep-data", help="Keep app data and cache directories"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Uninstall a package from the target device."""
+    payload = require_target(device, session_id)
+    payload.update({"package": package, "keep_data": keep_data})
+    client = DaemonClient()
+    resp = client.request("POST", "/app/uninstall", json_body=payload)
+    client.close()
+    handle_output_response(resp, json_output=json_output)
+
+
 @app.command("reset")
 def app_reset(
     session_id: str = typer.Argument(..., help="Session ID"),

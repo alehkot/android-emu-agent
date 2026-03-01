@@ -92,6 +92,7 @@ target against the latest snapshot.
 
 - `app list --device <serial>` List installed packages. Optional: `--scope all|system|third-party`.
 - `app install <apk_path> --device <serial>` Install APK on target device.
+- `app uninstall <package> --device <serial>` Uninstall package from target device.
 - `app launch <session_id> <package>` Launch an app.
 - `app intent <session_id> [--action <action>] [--data <uri>]` Launch an intent.
 - `app current --session <session_id>` Show current foreground app/activity.
@@ -106,6 +107,8 @@ Use `--activity` to launch a specific screen directly. Use `--wait-debugger` whe
 debugger to the app at startup:
 
 - `app list --session <session_id>` List packages via an active session.
+- `app uninstall <package> --session <session_id> [--keep-data]` Uninstall package via an active
+  session.
 - `app launch <session_id> <package> --activity <activity>` Launch a specific activity.
 - `app launch <session_id> <package> --wait-debugger` Wait for debugger before app start.
 - `app deeplink <session_id> <uri> --wait-debugger` Wait for debugger before intent start.
