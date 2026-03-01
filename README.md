@@ -6,7 +6,7 @@ CLI + daemon for LLM-driven Android UI control — ships with **ready-to-use cod
 
 Android Emu Agent automates Android apps using a fast observe-act-verify loop:
 
-1. Observe: capture a compact UI snapshot (interactive elements only)
+1. Observe: capture a compact actionable UI snapshot
 2. Act: issue commands using ephemeral element refs like `^a1`
 3. Verify: re-snapshot when needed
 
@@ -16,7 +16,11 @@ The CLI is a thin client. A long-running daemon handles all device I/O. All comm
 **Highlights:**
 
 - **Daemon-first architecture** — persistent process handles device I/O over Unix socket
-- **Ephemeral refs** — deterministic `^a1`-style handles with locator bundle fallbacks
+- **Framework-aware snapshots** — actionable output works across classic XML Views and modern UI
+  frameworks such as Compose and Litho
+- **Ref healing** — deterministic `^a1`-style handles with selector-chain rebinding when a newer
+  snapshot still contains the same target
+- **Diagnostics** — JSON responses and headers include `diagnostic_id` for request-level tracing
 - **Agent skills included** — structured reference docs, workflow templates, and safety guardrails
 - **Machine-readable output** — every command supports `--json` for agent pipelines
 
@@ -146,8 +150,11 @@ Sessions
 
 Snapshots and refs
 
-- `ui snapshot` returns `^refs` that are stable only for that snapshot.
-- If you get `ERR_STALE_REF`, take a new snapshot and use fresh refs.
+- `ui snapshot` returns actionable `^refs` that are generation-scoped and optimized for agent use.
+- Compact snapshots are designed to work well with classic XML layouts and modern frameworks such as
+  Compose and Litho.
+- If a ref is stale, the daemon may heal it against the latest snapshot and return a warning. You
+  should still take a fresh snapshot before the next action.
 
 Selectors
 
@@ -166,7 +173,7 @@ coords:120,450
 
 ## Snapshot Format
 
-Compact snapshot output includes context and interactive elements only:
+Compact snapshot output includes context and actionable UI elements only:
 
 ```json
 {
@@ -192,11 +199,16 @@ Compact snapshot output includes context and interactive elements only:
 }
 ```
 
+Compact mode may proxy descendant text onto an unlabeled clickable container when that makes the
+target easier to identify. Use `--full` for the unpruned hierarchy view, or `--raw` for the raw XML
+tree.
+
 ## Daemon and State
 
 - Socket: `/tmp/android-emu-agent.sock`
 - Logs: `~/.android-emu-agent/daemon.log`
 - PID file: `~/.android-emu-agent/daemon.pid`
+- Request diagnostics: `~/.android-emu-agent/diagnostics/requests.ndjson`
 
 The CLI auto-starts the daemon on first request. Use these to debug:
 
@@ -477,7 +489,7 @@ Common errors
 
 | Error Code               | Meaning                  | Fix                                             |
 | ------------------------ | ------------------------ | ----------------------------------------------- |
-| `ERR_STALE_REF`          | Ref from an old snapshot | Take a new snapshot                             |
+| `ERR_STALE_REF`          | Ref from an old snapshot | Re-snapshot; if auto-healed, use warning as cue |
 | `ERR_NOT_FOUND`          | Element not found        | Verify screen, use `--full` or a selector       |
 | `ERR_BLOCKED_INPUT`      | Dialog/IME blocking      | `wait idle` or `back`                           |
 | `ERR_TIMEOUT`            | Wait condition not met   | Increase `--timeout-ms` or check condition      |
@@ -492,6 +504,9 @@ Common errors
 | `ERR_VM_DISCONNECTED`    | Target VM exited         | Re-launch the app and re-attach                 |
 
 For deeper guidance, see `skills/android-emu-agent/references/troubleshooting.md`.
+
+Every JSON response also includes a `diagnostic_id`, and the same ID is returned as the
+`x-diagnostic-id` header for correlation with daemon request logs.
 
 ## CLI Reference
 

@@ -209,6 +209,26 @@ class Database:
             return row[0], cast(dict[str, Any], json.loads(row[1]))
         return None
 
+    async def get_refs_for_generation(
+        self,
+        session_id: str,
+        generation: int,
+    ) -> list[dict[str, Any]]:
+        """Get all ref payloads for a specific generation."""
+        if not self._connection:
+            return []
+        cursor = await self._connection.execute(
+            """
+            SELECT locator_bundle
+            FROM ref_maps
+            WHERE session_id = ? AND generation = ?
+            ORDER BY id ASC
+            """,
+            (session_id, generation),
+        )
+        rows = await cursor.fetchall()
+        return [cast(dict[str, Any], json.loads(row[0])) for row in rows]
+
     async def cleanup_old_refs(self, session_id: str, keep_generations: int = 3) -> None:
         """Remove refs older than keep_generations."""
         if not self._connection:

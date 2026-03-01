@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncGenerator
+import time
+from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from hashlib import md5
-from typing import Any
+from typing import Any, cast
+from uuid import uuid4
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 
 from android_emu_agent.actions.executor import ActionType, SwipeDirection
@@ -123,6 +125,47 @@ app = FastAPI(
 )
 
 
+@app.middleware("http")
+async def diagnostics_middleware(request: Request, call_next: Any) -> Response:
+    """Persist request diagnostics and attach diagnostic IDs to responses."""
+    diagnostic_id = uuid4().hex[:12]
+    request.state.diagnostic_id = diagnostic_id
+    started = time.perf_counter()
+    request_context = await _request_diagnostics_context(request)
+
+    response: Response
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception(
+            "request_unhandled_exception",
+            diagnostic_id=diagnostic_id,
+            method=request.method,
+            path=request.url.path,
+        )
+        raise
+
+    response, payload = await _response_with_diagnostic_id(response, diagnostic_id)
+    payload = payload or {}
+    core = getattr(request.app.state, "core", None)
+    diagnostics = getattr(core, "diagnostics", None)
+    if diagnostics is not None:
+        event = {
+            "diagnostic_id": diagnostic_id,
+            "timestamp": diagnostics.timestamp(),
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": response.status_code,
+            "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
+            "session_id": request_context.get("session_id"),
+            "serial": request_context.get("serial"),
+            "request": request_context.get("request"),
+            "error": payload.get("error"),
+        }
+        await diagnostics.record(event)
+    return response
+
+
 def _error_response(error: AgentError, status_code: int = 400) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
@@ -131,23 +174,10 @@ def _error_response(error: AgentError, status_code: int = 400) -> JSONResponse:
 
 
 def _bundle_from_dict(ref_dict: dict[str, Any], generation: int) -> LocatorBundle:
-    key_parts = [
-        ref_dict.get("resource_id", ""),
-        ref_dict.get("class", ""),
-        str(ref_dict.get("bounds", [])),
-    ]
-    ancestry_hash = md5("|".join(key_parts).encode()).hexdigest()[:8]
-    return LocatorBundle(
-        ref=ref_dict["ref"],
-        generation=generation,
-        resource_id=ref_dict.get("resource_id"),
-        content_desc=ref_dict.get("content_desc"),
-        text=ref_dict.get("text"),
-        class_name=ref_dict.get("class", ""),
-        bounds=ref_dict.get("bounds", [0, 0, 0, 0]),
-        ancestry_hash=ancestry_hash,
-        index=ref_dict.get("index", 0),
-    )
+    bundle = LocatorBundle.from_dict(ref_dict, generation=generation)
+    if not bundle.ancestry_hash:
+        bundle.ancestry_hash = md5(bundle.ancestry_path.encode()).hexdigest()[:8]
+    return bundle
 
 
 def _format_file_matches(matches: list[FileMatch]) -> str:
@@ -171,6 +201,86 @@ def _selector_from_locator(locator: LocatorBundle) -> dict[str, str] | None:
     if locator.text:
         return {"text": locator.text}
     return None
+
+
+def _json_body_from_bytes(body: bytes, content_type: str) -> dict[str, Any] | None:
+    """Best-effort JSON body extraction for diagnostics middleware."""
+    if "application/json" not in content_type:
+        return None
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+async def _read_response_body(response: Response) -> bytes:
+    """Read a response body whether FastAPI returned a buffered or streamed response."""
+    body = getattr(response, "body", None)
+    if isinstance(body, (bytes, bytearray)):
+        return bytes(body)
+
+    body_iterator = cast(AsyncIterator[bytes] | None, getattr(response, "body_iterator", None))
+    if body_iterator is None:
+        return b""
+
+    chunks = [chunk async for chunk in body_iterator]
+    return b"".join(chunks)
+
+
+async def _response_with_diagnostic_id(
+    response: Response,
+    diagnostic_id: str,
+) -> tuple[Response, dict[str, Any] | None]:
+    """Attach diagnostic metadata to JSON responses and headers."""
+    body = await _read_response_body(response)
+    content_type = response.headers.get("content-type", response.media_type or "")
+    headers = {key: value for key, value in response.headers.items() if key.lower() != "content-length"}
+    headers["x-diagnostic-id"] = diagnostic_id
+
+    payload = _json_body_from_bytes(body, content_type)
+    if payload is None:
+        return (
+            Response(
+                content=body,
+                status_code=response.status_code,
+                headers=headers,
+                media_type=response.media_type,
+            ),
+            None,
+        )
+
+    if "diagnostic_id" not in payload:
+        payload["diagnostic_id"] = diagnostic_id
+    return JSONResponse(status_code=response.status_code, content=payload, headers=headers), payload
+
+
+async def _request_diagnostics_context(request: Request) -> dict[str, Any]:
+    """Extract a small diagnostics context from the incoming request body."""
+    context: dict[str, Any] = {}
+    if request.method not in {"POST", "PUT", "PATCH"}:
+        return context
+
+    content_type = request.headers.get("content-type", "")
+    if "application/json" not in content_type:
+        return context
+
+    try:
+        body = await request.body()
+        if not body:
+            return context
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        return context
+
+    if not isinstance(payload, dict):
+        return context
+
+    for key in ("session_id", "serial", "ref", "package"):
+        if key in payload:
+            context[key] = payload[key]
+    context["request"] = payload
+    return context
 
 
 async def _resolve_device_target(
@@ -217,6 +327,57 @@ async def _resolve_locator(
         return _bundle_from_dict(ref_dict, generation), generation < current_generation
 
     return None, False
+
+
+async def _current_generation_refs(
+    core: DaemonCore,
+    session_id: str,
+    generation: int,
+) -> list[LocatorBundle]:
+    """Load the latest generation refs from memory, falling back to SQLite."""
+    refs = core.ref_resolver.get_generation_refs(session_id, generation)
+    if refs:
+        return refs
+    stored_refs = await core.database.get_refs_for_generation(session_id, generation)
+    return [_bundle_from_dict(ref_dict, generation) for ref_dict in stored_refs]
+
+
+async def _rebind_stale_locator(
+    core: DaemonCore,
+    session_id: str,
+    locator: LocatorBundle,
+    current_generation: int,
+) -> LocatorBundle | None:
+    """Rebind a stale locator against the newest known snapshot generation."""
+    rebound = core.ref_resolver.rebind_locator(session_id, locator, current_generation)
+    if rebound:
+        return rebound
+    current_refs = await _current_generation_refs(core, session_id, current_generation)
+    return core.ref_resolver.match_locator(locator, current_refs)
+
+
+async def _resolve_ref_target(
+    core: DaemonCore,
+    session_id: str,
+    ref: str,
+    current_generation: int,
+) -> tuple[LocatorBundle | None, str | None]:
+    """Resolve a ref and rebind it when a fresher snapshot exists."""
+    locator, is_stale = await _resolve_locator(core, session_id, ref, current_generation)
+    if not locator:
+        return None, None
+    if not is_stale:
+        return locator, None
+
+    rebound = await _rebind_stale_locator(core, session_id, locator, current_generation)
+    if rebound:
+        warning = (
+            f"Used stale ref {ref}; rebound against generation {current_generation}. "
+            "Take a new snapshot for reliable refs."
+        )
+        return rebound, warning
+
+    return locator, None
 
 
 @app.get("/health")
@@ -459,8 +620,9 @@ async def ui_snapshot(req: SnapshotRequest) -> EndpointResponse:
         )
 
     snapshot_dict = snapshot.to_dict()
-    core.ref_resolver.store_refs(req.session_id, generation, snapshot_dict["elements"])
-    await core.database.save_refs(req.session_id, generation, snapshot_dict["elements"])
+    ref_payloads = snapshot.ref_payloads()
+    core.ref_resolver.store_refs(req.session_id, generation, ref_payloads)
+    await core.database.save_refs(req.session_id, generation, ref_payloads)
 
     snapshot_json = json.dumps(snapshot_dict, ensure_ascii=True)
     await core.session_manager.update_snapshot(req.session_id, snapshot_dict, snapshot_json)
@@ -529,34 +691,23 @@ async def action_tap(req: ActionRequest) -> EndpointResponse:
 
     # Handle different selector types
     if isinstance(selector, RefSelector):
-        # Use existing ref resolution logic
-        locator, is_stale = await _resolve_locator(
+        locator, warning = await _resolve_ref_target(
             core, req.session_id, selector.ref, session.generation
         )
         if not locator:
             return _error_response(not_found_error(selector.ref), status_code=404)
 
-        if is_stale:
-            # Try re-identification using resource_id (conservative approach)
-            if locator.resource_id:
-                element = device(resourceId=locator.resource_id)
-                exists = await asyncio.to_thread(element.exists)
-                if exists:
-                    # Found via resource_id, proceed with warning
-                    await asyncio.to_thread(element.click)
-                    return {
-                        "status": "done",
-                        "selector": selector.ref,
-                        "warning": f"Used stale ref {selector.ref}; take a new snapshot for reliable refs",
-                    }
-            # Could not re-identify, fail with stale ref error
+        if warning is None and locator.generation < session.generation:
             return _error_response(
                 stale_ref_error(selector.ref, locator.generation, session.generation),
                 status_code=409,
             )
 
         result = await core.action_executor.execute(device, ActionType.TAP, locator)
-        return result.to_dict()
+        payload = result.to_dict()
+        if warning and payload.get("status") == "done":
+            payload["warning"] = warning
+        return payload
 
     elif isinstance(selector, CoordsSelector):
         # Direct coordinate tap without element lookup
@@ -638,17 +789,20 @@ async def _action_with_locator(
     if not device:
         return _error_response(device_offline_error(session.device_serial), status_code=404)
 
-    locator, is_stale = await _resolve_locator(core, req.session_id, req.ref, session.generation)
+    locator, warning = await _resolve_ref_target(core, req.session_id, req.ref, session.generation)
     if not locator:
         return _error_response(not_found_error(req.ref), status_code=404)
-    if is_stale:
+    if warning is None and locator.generation < session.generation:
         return _error_response(
             stale_ref_error(req.ref, locator.generation, session.generation),
             status_code=409,
         )
 
     result = await core.action_executor.execute(device, action, locator, **kwargs)
-    return result.to_dict()
+    payload = result.to_dict()
+    if warning and payload.get("status") == "done":
+        payload["warning"] = warning
+    return payload
 
 
 @app.post("/wait/idle", response_model=None)
@@ -711,17 +865,11 @@ async def wait_exists(req: WaitSelectorRequest) -> EndpointResponse:
         return _error_response(device_offline_error(session.device_serial), status_code=404)
 
     selector = req.selector
+    warning: str | None = None
     if req.ref:
-        locator, is_stale = await _resolve_locator(
-            core, req.session_id, req.ref, session.generation
-        )
+        locator, warning = await _resolve_ref_target(core, req.session_id, req.ref, session.generation)
         if not locator:
             return _error_response(not_found_error(req.ref), status_code=404)
-        if is_stale:
-            return _error_response(
-                stale_ref_error(req.ref, locator.generation, session.generation),
-                status_code=409,
-            )
         selector = _selector_from_locator(locator)
 
     if not selector:
@@ -737,7 +885,10 @@ async def wait_exists(req: WaitSelectorRequest) -> EndpointResponse:
 
     timeout = (req.timeout_ms or 0) / 1000 if req.timeout_ms else None
     result = await core.wait_engine.wait_exists(device, selector, timeout=timeout)
-    return result.to_dict()
+    payload = result.to_dict()
+    if req.ref and warning:
+        payload["warning"] = warning
+    return payload
 
 
 @app.post("/wait/gone", response_model=None)
@@ -752,17 +903,11 @@ async def wait_gone(req: WaitSelectorRequest) -> EndpointResponse:
         return _error_response(device_offline_error(session.device_serial), status_code=404)
 
     selector = req.selector
+    warning: str | None = None
     if req.ref:
-        locator, is_stale = await _resolve_locator(
-            core, req.session_id, req.ref, session.generation
-        )
+        locator, warning = await _resolve_ref_target(core, req.session_id, req.ref, session.generation)
         if not locator:
             return _error_response(not_found_error(req.ref), status_code=404)
-        if is_stale:
-            return _error_response(
-                stale_ref_error(req.ref, locator.generation, session.generation),
-                status_code=409,
-            )
         selector = _selector_from_locator(locator)
 
     if not selector:
@@ -778,7 +923,10 @@ async def wait_gone(req: WaitSelectorRequest) -> EndpointResponse:
 
     timeout = (req.timeout_ms or 0) / 1000 if req.timeout_ms else None
     result = await core.wait_engine.wait_gone(device, selector, timeout=timeout)
-    return result.to_dict()
+    payload = result.to_dict()
+    if req.ref and warning:
+        payload["warning"] = warning
+    return payload
 
 
 @app.post("/artifacts/save_snapshot", response_model=None)

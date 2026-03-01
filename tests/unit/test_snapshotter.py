@@ -141,6 +141,91 @@ class TestInteractiveFilter:
 
         assert len(snapshot.elements) == 0
 
+    def test_compact_mode_promotes_child_text_to_clickable_container(self) -> None:
+        """Compact snapshots should keep clickable rows discoverable without extra text noise."""
+        xml = b"""<hierarchy>
+            <node class="android.widget.FrameLayout" bounds="[0,0][1080,2400]">
+                <node class="android.widget.LinearLayout"
+                      clickable="true"
+                      bounds="[0,200][1080,400]">
+                    <node class="android.widget.TextView"
+                          text="Settings"
+                          bounds="[32,240][400,320]" />
+                </node>
+            </node>
+        </hierarchy>"""
+
+        snapshotter = UISnapshotter()
+        snapshot = snapshotter.parse_hierarchy(xml, "s-1", 1, {}, {})
+
+        assert len(snapshot.elements) == 1
+        assert snapshot.elements[0].class_name == "android.widget.LinearLayout"
+        assert snapshot.elements[0].label == "Settings"
+        assert snapshot.elements[0].text is None
+
+    def test_full_mode_keeps_structure_and_text_nodes(self) -> None:
+        """Full snapshots should preserve container and text nodes."""
+        xml = b"""<hierarchy>
+            <node class="android.widget.FrameLayout" bounds="[0,0][1080,2400]">
+                <node class="android.widget.LinearLayout"
+                      clickable="true"
+                      bounds="[0,200][1080,400]">
+                    <node class="android.widget.TextView"
+                          text="Settings"
+                          bounds="[32,240][400,320]" />
+                </node>
+            </node>
+        </hierarchy>"""
+
+        snapshotter = UISnapshotter()
+        snapshot = snapshotter.parse_hierarchy(
+            xml,
+            "s-1",
+            1,
+            {},
+            {},
+            interactive_only=False,
+        )
+
+        classes = [element.class_name for element in snapshot.elements]
+        assert "android.widget.FrameLayout" in classes
+        assert "android.widget.LinearLayout" in classes
+        assert "android.widget.TextView" in classes
+
+    def test_compose_checkbox_role_comes_from_semantic_state(self) -> None:
+        """Compose-style generic hosts should still infer checkbox semantics."""
+        xml = b"""<hierarchy>
+            <node class="android.view.View"
+                  checkable="true"
+                  checked="true"
+                  clickable="true"
+                  text="Remember me"
+                  bounds="[0,0][100,100]" />
+        </hierarchy>"""
+
+        snapshotter = UISnapshotter()
+        snapshot = snapshotter.parse_hierarchy(xml, "s-1", 1, {}, {})
+
+        assert len(snapshot.elements) == 1
+        assert snapshot.elements[0].role == "checkbox"
+        assert snapshot.elements[0].state["checked"] is True
+
+    def test_litho_view_is_kept_when_it_carries_accessible_label(self) -> None:
+        """Litho host views should not be filtered out when they expose accessibility text."""
+        xml = b"""<hierarchy>
+            <node class="com.facebook.litho.LithoView"
+                  clickable="true"
+                  content-desc="Continue"
+                  bounds="[0,0][300,120]" />
+        </hierarchy>"""
+
+        snapshotter = UISnapshotter()
+        snapshot = snapshotter.parse_hierarchy(xml, "s-1", 1, {}, {})
+
+        assert len(snapshot.elements) == 1
+        assert snapshot.elements[0].label == "Continue"
+        assert snapshot.elements[0].role == "clickable"
+
 
 class TestSnapshotSizeWarning:
     """Tests for snapshot size warning."""

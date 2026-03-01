@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
+import pytest
+
 from android_emu_agent.actions.executor import ActionExecutor, RetryPolicy, SwipeDirection
+from android_emu_agent.ui.ref_resolver import LocatorBundle
 
 
 class TestRetryPolicyDefaults:
@@ -206,3 +211,85 @@ class TestCalculateSwipeCoords:
         full_distance = abs(start_full[1] - end_full[1])
         small_distance = abs(start_small[1] - end_small[1])
         assert full_distance > small_distance
+
+
+class TestFrameworkFriendlyLookup:
+    """Tests for Compose/Litho-friendly element lookup heuristics."""
+
+    @pytest.mark.asyncio
+    async def test_find_element_uses_proxy_label_for_generic_host_views(self) -> None:
+        """Proxy labels should be used before falling back to coordinates."""
+        executor = ActionExecutor()
+        device = MagicMock()
+        label_element = MagicMock()
+        label_element.exists.return_value = True
+        coordinate_element = MagicMock()
+        coordinate_element.exists.return_value = False
+
+        def _select(**kwargs: str) -> MagicMock:
+            if kwargs == {"description": "Settings"}:
+                return label_element
+            if kwargs == {"text": "Settings"}:
+                return label_element
+            return coordinate_element
+
+        device.side_effect = _select
+
+        locator = LocatorBundle(
+            ref="^a1",
+            generation=2,
+            resource_id=None,
+            content_desc=None,
+            text=None,
+            class_name="android.view.View",
+            bounds=[10, 10, 50, 50],
+            ancestry_hash="abc123",
+            index=0,
+            role="clickable",
+            state={"clickable": True},
+            label="Settings",
+        )
+
+        element = await executor._find_element(device, locator)
+
+        assert element is label_element
+        device.assert_any_call(description="Settings")
+
+    @pytest.mark.asyncio
+    async def test_find_element_prefers_exact_resource_id_before_label_fallback(self) -> None:
+        """Classic IDs and Compose test tags should still be the first lookup strategy."""
+        executor = ActionExecutor()
+        device = MagicMock()
+        resource_element = MagicMock()
+        resource_element.exists.return_value = True
+        label_element = MagicMock()
+        label_element.exists.return_value = True
+
+        def _select(**kwargs: str) -> MagicMock:
+            if kwargs == {"resourceId": "compose_login_button"}:
+                return resource_element
+            if kwargs == {"description": "Login"}:
+                return label_element
+            return label_element
+
+        device.side_effect = _select
+
+        locator = LocatorBundle(
+            ref="^a2",
+            generation=2,
+            resource_id="compose_login_button",
+            content_desc=None,
+            text=None,
+            class_name="android.view.View",
+            bounds=[10, 10, 50, 50],
+            ancestry_hash="abc123",
+            index=0,
+            role="clickable",
+            state={"clickable": True},
+            label="Login",
+        )
+
+        element = await executor._find_element(device, locator)
+
+        assert element is resource_element
+        device.assert_called_with(resourceId="compose_login_button")

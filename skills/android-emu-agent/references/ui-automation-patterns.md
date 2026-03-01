@@ -95,7 +95,9 @@ Strategy:
 
 ## Dealing With Stale Refs
 
-`ERR_STALE_REF` occurs when an `^ref` from a previous snapshot no longer matches a current element.
+`ERR_STALE_REF` occurs when an `^ref` from a previous snapshot can no longer be confidently matched
+to the current UI. In some cases the daemon can auto-heal the ref and return a warning instead of a
+hard failure.
 
 Common causes:
 
@@ -108,16 +110,16 @@ Common causes:
 Recovery flow:
 
 ```bash
-# Action fails with ERR_STALE_REF
+# Action may fail with ERR_STALE_REF or succeed with a warning
 uv run android-emu-agent action tap s-abc123 ^a3
-# Error: ERR_STALE_REF - Element ^a3 not found or bounds changed
+# Possible result: status=done, warning="Used stale ref ..."
 
-# Recovery: Take fresh snapshot
+# Recovery: refresh refs before the next action
 uv run android-emu-agent ui snapshot s-abc123
 # Find the element again by its characteristics
 # ^a5 now has the same label "Submit"
 
-# Use new ref
+# Use new ref for subsequent actions
 uv run android-emu-agent action tap s-abc123 ^a5
 ```
 
@@ -127,6 +129,7 @@ Prevention tips:
 2. Wait for stability with `wait idle`
 3. Avoid acting during animations
 4. Re-snapshot after any delay
+5. On Compose/Litho screens, prefer semantic labels, descriptions, and test tags over class names
 
 For structured multi-level recovery, see `references/recovery.md`.
 

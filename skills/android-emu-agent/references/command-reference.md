@@ -10,6 +10,9 @@ globally, replace with `android-emu-agent <command>`.
 Most commands accept `--json` for machine-readable JSON output (useful for scripting or when you
 need to parse structured results programmatically).
 
+JSON responses also include `diagnostic_id`, and the same value is returned in the `x-diagnostic-id`
+header for request-level tracing.
+
 ### CLI
 
 - `version` Show version information.
@@ -40,13 +43,14 @@ need to parse structured results programmatically).
 
 ### UI
 
-- `ui snapshot <session_id>` Get interactive UI elements.
+- `ui snapshot <session_id>` Get actionable UI elements.
 - `ui snapshot <session_id> --format text` Compact text output.
 - `ui screenshot [<session_id>] [--device <serial> | --session <session_id>] [--pull] [--output <path>]`
   Capture screen image (optionally copy to local path).
 
-Use `--full` when the target element is not in the default interactive-only snapshot (e.g., labels,
-images, non-clickable containers):
+Default compact snapshots are actionable and work well on classic XML views plus modern frameworks
+such as Compose and Litho. Use `--full` when the target element is not in the default actionable
+snapshot (e.g., labels, images, non-clickable containers):
 
 - `ui snapshot <session_id> --full` Include all nodes (not just interactive).
 - `ui snapshot <session_id> --raw` Return raw XML hierarchy (for low-level debugging of the UI
@@ -64,6 +68,9 @@ images, non-clickable containers):
 - `action swipe <dir> -s <session_id>` Swipe gesture.
 - `action scroll <dir> -s <session_id>` Scroll gesture.
 
+If a stale `^ref` can be rebound against the latest snapshot generation, action responses may return
+`status=done` with a `warning`. Re-snapshot before the next action.
+
 ### Wait
 
 - `wait idle <session_id>` Wait for UI idle.
@@ -77,6 +84,9 @@ description:
 
 - `wait exists <session_id> --id <id> | --desc <desc> | --ref <ref>` Alternate selectors.
 - `wait gone <session_id> --id <id> | --desc <desc> | --ref <ref>` Alternate selectors.
+
+`wait exists` and `wait gone` can also heal stale refs when the daemon can confidently rebind the
+target against the latest snapshot.
 
 ### App
 

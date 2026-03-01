@@ -8,9 +8,10 @@ description:
 
 # Android Emu Agent Skill
 
-Use the `android-emu-agent` CLI + daemon to control Android UI with snapshots and ephemeral element
-refs. If you're working inside this repo, prefer `uv run android-emu-agent ...` to ensure the
-correct environment.
+Use the `android-emu-agent` CLI + daemon to control Android UI with actionable snapshots and
+generation-scoped element refs. Compact snapshots are designed to work well across classic XML
+layouts and modern frameworks such as Compose and Litho. If you're working inside this repo, prefer
+`uv run android-emu-agent ...` to ensure the correct environment.
 
 ## Quick Start
 
@@ -61,10 +62,12 @@ uv run android-emu-agent ui snapshot <session_id>
   emulator"), only ensure readiness (daemon up, device connected, session active). Do not tap,
   swipe, type, launch apps, or take any UI action until the user explicitly asks. See
   `references/behavioral-protocols.md` > Session Readiness Check.
-- One action per snapshot. Refs are ephemeral.
+- One action per snapshot. Refs are generation-scoped.
 - Re-snapshot after any action or wait.
 - Verify state changes after each action.
 - If blocked by dialogs or loading, handle the blocker first.
+- If a stale ref is auto-healed, treat the warning as a prompt to re-snapshot before the next
+  action.
 - When an action fails, follow the recovery protocol (re-snapshot, visual analysis, then ask user).
   Do not blindly retry. See `references/recovery.md`.
 - Confirm before write/destructive actions unless the user explicitly requested them. See

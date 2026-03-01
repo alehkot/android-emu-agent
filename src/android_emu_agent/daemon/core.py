@@ -5,6 +5,7 @@ import structlog
 from android_emu_agent.actions.executor import ActionExecutor
 from android_emu_agent.actions.wait import WaitEngine
 from android_emu_agent.artifacts.manager import ArtifactManager
+from android_emu_agent.daemon.diagnostics import RequestDiagnostics
 from android_emu_agent.daemon.health import HealthMonitor
 from android_emu_agent.db.models import Database
 from android_emu_agent.debugger.manager import DebugManager
@@ -36,6 +37,7 @@ class DaemonCore:
         self.debug_manager = DebugManager()
         self.context_resolver = ContextResolver()
         self.health_monitor = HealthMonitor(self.device_manager, self.session_manager)
+        self.diagnostics = RequestDiagnostics()
         self._running = False
 
     async def start(self) -> None:

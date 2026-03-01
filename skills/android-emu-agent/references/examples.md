@@ -212,16 +212,16 @@ For the full recovery protocol (limits, decision flowchart), see `references/rec
 uv run android-emu-agent ui snapshot s-abc123
 # ^a5 = "Confirm Purchase" button
 
-# Act — fails with ERR_STALE_REF
+# Act — stale ref may fail or auto-heal with a warning
 uv run android-emu-agent action tap s-abc123 ^a5
-# Error: ERR_STALE_REF - Element ^a5 not found or bounds changed
+# Possible result: status=done with warning about stale ref healing
 
 # --- Level 1: Re-snapshot Recovery ---
 
 # Wait for UI to settle
 uv run android-emu-agent wait idle s-abc123 --timeout-ms 5000
 
-# Fresh snapshot
+# Fresh snapshot to continue with reliable refs
 uv run android-emu-agent ui snapshot s-abc123
 # "Confirm Purchase" not visible in snapshot — Level 1 cannot resolve
 

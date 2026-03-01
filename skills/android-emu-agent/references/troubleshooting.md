@@ -16,7 +16,7 @@ Match your symptom to the right section:
 
 | Error                 | Cause                        | Solution                                               | Recovery        |
 | --------------------- | ---------------------------- | ------------------------------------------------------ | --------------- |
-| `ERR_STALE_REF`       | Ref from outdated snapshot   | Take fresh snapshot, find element again                | Level 1 (auto)  |
+| `ERR_STALE_REF`       | Ref from outdated snapshot   | Re-snapshot; if auto-healed, use warning as the cue    | Level 1 (auto)  |
 | `ERR_NOT_FOUND`       | Element not in current UI    | Verify correct screen, try different selector          | Level 1 (auto)  |
 | `ERR_BLOCKED_INPUT`   | Dialog/keyboard blocking     | Dismiss blocker with `back`, or `wait idle`            | Level 1 (auto)  |
 | `ERR_ACTION_FAILED`   | Action dispatched but failed | Re-snapshot, verify target state, retry                | Level 1 (auto)  |
@@ -52,6 +52,8 @@ adb start-server
 ### Elements Not Appearing in Snapshot
 
 - Element not interactive: use `--full` to see all elements.
+- Element is inside Compose/Litho and the compact snapshot pruned useful context: use `--full` or
+  `--raw` to inspect framework-emitted semantics.
 - Element in WebView: consider coordinates or WebView-specific handling.
 - Element behind dialog: dismiss dialog first.
 - Element not yet loaded: `wait idle` and re-snapshot.
@@ -68,6 +70,8 @@ uv run android-emu-agent ui snapshot <session_id>
 
 - Element not enabled: check `state.enabled`.
 - Element not clickable: tap parent/child or use coordinates.
+- Compose/Litho host view: rely on semantic labels, content descriptions, or test tags rather than
+  class names alone.
 - Dialog blocking input: dismiss first.
 - Animation in progress: `wait idle`.
 - Try `long-tap` for stubborn elements.
@@ -87,6 +91,19 @@ When an action fails during an automation flow, use the structured recovery prot
 - **Level 3 (interactive):** Present state and options to user for guidance
 
 See `references/recovery.md` for the full protocol, limits, and decision flowchart.
+
+### Request Diagnostics
+
+Every JSON response includes `diagnostic_id`, and the same value is also returned in the
+`x-diagnostic-id` header.
+
+Daemon request logs are persisted to:
+
+```text
+~/.android-emu-agent/diagnostics/requests.ndjson
+```
+
+Use that ID to correlate request failures, stale-ref healing warnings, and endpoint timing.
 
 ### App Keeps Crashing
 

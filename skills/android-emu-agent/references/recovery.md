@@ -7,14 +7,14 @@ Structured 3-level escalation when an action fails. Each level is progressively 
 
 ## When to Trigger
 
-| Error Code          | Start At | Notes                                         |
-| ------------------- | -------- | --------------------------------------------- |
-| `ERR_STALE_REF`     | Level 1  | Ref expired; re-snapshot usually resolves     |
-| `ERR_NOT_FOUND`     | Level 1  | Element missing from current hierarchy        |
-| `ERR_BLOCKED_INPUT` | Level 1  | Dialog or keyboard blocking; dismiss first    |
-| `ERR_ACTION_FAILED` | Level 1  | Action dispatched but did not succeed         |
-| `ERR_TIMEOUT`       | Level 2  | Wait condition never met; needs visual check  |
-| `ERR_NO_LOCATOR`    | Level 2  | No locator strategy resolved; deeper analysis |
+| Error Code          | Start At | Notes                                             |
+| ------------------- | -------- | ------------------------------------------------- |
+| `ERR_STALE_REF`     | Level 1  | Ref expired; daemon may heal it, then re-snapshot |
+| `ERR_NOT_FOUND`     | Level 1  | Element missing from current hierarchy            |
+| `ERR_BLOCKED_INPUT` | Level 1  | Dialog or keyboard blocking; dismiss first        |
+| `ERR_ACTION_FAILED` | Level 1  | Action dispatched but did not succeed             |
+| `ERR_TIMEOUT`       | Level 2  | Wait condition never met; needs visual check      |
+| `ERR_NO_LOCATOR`    | Level 2  | No locator strategy resolved; deeper analysis     |
 
 Not recoverable (stop and report):
 
@@ -26,6 +26,7 @@ Not recoverable (stop and report):
 
 Cost: low. Two CLI calls at most.
 
+1. Check whether the failing response already returned a stale-ref healing `warning`
 1. `wait idle` for UI to settle (timeout 3-5 s)
 1. Take a fresh `ui snapshot`
 1. Search for the target element by its characteristics (text, description, role, resource_id)
@@ -45,6 +46,9 @@ uv run android-emu-agent ui snapshot <session_id>
 uv run android-emu-agent action tap <session_id> ^<new_ref>
 ```
 
+If the original action succeeded with a warning rather than returning `ERR_STALE_REF`, skip straight
+to the verification step and refresh refs before the next action.
+
 ## Level 2: Visual / Screenshot Recovery (Automatic)
 
 Cost: medium. Screenshot + full snapshot + corrective action.
@@ -53,15 +57,18 @@ Cost: medium. Screenshot + full snapshot + corrective action.
 1. `ui snapshot --full` to see all elements (including non-interactive)
 1. Analyze the combined evidence to determine root cause:
 
-| Diagnosis             | Corrective Action                                       |
-| --------------------- | ------------------------------------------------------- |
-| Element off-screen    | Scroll in the appropriate direction, re-snapshot        |
-| Element behind dialog | Dismiss the dialog (tap dismiss / back), re-snapshot    |
-| Wrong activity        | Navigate back or launch correct activity, re-snapshot   |
-| Inside WebView        | Use coordinate-based tap (`action tap-xy`), re-snapshot |
-| App in error state    | Handle error (dismiss, retry, reset), re-snapshot       |
+| Diagnosis             | Corrective Action                                              |
+| --------------------- | -------------------------------------------------------------- |
+| Element off-screen    | Scroll in the appropriate direction, re-snapshot               |
+| Element behind dialog | Dismiss the dialog (tap dismiss / back), re-snapshot           |
+| Wrong activity        | Navigate back or launch correct activity, re-snapshot          |
+| Inside WebView        | Use coordinate-based action or alternate strategy, re-snapshot |
+| App in error state    | Handle error (dismiss, retry, reset), re-snapshot              |
 
 1. After corrective action, take a fresh snapshot and retry the original action
+
+The screenshot is the observation/debug fallback, not the default action fallback. Use it to decide
+what to do next when snapshot-based recovery is insufficient.
 
 Max corrective actions: **3**. If the target is still unreachable → escalate to Level 3.
 

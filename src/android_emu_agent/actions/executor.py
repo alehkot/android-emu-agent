@@ -243,7 +243,14 @@ class ActionExecutor:
             if await asyncio.to_thread(element.exists):
                 return element
 
-        # Strategy 4: bounds (coordinate fallback)
+        # Strategy 4: semantic label fallback for Compose/Litho host views
+        if locator.label and locator.label not in {locator.text, locator.content_desc}:
+            for kwargs in ({"description": locator.label}, {"text": locator.label}):
+                element = device(**kwargs)
+                if await asyncio.to_thread(element.exists):
+                    return element
+
+        # Strategy 5: bounds (coordinate fallback)
         if locator.bounds and len(locator.bounds) == 4:
             # Calculate center point
             x = (locator.bounds[0] + locator.bounds[2]) // 2

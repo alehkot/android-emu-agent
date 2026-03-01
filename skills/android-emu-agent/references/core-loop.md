@@ -11,7 +11,9 @@ Request a UI snapshot to see interactive elements:
 uv run android-emu-agent ui snapshot <session_id>
 ```
 
-The snapshot returns context and interactive elements with ephemeral `^ref` handles.
+The snapshot returns context and actionable elements with generation-scoped `^ref` handles. Compact
+actionable filtering is intended to work across classic XML layouts and modern frameworks such as
+Compose and Litho by preferring semantic labels and hittable containers over layout noise.
 
 Example snapshot output:
 
@@ -37,8 +39,8 @@ Example snapshot output:
 ```
 
 Use `--format text` for a compact line-oriented summary. Use `--full` when the target element is not
-in the default interactive-only snapshot (e.g., labels, images, non-clickable containers). Use
-`--raw` for the raw XML hierarchy when debugging the UI tree structure.
+in the default actionable snapshot (e.g., labels, images, non-clickable containers). Use `--raw` for
+the raw XML hierarchy when debugging the UI tree structure or framework-specific semantics.
 
 ## Decide
 
@@ -70,7 +72,8 @@ uv run android-emu-agent action set-text <session_id> ^a2 "username"
 uv run android-emu-agent action back <session_id>
 ```
 
-Refs are ephemeral and tied to a specific snapshot generation. After any action, take a new snapshot
+Refs are tied to a specific snapshot generation. The daemon may heal a stale ref against the newest
+snapshot when it can confidently rebind the same element, but you should still take a new snapshot
 before acting again.
 
 If an action fails, follow the Action Failure Recovery Protocol (`references/recovery.md`): Level 1

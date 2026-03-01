@@ -80,6 +80,105 @@ class TestRefResolver:
         bundle, _ = resolver.resolve_ref("s-1", "^a1", current_generation=1)
         assert bundle is None
 
+    def test_rebind_locator_uses_selector_chain_against_latest_generation(self) -> None:
+        """Should rebind stale refs to a newer generation using stored selector chains."""
+        resolver = RefResolver()
+
+        resolver.store_refs(
+            "s-1",
+            generation=1,
+            elements=[
+                {
+                    "ref": "^a1",
+                    "label": "Settings",
+                    "class": "android.widget.LinearLayout",
+                    "bounds": [0, 100, 100, 160],
+                    "index": 0,
+                    "ancestry_path": "hierarchy/android.widget.FrameLayout/android.widget.LinearLayout",
+                    "element_hash": "same-row",
+                    "selector_chain": [
+                        {"kind": "label", "value": "Settings"},
+                        {"kind": "class_name", "value": "android.widget.LinearLayout"},
+                    ],
+                }
+            ],
+        )
+        resolver.store_refs(
+            "s-1",
+            generation=2,
+            elements=[
+                {
+                    "ref": "^a9",
+                    "resource_id": "com.test:id/settings_row",
+                    "label": "Settings",
+                    "class": "android.widget.LinearLayout",
+                    "bounds": [0, 300, 100, 360],
+                    "index": 0,
+                    "ancestry_path": "hierarchy/android.widget.FrameLayout/android.widget.LinearLayout",
+                    "element_hash": "same-row",
+                    "selector_chain": [
+                        {"kind": "resource_id", "value": "com.test:id/settings_row"},
+                        {"kind": "label", "value": "Settings"},
+                    ],
+                }
+            ],
+        )
+
+        stale_locator, is_stale = resolver.resolve_ref("s-1", "^a1", current_generation=2)
+
+        assert stale_locator is not None
+        assert is_stale is True
+
+        rebound = resolver.rebind_locator("s-1", stale_locator, current_generation=2)
+
+        assert rebound is not None
+        assert rebound.ref == "^a9"
+        assert rebound.resource_id == "com.test:id/settings_row"
+
+    def test_rebind_locator_normalizes_compose_test_tag_resource_ids(self) -> None:
+        """Compose test tags should match whether or not a package prefix is present."""
+        resolver = RefResolver()
+
+        resolver.store_refs(
+            "s-1",
+            generation=1,
+            elements=[
+                {
+                    "ref": "^a1",
+                    "resource_id": "compose_login_button",
+                    "role": "clickable",
+                    "state": {"clickable": True},
+                    "class": "android.view.View",
+                    "bounds": [0, 0, 100, 100],
+                }
+            ],
+        )
+        resolver.store_refs(
+            "s-1",
+            generation=2,
+            elements=[
+                {
+                    "ref": "^a4",
+                    "resource_id": "com.example:id/compose_login_button",
+                    "role": "clickable",
+                    "state": {"clickable": True},
+                    "class": "android.view.View",
+                    "bounds": [20, 20, 120, 120],
+                }
+            ],
+        )
+
+        stale_locator, is_stale = resolver.resolve_ref("s-1", "^a1", current_generation=2)
+
+        assert stale_locator is not None
+        assert is_stale is True
+
+        rebound = resolver.rebind_locator("s-1", stale_locator, current_generation=2)
+
+        assert rebound is not None
+        assert rebound.ref == "^a4"
+        assert rebound.resource_id == "com.example:id/compose_login_button"
+
 
 class TestLocatorBundle:
     """Tests for LocatorBundle creation."""
