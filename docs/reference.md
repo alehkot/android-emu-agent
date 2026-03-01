@@ -1673,7 +1673,71 @@ android-emu-agent emulator [OPTIONS] COMMAND [ARGS]...
 
 **Commands**:
 
+- `list-avds`: List available Android Virtual Devices.
+- `start`: Start an AVD using the Android emulator CLI.
+- `stop`: Stop a running emulator instance.
 - `snapshot`: Emulator snapshot commands
+
+### `android-emu-agent emulator list-avds`
+
+List available Android Virtual Devices.
+
+**Usage**:
+
+```console
+android-emu-agent emulator list-avds [OPTIONS]
+```
+
+**Options**:
+
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent emulator start`
+
+Start an AVD using the Android emulator CLI.
+
+**Usage**:
+
+```console
+android-emu-agent emulator start [OPTIONS] AVD_NAME
+```
+
+**Arguments**:
+
+- `AVD_NAME`: AVD name from &#x27;emulator -list-avds&#x27; [required]
+
+**Options**:
+
+- `--snapshot TEXT`: Snapshot name to load on boot
+- `--wipe-data`: Wipe userdata before boot
+- `--cold-boot`: Start without loading Quick Boot or snapshot state
+- `--no-snapshot-save`: Do not save Quick Boot state on exit
+- `--read-only`: Start the AVD in read-only mode
+- `--no-window`: Run the emulator headless
+- `--port INTEGER`: Console port to use for the emulator instance
+- `--wait-boot / --no-wait-boot`: Wait for boot before returning [default: wait-boot]
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent emulator stop`
+
+Stop a running emulator instance.
+
+**Usage**:
+
+```console
+android-emu-agent emulator stop [OPTIONS] SERIAL
+```
+
+**Arguments**:
+
+- `SERIAL`: Running emulator serial (e.g., emulator-5554) [required]
+
+**Options**:
+
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
 
 ### `android-emu-agent emulator snapshot`
 
@@ -1692,7 +1756,7 @@ android-emu-agent emulator snapshot [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 - `save`: Save emulator snapshot.
-- `restore`: Restore emulator snapshot.
+- `restore`: Restore emulator snapshot and restart by...
 
 #### `android-emu-agent emulator snapshot save`
 
@@ -1716,7 +1780,7 @@ android-emu-agent emulator snapshot save [OPTIONS] SERIAL NAME
 
 #### `android-emu-agent emulator snapshot restore`
 
-Restore emulator snapshot.
+Restore emulator snapshot and restart by default.
 
 **Usage**:
 
@@ -1731,6 +1795,7 @@ android-emu-agent emulator snapshot restore [OPTIONS] SERIAL NAME
 
 **Options**:
 
+- `--restart / --no-restart`: Restart after loading the snapshot [default: restart]
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 

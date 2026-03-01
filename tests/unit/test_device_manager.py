@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import subprocess
-from unittest.mock import AsyncMock, MagicMock, patch
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
@@ -490,6 +491,136 @@ class TestEmulatorSnapshot:
     """Tests for emulator snapshot methods."""
 
     @pytest.mark.asyncio
+    async def test_list_avds(self) -> None:
+        """Should list AVD names from emulator CLI output."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="Pixel_8_API_34\nTablet_API_33\n",
+            stderr="",
+        )
+
+        with (
+            patch.object(
+                manager,
+                "_resolve_sdk_tool",
+                return_value=Path("/sdk/emulator/emulator"),
+            ),
+            patch.object(
+                manager,
+                "_run_host_command",
+                AsyncMock(return_value=completed),
+            ) as mock_run_host,
+        ):
+            avds = await manager.emulator_list_avds()
+
+        assert avds == ["Pixel_8_API_34", "Tablet_API_33"]
+        mock_run_host.assert_awaited_once_with(
+            ["/sdk/emulator/emulator", "-list-avds"],
+            tool="emulator",
+        )
+
+    @pytest.mark.asyncio
+    async def test_emulator_start(self) -> None:
+        """Should build emulator CLI args and wait for boot by default."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        process = MagicMock()
+        process.pid = 4321
+
+        with (
+            patch.object(
+                manager,
+                "emulator_list_avds",
+                AsyncMock(return_value=["Pixel_8_API_34"]),
+            ),
+            patch.object(
+                manager,
+                "_resolve_sdk_tool",
+                return_value=Path("/sdk/emulator/emulator"),
+            ),
+            patch.object(
+                manager,
+                "_list_running_emulator_serials",
+                AsyncMock(return_value=set()),
+            ),
+            patch.object(
+                manager,
+                "_spawn_emulator_process",
+                AsyncMock(return_value=process),
+            ) as mock_spawn,
+            patch.object(
+                manager,
+                "_wait_for_new_emulator_serial",
+                AsyncMock(return_value="emulator-5554"),
+            ) as mock_wait_serial,
+            patch.object(manager, "_wait_for_emulator_ready", AsyncMock()) as mock_wait_ready,
+        ):
+            result = await manager.emulator_start(
+                "Pixel_8_API_34",
+                snapshot="clean",
+                no_snapshot_save=True,
+                read_only=True,
+                no_window=True,
+                port=5554,
+            )
+
+        mock_spawn.assert_awaited_once_with(
+            [
+                "/sdk/emulator/emulator",
+                "-avd",
+                "Pixel_8_API_34",
+                "-port",
+                "5554",
+                "-snapshot",
+                "clean",
+                "-no-snapshot-save",
+                "-read-only",
+                "-no-window",
+            ],
+            "Pixel_8_API_34",
+        )
+        mock_wait_serial.assert_awaited_once_with(
+            "Pixel_8_API_34",
+            set(),
+            expected_serial="emulator-5554",
+            process=process,
+        )
+        mock_wait_ready.assert_awaited_once_with("emulator-5554", timeout_s=180.0)
+        assert result == {
+            "avd_name": "Pixel_8_API_34",
+            "serial": "emulator-5554",
+            "pid": 4321,
+            "wait_boot": True,
+        }
+
+    @pytest.mark.asyncio
+    async def test_emulator_stop(self) -> None:
+        """Should stop a running emulator through adb emu kill."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+
+        with (
+            patch.object(manager, "evict_device", AsyncMock()) as mock_evict,
+            patch.object(manager, "_run_adb", AsyncMock()) as mock_run_adb,
+            patch.object(
+                manager,
+                "_wait_for_emulator_disconnect",
+                AsyncMock(),
+            ) as mock_wait_disconnect,
+        ):
+            await manager.emulator_stop("emulator-5554")
+
+        mock_evict.assert_awaited_once_with("emulator-5554")
+        mock_run_adb.assert_awaited_once_with("emulator-5554", ["emu", "kill"])
+        mock_wait_disconnect.assert_awaited_once_with("emulator-5554")
+
+    @pytest.mark.asyncio
     async def test_snapshot_save(self) -> None:
         """Should save emulator snapshot."""
         from android_emu_agent.device.manager import DeviceManager
@@ -516,26 +647,72 @@ class TestEmulatorSnapshot:
 
     @pytest.mark.asyncio
     async def test_snapshot_restore(self) -> None:
-        """Should restore emulator snapshot."""
+        """Should restore emulator snapshot via stop/load/start by default."""
         from android_emu_agent.device.manager import DeviceManager
 
         manager = DeviceManager()
 
-        with patch("asyncio.open_connection") as mock_conn:
-            mock_reader = AsyncMock()
-            mock_writer = MagicMock()
-            mock_writer.drain = AsyncMock()
-            mock_writer.wait_closed = AsyncMock()
-            mock_reader.read.side_effect = [
-                b"Android Console: type 'help' for a list of commands\r\nOK\r\n",
-                b"OK\r\n",
-            ]
-            mock_conn.return_value = (mock_reader, mock_writer)
-
+        with (
+            patch.object(manager, "evict_device", AsyncMock()) as mock_evict,
+            patch.object(manager, "_send_console_command", AsyncMock()) as mock_console,
+            patch.object(manager, "_wait_for_emulator_ready", AsyncMock()) as mock_wait,
+        ):
             await manager.emulator_snapshot_restore("emulator-5554", "baseline")
 
-            write_calls = [str(c) for c in mock_writer.write.call_args_list]
-            assert any("avd snapshot load baseline" in c for c in write_calls)
+        mock_evict.assert_awaited_once_with("emulator-5554")
+        assert mock_console.await_args_list == [
+            call(5554, "avd stop"),
+            call(5554, "avd snapshot load baseline"),
+            call(5554, "avd start"),
+        ]
+        mock_wait.assert_awaited_once_with("emulator-5554")
+
+    @pytest.mark.asyncio
+    async def test_snapshot_restore_without_restart(self) -> None:
+        """Should support live snapshot load without restarting."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+
+        with (
+            patch.object(manager, "evict_device", AsyncMock()) as mock_evict,
+            patch.object(manager, "_send_console_command", AsyncMock()) as mock_console,
+            patch.object(manager, "_wait_for_emulator_ready", AsyncMock()) as mock_wait,
+            patch.object(manager, "refresh", AsyncMock()) as mock_refresh,
+        ):
+            await manager.emulator_snapshot_restore("emulator-5554", "baseline", restart=False)
+
+        mock_evict.assert_awaited_once_with("emulator-5554")
+        mock_console.assert_awaited_once_with(5554, "avd snapshot load baseline")
+        mock_wait.assert_not_awaited()
+        mock_refresh.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_wait_for_emulator_ready(self) -> None:
+        """Should wait for ADB and boot completion after restart."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        completed = [
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="0\n", stderr=""),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="1\n", stderr=""),
+        ]
+
+        with (
+            patch.object(manager, "_run_adb", AsyncMock(side_effect=completed)) as mock_run_adb,
+            patch.object(manager, "refresh", AsyncMock()) as mock_refresh,
+            patch("asyncio.sleep", AsyncMock()) as mock_sleep,
+        ):
+            await manager._wait_for_emulator_ready("emulator-5554", timeout_s=5.0)
+
+        assert mock_run_adb.await_args_list == [
+            call("emulator-5554", ["wait-for-device"]),
+            call("emulator-5554", ["shell", "getprop", "sys.boot_completed"]),
+            call("emulator-5554", ["shell", "getprop", "sys.boot_completed"]),
+        ]
+        mock_refresh.assert_awaited_once()
+        mock_sleep.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_snapshot_not_emulator(self) -> None:

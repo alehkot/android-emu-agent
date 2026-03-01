@@ -142,6 +142,59 @@ def snapshot_failed_error(name: str, reason: str) -> AgentError:
     )
 
 
+def sdk_tool_not_found_error(tool: str) -> AgentError:
+    """Create error for missing Android SDK command-line tools."""
+    return AgentError(
+        code="ERR_SDK_TOOL_NOT_FOUND",
+        message=f"Android SDK tool not found: {tool}",
+        context={"tool": tool},
+        remediation=(
+            "Ensure ANDROID_SDK_ROOT or ANDROID_HOME is set and add the Android SDK tool directories "
+            "to PATH: platform-tools for adb, emulator for emulator, and cmdline-tools/latest/bin "
+            "for avdmanager."
+        ),
+    )
+
+
+def emulator_command_error(command: str, reason: str) -> AgentError:
+    """Create error for emulator CLI failures."""
+    return AgentError(
+        code="ERR_EMULATOR_COMMAND",
+        message=f"Emulator command failed: {command}",
+        context={"command": command, "reason": reason},
+        remediation=(
+            "Verify the emulator binary is installed, the AVD exists, and the provided flags are "
+            "valid for your Android SDK version."
+        ),
+    )
+
+
+def avd_not_found_error(avd_name: str) -> AgentError:
+    """Create error for unknown AVD names."""
+    return AgentError(
+        code="ERR_AVD_NOT_FOUND",
+        message=f"AVD not found: {avd_name}",
+        context={"avd_name": avd_name},
+        remediation=(
+            "List available AVDs with 'android-emu-agent emulator list-avds' or create one with "
+            "'avdmanager'."
+        ),
+    )
+
+
+def emulator_launch_failed_error(avd_name: str, reason: str) -> AgentError:
+    """Create error for emulator process launch failures."""
+    return AgentError(
+        code="ERR_EMULATOR_LAUNCH_FAILED",
+        message=f"Failed to start emulator for AVD '{avd_name}': {reason}",
+        context={"avd_name": avd_name, "reason": reason},
+        remediation=(
+            "Check the AVD configuration, confirm required SDK system images are installed, and "
+            "retry with fewer emulator flags if needed."
+        ),
+    )
+
+
 def invalid_package_error(package: str) -> AgentError:
     """Create error for invalid package name."""
     return AgentError(

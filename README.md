@@ -33,7 +33,7 @@ automation CLI for AI agents.
 
 - Python 3.11+
 - `uv` package manager
-- Android SDK with `adb` on PATH
+- Android SDK with `adb`, `emulator`, and ideally `avdmanager` on `PATH`
 - Android emulator or rooted device (primary target)
 - JDK 17+ (only for debugger commands; set `JAVA_HOME` or have `java` on PATH)
 
@@ -50,9 +50,38 @@ uv sync
 
 Inside this repo, prefer `uv run android-emu-agent <command>`.
 
+## Android SDK CLI Prerequisites
+
+For emulator lifecycle commands, the daemon expects Android SDK command-line tools to be available.
+It checks `PATH` first and then common SDK roots derived from `ANDROID_SDK_ROOT` / `ANDROID_HOME`.
+
+Recommended `PATH` entries:
+
+- `platform-tools` for `adb`
+- `emulator` for `emulator`
+- `cmdline-tools/latest/bin` for `avdmanager` and `sdkmanager`
+
+Example macOS setup:
+
+```bash
+export ANDROID_SDK_ROOT="$HOME/Library/Android/sdk"
+export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+
+adb version
+emulator -list-avds
+avdmanager list avd
+```
+
+If you only plan to control an already-running device, `adb` is enough. If you want
+`android-emu-agent` to boot or manage emulator instances, make `emulator` available too.
+
 ## Quick Start (2 minutes)
 
 ```bash
+# 0. Optional: boot an AVD from the CLI
+uv run android-emu-agent emulator list-avds
+uv run android-emu-agent emulator start Pixel_8_API_34 --wait-boot
+
 # 1. Start the daemon (optional, CLI will auto-start by default)
 uv run android-emu-agent daemon start
 
@@ -136,9 +165,11 @@ tap/type actions, app launches, waits, etc.).
 
 Prerequisites you may need (if the agent reports it cannot connect):
 
-1. Start the daemon: `uv run android-emu-agent daemon start`
-2. Confirm a device is visible: `uv run android-emu-agent device list`
-3. If needed, start a session explicitly:
+1. If no emulator is running yet, list and boot one: `uv run android-emu-agent emulator list-avds`
+   `uv run android-emu-agent emulator start <avd_name> --wait-boot`
+2. Start the daemon: `uv run android-emu-agent daemon start`
+3. Confirm a device is visible: `uv run android-emu-agent device list`
+4. If needed, start a session explicitly:
    `uv run android-emu-agent session start --device emulator-5554`
 
 ## Core Concepts
@@ -428,15 +459,20 @@ JDWP and monitors for VM disconnect events. Build the bridge JAR with:
 cd jdi-bridge && ./gradlew shadowJar
 ```
 
-Emulator snapshots
+Emulator lifecycle and snapshots
 
 ```bash
+uv run android-emu-agent emulator list-avds
+uv run android-emu-agent emulator start Pixel_8_API_34 --snapshot clean --no-snapshot-save
+uv run android-emu-agent emulator stop emulator-5554
 uv run android-emu-agent emulator snapshot save emulator-5554 clean
 uv run android-emu-agent emulator snapshot restore emulator-5554 clean
 ```
 
 These commands require an emulator serial (`emulator-5554`). If you pass a non-emulator serial, you
-will see `ERR_NOT_EMULATOR`.
+will see `ERR_NOT_EMULATOR`. Snapshot restore restarts the emulator by default so the loaded
+snapshot becomes the active runtime state again. Use `--no-restart` if you explicitly want the old
+live-load behavior. Create AVD definitions ahead of time with Android Studio or `avdmanager`.
 
 ## Real Devices (Non-Root)
 
@@ -497,6 +533,7 @@ Common errors
 | `ERR_SESSION_EXPIRED`    | Session is gone          | Start a new session                             |
 | `ERR_PERMISSION`         | Root required            | Use a rooted device/emulator                    |
 | `ERR_ADB_NOT_FOUND`      | `adb` not on PATH        | Install Android SDK and ensure `adb` is on PATH |
+| `ERR_SDK_TOOL_NOT_FOUND` | SDK CLI tool missing     | Add `emulator` / `avdmanager` to PATH           |
 | `ERR_ADB_COMMAND`        | ADB command failed       | Check device connectivity and retry             |
 | `ERR_ALREADY_ATTACHED`   | Debug session exists     | Detach first with `debug detach`                |
 | `ERR_DEBUG_NOT_ATTACHED` | No debug session         | Attach first with `debug attach`                |

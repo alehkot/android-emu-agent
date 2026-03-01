@@ -8,6 +8,26 @@ permission handling, login fields, form filling), see `references/ui-automation-
 behavioral protocols (write-action confirmation, inquiry vs. action), see
 `references/behavioral-protocols.md`.
 
+## Example 0: Boot an AVD and Restore a Known State
+
+Goal: Start an emulator from the CLI, restore a known snapshot, then begin a fresh automation
+session.
+
+```bash
+# 1. Inspect available AVDs
+uv run android-emu-agent emulator list-avds
+
+# 2. Start the emulator and wait for Android boot
+uv run android-emu-agent emulator start Pixel_8_API_34 --wait-boot
+
+# 3. Restore a known snapshot for deterministic tests
+uv run android-emu-agent emulator snapshot restore emulator-5554 post-onboarding
+
+# 4. Start the daemon and a session
+uv run android-emu-agent daemon start
+uv run android-emu-agent session start --device emulator-5554
+```
+
 ## Example 1: Launch App and Handle Permissions
 
 Goal: Launch an app that requests camera permission and grant it.

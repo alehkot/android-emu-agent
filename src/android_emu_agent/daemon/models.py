@@ -153,6 +153,32 @@ class EmulatorSnapshotRequest(BaseModel):
     name: str
 
 
+class EmulatorSnapshotRestoreRequest(EmulatorSnapshotRequest):
+    restart: bool = True
+
+
+class EmulatorStartRequest(BaseModel):
+    avd_name: str
+    snapshot: str | None = None
+    wipe_data: bool = False
+    cold_boot: bool = False
+    no_snapshot_save: bool = False
+    read_only: bool = False
+    no_window: bool = False
+    port: int | None = None
+    wait_boot: bool = True
+
+    @model_validator(mode="after")
+    def validate_snapshot_options(self) -> EmulatorStartRequest:
+        if self.snapshot and self.cold_boot:
+            raise ValueError("Cannot combine snapshot and cold_boot")
+        return self
+
+
+class EmulatorStopRequest(BaseModel):
+    serial: str
+
+
 class ArtifactLogsRequest(BaseModel):
     session_id: str
     package: str | None = None

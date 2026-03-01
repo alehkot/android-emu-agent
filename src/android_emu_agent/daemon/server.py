@@ -54,6 +54,9 @@ from android_emu_agent.daemon.models import (
     DeviceTargetRequest,
     DozeRequest,
     EmulatorSnapshotRequest,
+    EmulatorSnapshotRestoreRequest,
+    EmulatorStartRequest,
+    EmulatorStopRequest,
     FileAppPullRequest,
     FileAppPushRequest,
     FileFindRequest,
@@ -2092,18 +2095,81 @@ async def emulator_snapshot_save(req: EmulatorSnapshotRequest) -> EndpointRespon
     return {"status": "done", "serial": req.serial, "snapshot": req.name}
 
 
-@app.post("/emulator/snapshot_restore", response_model=None)
-async def emulator_snapshot_restore(req: EmulatorSnapshotRequest) -> EndpointResponse:
-    """Restore emulator snapshot."""
+@app.get("/emulator/avds", response_model=None)
+async def emulator_list_avds() -> EndpointResponse:
+    """List Android Virtual Devices visible to the emulator CLI."""
     core: DaemonCore = app.state.core
     try:
-        await core.device_manager.emulator_snapshot_restore(req.serial, req.name)
+        avds = await core.device_manager.emulator_list_avds()
+    except AgentError as e:
+        return _error_response(e, status_code=400)
+
+    output = "\n".join(avds) if avds else "No AVDs found."
+    return {"status": "done", "count": len(avds), "avds": avds, "output": output}
+
+
+@app.post("/emulator/start", response_model=None)
+async def emulator_start(req: EmulatorStartRequest) -> EndpointResponse:
+    """Start an emulator instance from an AVD."""
+    core: DaemonCore = app.state.core
+    try:
+        result = await core.device_manager.emulator_start(
+            req.avd_name,
+            snapshot=req.snapshot,
+            wipe_data=req.wipe_data,
+            cold_boot=req.cold_boot,
+            no_snapshot_save=req.no_snapshot_save,
+            read_only=req.read_only,
+            no_window=req.no_window,
+            port=req.port,
+            wait_boot=req.wait_boot,
+        )
+    except AgentError as e:
+        return _error_response(e, status_code=400)
+
+    serial = result.get("serial")
+    if serial:
+        output = f"Started AVD '{req.avd_name}' as {serial}"
+    else:
+        output = f"Started AVD '{req.avd_name}' (pid {result['pid']})"
+    return {"status": "done", "output": output, **result}
+
+
+@app.post("/emulator/stop", response_model=None)
+async def emulator_stop(req: EmulatorStopRequest) -> EndpointResponse:
+    """Stop a running emulator instance."""
+    core: DaemonCore = app.state.core
+    try:
+        await core.device_manager.emulator_stop(req.serial)
     except AgentError as e:
         return _error_response(e, status_code=400)
     except Exception:
         return _error_response(device_offline_error(req.serial), status_code=404)
 
-    return {"status": "done", "serial": req.serial, "snapshot": req.name}
+    return {"status": "done", "serial": req.serial, "output": f"Stopped {req.serial}"}
+
+
+@app.post("/emulator/snapshot_restore", response_model=None)
+async def emulator_snapshot_restore(req: EmulatorSnapshotRestoreRequest) -> EndpointResponse:
+    """Restore emulator snapshot."""
+    core: DaemonCore = app.state.core
+    try:
+        await core.device_manager.emulator_snapshot_restore(
+            req.serial,
+            req.name,
+            restart=req.restart,
+        )
+    except AgentError as e:
+        return _error_response(e, status_code=400)
+    except Exception:
+        return _error_response(device_offline_error(req.serial), status_code=404)
+
+    return {
+        "status": "done",
+        "serial": req.serial,
+        "snapshot": req.name,
+        "restart": req.restart,
+    }
 
 
 # Debug commands

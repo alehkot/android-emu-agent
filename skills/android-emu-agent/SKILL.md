@@ -13,6 +13,14 @@ generation-scoped element refs. Compact snapshots are designed to work well acro
 layouts and modern frameworks such as Compose and Litho. If you're working inside this repo, prefer
 `uv run android-emu-agent ...` to ensure the correct environment.
 
+## SDK CLI Prerequisites
+
+- For connected-device workflows, `adb` must be available.
+- For emulator lifecycle workflows, `emulator` should be available.
+- For creating or inspecting AVD definitions outside the agent, `avdmanager` is recommended.
+- The daemon resolves tools from `PATH` first, then standard Android SDK roots from
+  `ANDROID_SDK_ROOT` / `ANDROID_HOME`.
+
 ## Quick Start
 
 1. Start the daemon.
@@ -26,6 +34,13 @@ uv run android-emu-agent daemon status
 
 ```bash
 uv run android-emu-agent device list
+```
+
+1. If no emulator is running, boot one first.
+
+```bash
+uv run android-emu-agent emulator list-avds
+uv run android-emu-agent emulator start <avd_name> --wait-boot
 ```
 
 1. Start a session.

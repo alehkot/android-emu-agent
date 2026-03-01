@@ -289,10 +289,14 @@ uv run android-emu-agent action tap s-abc123 ^a1
 Strategy 4: Use emulator snapshots for repeated testing
 
 ```bash
-# In Android Studio / emulator
 # 1. Complete onboarding manually
-# 2. Save a snapshot: "post-onboarding"
-# 3. For automation, start from that snapshot
+uv run android-emu-agent emulator snapshot save emulator-5554 post-onboarding
+
+# 2. Before each run, restore the saved state
+uv run android-emu-agent emulator snapshot restore emulator-5554 post-onboarding
+
+# 3. Or boot an AVD directly from a named snapshot
+uv run android-emu-agent emulator start Pixel_8_API_34 --snapshot post-onboarding --wait-boot
 ```
 
 ## Navigation Patterns

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 import re
 import shlex
 import shutil
@@ -19,10 +20,15 @@ from android_emu_agent.errors import (
     AgentError,
     adb_command_error,
     adb_not_found_error,
+    avd_not_found_error,
     console_connect_error,
+    emulator_command_error,
+    emulator_launch_failed_error,
     file_not_found_error,
     package_not_found_error,
+    sdk_tool_not_found_error,
     snapshot_failed_error,
+    timeout_error,
 )
 from android_emu_agent.validation import get_console_port
 
@@ -42,6 +48,11 @@ if TYPE_CHECKING:
     from adbutils import AdbDevice
 
 logger = structlog.get_logger()
+
+EMULATOR_RESTART_TIMEOUT_S = 120.0
+EMULATOR_BOOT_POLL_INTERVAL_S = 1.0
+EMULATOR_START_TIMEOUT_S = 180.0
+EMULATOR_STOP_TIMEOUT_S = 30.0
 
 
 @dataclass
@@ -560,6 +571,89 @@ class DeviceManager:
                 packages.append(line.removeprefix("package:"))
         return packages
 
+    async def emulator_list_avds(self) -> list[str]:
+        """List Android Virtual Devices discoverable by the emulator CLI."""
+        emulator_path = self._resolve_sdk_tool("emulator")
+        result = await self._run_host_command([str(emulator_path), "-list-avds"], tool="emulator")
+        return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+    async def _run_host_command(
+        self, args: list[str], *, tool: str
+    ) -> subprocess.CompletedProcess[str]:
+        def _run() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                args,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+        try:
+            return await asyncio.to_thread(_run)
+        except FileNotFoundError as exc:
+            raise sdk_tool_not_found_error(tool) from exc
+        except subprocess.CalledProcessError as exc:
+            reason = (exc.stderr or exc.stdout or str(exc)).strip()
+            raise emulator_command_error(" ".join(args), reason) from exc
+
+    def _resolve_sdk_tool(self, tool: str) -> Path:
+        resolved = shutil.which(tool)
+        if resolved:
+            return Path(resolved)
+
+        for candidate in self._sdk_tool_candidates(tool):
+            if candidate.exists() and candidate.is_file():
+                return candidate
+
+        raise sdk_tool_not_found_error(tool)
+
+    def _sdk_tool_candidates(self, tool: str) -> list[Path]:
+        candidates: list[Path] = []
+        for root in self._sdk_roots():
+            if tool == "emulator":
+                candidates.append(root / "emulator" / tool)
+                continue
+
+            if tool == "avdmanager":
+                candidates.extend(
+                    [
+                        root / "cmdline-tools" / "latest" / "bin" / tool,
+                        root / "cmdline-tools" / "bin" / tool,
+                        root / "tools" / "bin" / tool,
+                    ]
+                )
+                cmdline_root = root / "cmdline-tools"
+                if cmdline_root.exists():
+                    candidates.extend(
+                        path / "bin" / tool
+                        for path in sorted(cmdline_root.iterdir())
+                        if path.is_dir()
+                    )
+
+        return candidates
+
+    def _sdk_roots(self) -> list[Path]:
+        roots: list[Path] = []
+        seen: set[Path] = set()
+
+        def _add(path: Path | None) -> None:
+            if path is None:
+                return
+            expanded = path.expanduser()
+            if expanded in seen:
+                return
+            seen.add(expanded)
+            roots.append(expanded)
+
+        for env_name in ("ANDROID_SDK_ROOT", "ANDROID_HOME"):
+            sdk_root = Path(os.environ[env_name]).expanduser() if env_name in os.environ else None
+            _add(sdk_root)
+
+        _add(Path.home() / "Library" / "Android" / "sdk")
+        _add(Path.home() / "Android" / "Sdk")
+        _add(Path.home() / "AppData" / "Local" / "Android" / "Sdk")
+        return roots
+
     async def _run_adb(self, serial: str, args: list[str]) -> subprocess.CompletedProcess[str]:
         def _run() -> subprocess.CompletedProcess[str]:
             adb_path = shutil.which("adb")
@@ -677,6 +771,77 @@ class DeviceManager:
             if evicted_adb or evicted_u2:
                 logger.info("device_evicted", serial=serial, adb=evicted_adb, u2=evicted_u2)
 
+    async def emulator_start(
+        self,
+        avd_name: str,
+        *,
+        snapshot: str | None = None,
+        wipe_data: bool = False,
+        cold_boot: bool = False,
+        no_snapshot_save: bool = False,
+        read_only: bool = False,
+        no_window: bool = False,
+        port: int | None = None,
+        wait_boot: bool = True,
+    ) -> dict[str, Any]:
+        """Start an emulator instance from an AVD definition."""
+        available_avds = await self.emulator_list_avds()
+        if avd_name not in available_avds:
+            raise avd_not_found_error(avd_name)
+
+        emulator_path = self._resolve_sdk_tool("emulator")
+        existing_serials = await self._list_running_emulator_serials()
+
+        args = [str(emulator_path), "-avd", avd_name]
+        if port is not None:
+            args.extend(["-port", str(port)])
+        if snapshot:
+            args.extend(["-snapshot", snapshot])
+        if wipe_data:
+            args.append("-wipe-data")
+        if cold_boot:
+            args.append("-no-snapshot-load")
+        if no_snapshot_save:
+            args.append("-no-snapshot-save")
+        if read_only:
+            args.append("-read-only")
+        if no_window:
+            args.append("-no-window")
+
+        process = await self._spawn_emulator_process(args, avd_name)
+        serial = f"emulator-{port}" if port is not None else None
+
+        if wait_boot:
+            serial = await self._wait_for_new_emulator_serial(
+                avd_name,
+                existing_serials,
+                expected_serial=serial,
+                process=process,
+            )
+            await self._wait_for_emulator_ready(serial, timeout_s=EMULATOR_START_TIMEOUT_S)
+
+        logger.info(
+            "emulator_started",
+            avd_name=avd_name,
+            serial=serial,
+            pid=process.pid,
+            wait_boot=wait_boot,
+        )
+        return {
+            "avd_name": avd_name,
+            "serial": serial,
+            "pid": process.pid,
+            "wait_boot": wait_boot,
+        }
+
+    async def emulator_stop(self, serial: str) -> None:
+        """Stop a running emulator instance via adb emu kill."""
+        get_console_port(serial)
+        await self.evict_device(serial)
+        await self._run_adb(serial, ["emu", "kill"])
+        await self._wait_for_emulator_disconnect(serial)
+        logger.info("emulator_stopped", serial=serial)
+
     async def emulator_snapshot_save(self, serial: str, name: str) -> None:
         """Save emulator snapshot.
 
@@ -688,7 +853,9 @@ class DeviceManager:
         await self._send_console_command(port, f"avd snapshot save {name}")
         logger.info("snapshot_saved", serial=serial, name=name)
 
-    async def emulator_snapshot_restore(self, serial: str, name: str) -> None:
+    async def emulator_snapshot_restore(
+        self, serial: str, name: str, *, restart: bool = True
+    ) -> None:
         """Restore emulator snapshot.
 
         Args:
@@ -696,8 +863,137 @@ class DeviceManager:
             name: Snapshot name
         """
         port = get_console_port(serial)
+        await self.evict_device(serial)
+
+        if restart:
+            await self._send_console_command(port, "avd stop")
+
         await self._send_console_command(port, f"avd snapshot load {name}")
-        logger.info("snapshot_restored", serial=serial, name=name)
+
+        if restart:
+            await self._send_console_command(port, "avd start")
+            await self._wait_for_emulator_ready(serial)
+        else:
+            await self.refresh()
+
+        logger.info("snapshot_restored", serial=serial, name=name, restart=restart)
+
+    async def _spawn_emulator_process(
+        self, args: list[str], avd_name: str
+    ) -> subprocess.Popen[bytes]:
+        def _spawn() -> subprocess.Popen[bytes]:
+            return subprocess.Popen(
+                args,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+
+        try:
+            return await asyncio.to_thread(_spawn)
+        except FileNotFoundError as exc:
+            raise sdk_tool_not_found_error("emulator") from exc
+        except OSError as exc:
+            raise emulator_launch_failed_error(avd_name, str(exc)) from exc
+
+    async def _list_running_emulator_serials(self) -> set[str]:
+        await self.refresh()
+        return {serial for serial, info in self._devices.items() if info.is_emulator}
+
+    async def _wait_for_new_emulator_serial(
+        self,
+        avd_name: str,
+        existing_serials: set[str],
+        *,
+        expected_serial: str | None,
+        process: subprocess.Popen[bytes],
+        timeout_s: float = EMULATOR_START_TIMEOUT_S,
+    ) -> str:
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout_s
+        operation = f"emulator startup for AVD {avd_name}"
+        timeout_ms = timeout_s * 1000
+        last_context: dict[str, Any] = {
+            "avd_name": avd_name,
+            "expected_serial": expected_serial,
+            "running_emulators": sorted(existing_serials),
+        }
+
+        while True:
+            current_serials = await self._list_running_emulator_serials()
+            last_context["running_emulators"] = sorted(current_serials)
+
+            if expected_serial and expected_serial in current_serials:
+                return expected_serial
+
+            new_serials = sorted(current_serials - existing_serials)
+            if new_serials:
+                return new_serials[0]
+
+            if process.poll() is not None:
+                raise emulator_launch_failed_error(
+                    avd_name,
+                    f"emulator process exited with code {process.returncode}",
+                )
+
+            if loop.time() >= deadline:
+                raise timeout_error(operation, timeout_ms, last_context)
+
+            await asyncio.sleep(EMULATOR_BOOT_POLL_INTERVAL_S)
+
+    async def _wait_for_emulator_disconnect(
+        self, serial: str, *, timeout_s: float = EMULATOR_STOP_TIMEOUT_S
+    ) -> None:
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout_s
+        operation = f"emulator shutdown for {serial}"
+        timeout_ms = timeout_s * 1000
+        last_context: dict[str, Any] = {"serial": serial}
+
+        while True:
+            current_serials = await self._list_running_emulator_serials()
+            last_context["running_emulators"] = sorted(current_serials)
+            if serial not in current_serials:
+                return
+
+            if loop.time() >= deadline:
+                raise timeout_error(operation, timeout_ms, last_context)
+
+            await asyncio.sleep(EMULATOR_BOOT_POLL_INTERVAL_S)
+
+    async def _wait_for_emulator_ready(
+        self, serial: str, *, timeout_s: float = EMULATOR_RESTART_TIMEOUT_S
+    ) -> None:
+        """Wait for an emulator instance to be ready for adb/UI automation."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout_s
+        operation = f"emulator boot readiness for {serial}"
+        timeout_ms = timeout_s * 1000
+
+        try:
+            await asyncio.wait_for(
+                self._run_adb(serial, ["wait-for-device"]),
+                timeout=max(deadline - loop.time(), 0.1),
+            )
+        except TimeoutError as exc:
+            raise timeout_error(operation, timeout_ms, {"serial": serial}) from exc
+
+        last_context: dict[str, Any] = {"serial": serial, "property": "sys.boot_completed"}
+        while True:
+            try:
+                result = await self._run_adb(serial, ["shell", "getprop", "sys.boot_completed"])
+                boot_completed = result.stdout.strip()
+                last_context["boot_completed"] = boot_completed
+                if boot_completed == "1":
+                    await self.refresh()
+                    return
+            except AgentError as exc:
+                last_context["reason"] = exc.context.get("reason") or exc.message
+
+            if loop.time() >= deadline:
+                raise timeout_error(operation, timeout_ms, last_context)
+
+            await asyncio.sleep(EMULATOR_BOOT_POLL_INTERVAL_S)
 
     async def _send_console_command(self, port: int, command: str) -> str:
         """Send command to emulator console.

@@ -14,17 +14,18 @@ Match your symptom to the right section:
 
 ## Error Reference
 
-| Error                 | Cause                        | Solution                                               | Recovery        |
-| --------------------- | ---------------------------- | ------------------------------------------------------ | --------------- |
-| `ERR_STALE_REF`       | Ref from outdated snapshot   | Re-snapshot; if auto-healed, use warning as the cue    | Level 1 (auto)  |
-| `ERR_NOT_FOUND`       | Element not in current UI    | Verify correct screen, try different selector          | Level 1 (auto)  |
-| `ERR_BLOCKED_INPUT`   | Dialog/keyboard blocking     | Dismiss blocker with `back`, or `wait idle`            | Level 1 (auto)  |
-| `ERR_ACTION_FAILED`   | Action dispatched but failed | Re-snapshot, verify target state, retry                | Level 1 (auto)  |
-| `ERR_TIMEOUT`         | Wait condition never met     | Increase `--timeout-ms` or verify condition is correct | Level 2 (auto)  |
-| `ERR_NO_LOCATOR`      | No locator strategy found    | Use `--full` snapshot, try coordinate-based action     | Level 2 (auto)  |
-| `ERR_DEVICE_OFFLINE`  | Device disconnected          | Run `device list`, reconnect device                    | Not recoverable |
-| `ERR_SESSION_EXPIRED` | Session timed out            | Create new session with `session start`                | Not recoverable |
-| `ERR_DAEMON_OFFLINE`  | Daemon not running           | Run `daemon start`                                     | Not recoverable |
+| Error                    | Cause                        | Solution                                               | Recovery        |
+| ------------------------ | ---------------------------- | ------------------------------------------------------ | --------------- |
+| `ERR_STALE_REF`          | Ref from outdated snapshot   | Re-snapshot; if auto-healed, use warning as the cue    | Level 1 (auto)  |
+| `ERR_NOT_FOUND`          | Element not in current UI    | Verify correct screen, try different selector          | Level 1 (auto)  |
+| `ERR_BLOCKED_INPUT`      | Dialog/keyboard blocking     | Dismiss blocker with `back`, or `wait idle`            | Level 1 (auto)  |
+| `ERR_ACTION_FAILED`      | Action dispatched but failed | Re-snapshot, verify target state, retry                | Level 1 (auto)  |
+| `ERR_TIMEOUT`            | Wait condition never met     | Increase `--timeout-ms` or verify condition is correct | Level 2 (auto)  |
+| `ERR_NO_LOCATOR`         | No locator strategy found    | Use `--full` snapshot, try coordinate-based action     | Level 2 (auto)  |
+| `ERR_DEVICE_OFFLINE`     | Device disconnected          | Run `device list`, reconnect device                    | Not recoverable |
+| `ERR_SDK_TOOL_NOT_FOUND` | Android SDK CLI missing      | Add `adb` / `emulator` / `avdmanager` to PATH          | Not recoverable |
+| `ERR_SESSION_EXPIRED`    | Session timed out            | Create new session with `session start`                | Not recoverable |
+| `ERR_DAEMON_OFFLINE`     | Daemon not running           | Run `daemon start`                                     | Not recoverable |
 
 > **Note:** Infrastructure errors (device offline, session expired, daemon offline) cannot be
 > recovered automatically. Stop and report to the user.
@@ -47,6 +48,27 @@ uv run android-emu-agent device list
 adb devices
 adb kill-server
 adb start-server
+```
+
+### Emulator CLI Not Available
+
+If emulator lifecycle commands fail with `ERR_SDK_TOOL_NOT_FOUND`, ensure the Android SDK tools are
+installed and reachable:
+
+```bash
+export ANDROID_SDK_ROOT="$HOME/Library/Android/sdk"
+export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+
+adb version
+emulator -list-avds
+avdmanager list avd
+```
+
+If no emulator is running yet, you can boot one through the agent:
+
+```bash
+uv run android-emu-agent emulator list-avds
+uv run android-emu-agent emulator start <avd_name> --wait-boot
 ```
 
 ### Elements Not Appearing in Snapshot

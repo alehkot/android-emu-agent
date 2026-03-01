@@ -13,6 +13,10 @@ need to parse structured results programmatically).
 JSON responses also include `diagnostic_id`, and the same value is returned in the `x-diagnostic-id`
 header for request-level tracing.
 
+Emulator lifecycle commands expect `adb` and `emulator` to be available via `PATH` or discoverable
+through `ANDROID_SDK_ROOT` / `ANDROID_HOME`. `avdmanager` is recommended when you need to create or
+inspect AVD definitions outside `android-emu-agent`.
+
 ### CLI
 
 - `version` Show version information.
@@ -229,8 +233,15 @@ compatible alias.
 
 ### Emulator
 
+- `emulator list-avds` List AVDs known to the Android emulator CLI.
+- `emulator start <avd_name>` Start an AVD and wait for boot by default.
+- `emulator start <avd_name> --snapshot <name> --no-snapshot-save` Start from a named snapshot
+  without saving Quick Boot state on exit.
+- `emulator start <avd_name> --cold-boot` Start without loading Quick Boot or snapshot state.
+- `emulator stop <serial>` Stop a running emulator cleanly.
 - `emulator snapshot save <serial> <name>` Save emulator snapshot.
-- `emulator snapshot restore <serial> <name>` Restore emulator snapshot.
+- `emulator snapshot restore <serial> <name>` Restore emulator snapshot and restart the emulator by
+  default. Use `--no-restart` for a live console load.
 
 ### Reliability
 
