@@ -144,6 +144,7 @@ Do not ship CLI/API/debugger changes that skip docs or tests sync.
 
 ## 11. Commits and PRs
 
+- Do not create, amend, or rewrite commits unless the user explicitly asks you to do so.
 - Conventional commit style: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
 - PR should include:
   - what changed and why,

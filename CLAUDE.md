@@ -129,6 +129,7 @@ strategy fails.
 - Line length is 100 (enforced by ruff)
 - Prefer `pathlib` over `os.path` (ruff PTH rules enabled)
 - `snake_case` for modules/functions/vars, `PascalCase` for classes, tests as `test_*.py`
+- Do not create, amend, or rewrite commits unless the user explicitly asks you to do so
 - Commit messages follow Conventional Commits: `feat:`, `fix:`, `docs:`, etc.
 
 ### Error Handling

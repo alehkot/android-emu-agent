@@ -92,6 +92,8 @@ cd jdi-bridge && ./gradlew shadowJar
   sync wrappers.
 - **Errors**: Use `AgentError` with specific error codes and remediation hints.
 - **Logging**: Use structured logging via `structlog`.
+- **Commits**: Do not create, amend, or rewrite commits unless the user explicitly asks you to do
+  so.
 
 ## Testing Expectations
 
