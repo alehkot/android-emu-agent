@@ -180,11 +180,24 @@ and cause unintended state changes.
 
 When the task is an inquiry, use only read-only methods in this order:
 
-1. **Snapshot analysis** — `ui snapshot` to inspect element labels, roles, and state
-2. **Screenshot analysis** — `artifact screenshot` for visual identification (icons, colors, layout)
-3. **Scroll to reveal** — `action scroll` is non-destructive and may expose off-screen elements
-4. **Full snapshot** — `ui snapshot --full` to include all nodes, not just interactive ones
-5. **Ask the user** — if none of the above resolves the question, report what you found and ask
+1. **Compact snapshot (fresh generation)** — `ui snapshot` to inspect current labels, roles, and
+   state
+2. **Stabilize and re-snapshot** — `wait idle` then `ui snapshot` again to reduce transient render
+   misses
+3. **Full hierarchy snapshot** — `ui snapshot --full` to include non-interactive nodes and nested
+   labels
+4. **Raw XML snapshot (framework diagnostics)** — `ui snapshot --raw` when Compose/Litho/WebView
+   semantics remain unclear in full mode
+5. **Screenshot analysis** — `ui screenshot` (or artifact screenshot) for visual confirmation of
+   icons/layout text that may be pruned in compact mode
+6. **Scroll to reveal** — `action scroll` (read-only) and then repeat steps 1-5 for off-screen
+   content
+7. **Ask the user** — if unresolved, report what was observed at each mode and ask for guidance
+
+**Explicit trigger:** If the user says elements are missing, stale, or filtered out in the snapshot,
+the agent must run at least through step 3 (`--full`) before concluding the element is absent. If
+still unresolved after step 4, the agent must capture a screenshot (step 5), deliver it, and provide
+visual analysis before asking for guidance.
 
 **Do NOT** tap, type, swipe (non-scroll), or launch apps to answer an inquiry. These are
 state-modifying actions that go beyond what the user asked.

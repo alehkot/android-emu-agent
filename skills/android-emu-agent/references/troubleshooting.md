@@ -82,10 +82,25 @@ uv run android-emu-agent emulator start <avd_name> --wait-boot
 - If in the middle of an action flow and the element has disappeared, follow the recovery protocol
   (`references/recovery.md`) rather than manually debugging.
 
+When the user explicitly reports missing/stale/filtered elements, run this escalation sequence in
+order (do not stop at compact mode):
+
 ```bash
-uv run android-emu-agent ui snapshot <session_id> --full
+# 1) Fresh compact snapshot
+uv run android-emu-agent ui snapshot <session_id>
+
+# 2) Stabilize + compact re-check
 uv run android-emu-agent wait idle <session_id> --timeout-ms 5000
 uv run android-emu-agent ui snapshot <session_id>
+
+# 3) Full hierarchy (includes non-interactive + nested labels)
+uv run android-emu-agent ui snapshot <session_id> --full
+
+# 4) Raw XML hierarchy (framework-level diagnostics)
+uv run android-emu-agent ui snapshot <session_id> --raw
+
+# 5) Worst-case: visual evidence for delivery + analysis
+uv run android-emu-agent ui screenshot <session_id>
 ```
 
 ### Actions Not Working

@@ -91,6 +91,12 @@ uv run android-emu-agent ui snapshot <session_id>
   there a button for...", "what does this screen show", "check if..."), use only read-only methods
   (snapshots, screenshots, scrolling) to answer. Do not tap, type, or otherwise modify UI state to
   investigate. See `references/behavioral-protocols.md` > Inquiry vs. Action Tasks.
+- **Missing-elements escalation is mandatory.** If the user reports missing/stale/filtered elements
+  (e.g. "snapshot is stale", "components are missing"), automatically run the read-only escalation
+  path in order: fresh compact snapshot → `wait idle` + compact snapshot → `ui snapshot --full` →
+  `ui snapshot --raw` → `ui screenshot`. Do not stop at compact mode in this case. In the worst
+  case, capture a screenshot, deliver it, and provide visual analysis before asking the user what to
+  do next.
 
 ## Decision Guide
 
