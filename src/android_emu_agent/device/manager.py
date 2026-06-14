@@ -207,7 +207,7 @@ class DeviceManager:
             raise RuntimeError(f"Device not found: {serial}")
 
         def _apply() -> None:
-            device.shell(f"pm clear {package}")
+            device.shell(f"pm clear {shlex.quote(package)}")
 
         await asyncio.to_thread(_apply)
 
@@ -367,10 +367,16 @@ class DeviceManager:
             target_activity = activity
             if not target_activity:
                 # Resolve launcher activity
-                output = device.shell(
-                    f"cmd package resolve-activity --brief "
-                    f"-c android.intent.category.LAUNCHER {package}"
-                )
+                resolve_parts = [
+                    "cmd",
+                    "package",
+                    "resolve-activity",
+                    "--brief",
+                    "-c",
+                    "android.intent.category.LAUNCHER",
+                    package,
+                ]
+                output = device.shell(" ".join(shlex.quote(part) for part in resolve_parts))
                 lines = output.strip().split("\n")
                 if len(lines) >= 2:
                     # Second line contains package/activity
@@ -386,8 +392,11 @@ class DeviceManager:
                 target_activity = f".{target_activity}"
 
             component = f"{package}/{target_activity}"
-            command = f"am start {'-D ' if wait_for_debugger else ''}-n {component}"
-            device.shell(command)
+            command_parts = ["am", "start"]
+            if wait_for_debugger:
+                command_parts.append("-D")
+            command_parts.extend(["-n", component])
+            device.shell(" ".join(shlex.quote(part) for part in command_parts))
             return target_activity
 
         return await asyncio.to_thread(_launch)
@@ -404,7 +413,7 @@ class DeviceManager:
             raise RuntimeError(f"Device not found: {serial}")
 
         def _stop() -> None:
-            device.shell(f"am force-stop {package}")
+            device.shell(f"am force-stop {shlex.quote(package)}")
 
         await asyncio.to_thread(_stop)
 

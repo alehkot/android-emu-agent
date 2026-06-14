@@ -299,6 +299,23 @@ class TestAppLaunch:
         assert result == ".MainActivity"
 
     @pytest.mark.asyncio
+    async def test_launch_quotes_component(self) -> None:
+        """Should quote the activity component before passing it to adb shell."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        mock_device = MagicMock()
+        mock_device.shell.return_value = "Starting: Intent { ... }"
+
+        with patch.object(manager, "get_adb_device", return_value=mock_device):
+            await manager.app_launch(
+                "emulator-5554", "com.example.app", activity="MainActivity;id"
+            )
+
+        call_arg = mock_device.shell.call_args[0][0]
+        assert "'com.example.app/.MainActivity;id'" in call_arg
+
+    @pytest.mark.asyncio
     async def test_launch_wait_for_debugger(self) -> None:
         """Should add -D when debugger wait is requested."""
         from android_emu_agent.device.manager import DeviceManager
@@ -354,6 +371,24 @@ class TestAppForceStop:
         call_arg = mock_device.shell.call_args[0][0]
         assert "am force-stop" in call_arg
         assert "com.example.app" in call_arg
+
+
+class TestAppReset:
+    """Tests for app_reset."""
+
+    @pytest.mark.asyncio
+    async def test_reset_quotes_package(self) -> None:
+        """Should quote package names before passing them to adb shell."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        mock_device = MagicMock()
+
+        with patch.object(manager, "get_adb_device", return_value=mock_device):
+            await manager.app_reset("emulator-5554", "com.example.app;id")
+
+        call_arg = mock_device.shell.call_args[0][0]
+        assert call_arg == "pm clear 'com.example.app;id'"
 
 
 class TestAppDeeplink:

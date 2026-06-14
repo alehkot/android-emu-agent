@@ -207,6 +207,124 @@ def _selector_from_locator(locator: LocatorBundle) -> dict[str, str] | None:
     return None
 
 
+def _bounds_from_info(info: Any) -> list[int] | None:
+    """Extract [left, top, right, bottom] bounds from uiautomator2 metadata."""
+    if isinstance(info, dict):
+        for nested_key in ("bounds", "visibleBounds", "visible_bounds"):
+            nested = info.get(nested_key)
+            if nested is not None:
+                bounds = _bounds_from_info(nested)
+                if bounds:
+                    return bounds
+
+        keys = ("left", "top", "right", "bottom")
+        if all(key in info for key in keys):
+            values = [info[key] for key in keys]
+            if all(isinstance(value, (int, float)) for value in values):
+                return [int(value) for value in values]
+
+    if isinstance(info, (list, tuple)) and len(info) == 4 and all(
+        isinstance(value, (int, float)) for value in info
+    ):
+        return [int(value) for value in info]
+
+    return None
+
+
+def _bounds_are_usable(bounds: list[int] | None) -> bool:
+    return (
+        bounds is not None
+        and len(bounds) == 4
+        and bounds[2] > bounds[0]
+        and bounds[3] > bounds[1]
+    )
+
+
+def _screen_bounds_from_info(info: Any) -> list[int] | None:
+    if not isinstance(info, dict):
+        return None
+    width = info.get("displayWidth")
+    height = info.get("displayHeight")
+    if not isinstance(width, (int, float)) or not isinstance(height, (int, float)):
+        return None
+    return [0, 0, int(width), int(height)]
+
+
+async def _resolve_swipe_bounds(
+    core: DaemonCore,
+    device: Any,
+    session_id: str,
+    container: str | None,
+    generation: int,
+) -> tuple[list[int], str | None] | JSONResponse:
+    """Resolve the swipe target bounds from screen, ref, or selector."""
+    if not container:
+        info = await asyncio.to_thread(lambda: device.info)
+        bounds = _screen_bounds_from_info(info)
+        if not _bounds_are_usable(bounds):
+            return _error_response(
+                AgentError(
+                    code="ERR_DEVICE_BOUNDS",
+                    message="Unable to read device display bounds",
+                    context={"info": info},
+                    remediation="Verify the device is online and try again.",
+                ),
+                status_code=500,
+            )
+        assert bounds is not None
+        return bounds, None
+
+    try:
+        selector = parse_selector(container)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    if isinstance(selector, CoordsSelector):
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_CONTAINER",
+                message="Swipe container cannot be a coordinate selector",
+                context={"container": container},
+                remediation="Use a ^ref, text selector, resource id selector, or description selector.",
+            ),
+            status_code=400,
+        )
+
+    warning: str | None = None
+    if isinstance(selector, RefSelector):
+        locator, warning = await _resolve_ref_target(core, session_id, selector.ref, generation)
+        if not locator:
+            return _error_response(not_found_error(selector.ref), status_code=404)
+        if warning is None and locator.generation < generation:
+            return _error_response(
+                stale_ref_error(selector.ref, locator.generation, generation),
+                status_code=409,
+            )
+        bounds = locator.bounds
+    else:
+        kwargs = selector.to_u2_kwargs()
+        element = device(**kwargs)
+        exists = await asyncio.to_thread(element.exists)
+        if not exists:
+            return _error_response(not_found_error(container), status_code=404)
+        element_info = await asyncio.to_thread(lambda: element.info)
+        bounds = _bounds_from_info(element_info)
+
+    if not _bounds_are_usable(bounds):
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_CONTAINER_BOUNDS",
+                message=f"Container has no usable bounds: {container}",
+                context={"container": container, "bounds": bounds},
+                remediation="Use a visible container ref or selector from a fresh snapshot.",
+            ),
+            status_code=400,
+        )
+
+    assert bounds is not None
+    return bounds, warning
+
+
 def _json_body_from_bytes(body: bytes, content_type: str) -> dict[str, Any] | None:
     """Best-effort JSON body extraction for diagnostics middleware."""
     if "application/json" not in content_type:
@@ -1795,6 +1913,11 @@ async def app_resolve_intent(req: AppResolveIntentRequest) -> EndpointResponse:
             validate_uri(req.data_uri)
         except AgentError as e:
             return _error_response(e, status_code=400)
+    if req.package:
+        try:
+            validate_package(req.package)
+        except AgentError as e:
+            return _error_response(e, status_code=400)
 
     try:
         result = await core.device_manager.app_resolve_intent(
@@ -1953,6 +2076,11 @@ async def app_reset(req: AppResetRequest) -> EndpointResponse:
         return _error_response(session_expired_error(req.session_id), status_code=404)
 
     try:
+        validate_package(req.package)
+    except AgentError as e:
+        return _error_response(e, status_code=400)
+
+    try:
         await core.device_manager.app_reset(session.device_serial, req.package)
     except Exception:
         return _error_response(device_offline_error(session.device_serial), status_code=404)
@@ -2054,6 +2182,11 @@ async def app_intent(req: AppIntentRequest) -> EndpointResponse:
     if req.data_uri:
         try:
             validate_uri(req.data_uri)
+        except AgentError as e:
+            return _error_response(e, status_code=400)
+    if req.package:
+        try:
+            validate_package(req.package)
         except AgentError as e:
             return _error_response(e, status_code=400)
 
@@ -2917,14 +3050,37 @@ async def action_swipe(req: SwipeRequest) -> EndpointResponse:
     try:
         direction = SwipeDirection(req.direction)
     except ValueError:
-        return {
-            "status": "error",
-            "error": {
-                "code": "ERR_INVALID_DIRECTION",
-                "message": f"Invalid direction: {req.direction}",
-                "remediation": "Use up, down, left, or right",
-            },
-        }
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_DIRECTION",
+                message=f"Invalid direction: {req.direction}",
+                context={"direction": req.direction},
+                remediation="Use up, down, left, or right",
+            ),
+            status_code=400,
+        )
+
+    if req.distance <= 0 or req.distance > 1:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_DISTANCE",
+                message=f"Invalid swipe distance: {req.distance}",
+                context={"distance": req.distance},
+                remediation="Use a distance greater than 0 and less than or equal to 1.",
+            ),
+            status_code=400,
+        )
+
+    if req.duration_ms <= 0:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_DURATION",
+                message=f"Invalid swipe duration: {req.duration_ms}",
+                context={"duration_ms": req.duration_ms},
+                remediation="Use a positive duration in milliseconds.",
+            ),
+            status_code=400,
+        )
 
     session = await core.session_manager.get_session(req.session_id)
     if not session:
@@ -2934,9 +3090,16 @@ async def action_swipe(req: SwipeRequest) -> EndpointResponse:
     if not device:
         return _error_response(device_offline_error(session.device_serial), status_code=404)
 
-    # Get bounds (full screen if no container)
-    info = await asyncio.to_thread(lambda: device.info)
-    bounds = [0, 0, info["displayWidth"], info["displayHeight"]]
+    bounds_result = await _resolve_swipe_bounds(
+        core,
+        device,
+        req.session_id,
+        req.container,
+        session.generation,
+    )
+    if isinstance(bounds_result, JSONResponse):
+        return bounds_result
+    bounds, warning = bounds_result
 
     start, end = core.action_executor._calculate_swipe_coords(bounds, direction, req.distance)
 
@@ -2944,4 +3107,9 @@ async def action_swipe(req: SwipeRequest) -> EndpointResponse:
         device.swipe, start[0], start[1], end[0], end[1], req.duration_ms / 1000
     )
 
-    return {"status": "done", "direction": req.direction}
+    payload: dict[str, Any] = {"status": "done", "direction": req.direction, "bounds": bounds}
+    if req.container:
+        payload["container"] = req.container
+    if warning:
+        payload["warning"] = warning
+    return payload

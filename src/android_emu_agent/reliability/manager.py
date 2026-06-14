@@ -56,7 +56,7 @@ class ReliabilityManager:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     async def exit_info(self, device: AdbDevice, package: str) -> str:
-        return await self._shell(device, f"dumpsys activity exit-info {package}")
+        return await self._shell(device, f"dumpsys activity exit-info {shlex.quote(package)}")
 
     async def bugreport(self, serial: str, filename: str | None = None) -> Path:
         timestamp = self._timestamp()
@@ -103,11 +103,12 @@ class ReliabilityManager:
         return output
 
     async def dropbox_print(self, device: AdbDevice, tag: str) -> str:
-        return await self._shell(device, f"dumpsys dropbox --print {tag}")
+        return await self._shell(device, f"dumpsys dropbox --print {shlex.quote(tag)}")
 
     async def background_restrictions(self, device: AdbDevice, package: str) -> dict[str, str]:
-        appops = await self._shell(device, f"cmd appops get {package} RUN_IN_BACKGROUND")
-        standby = await self._shell(device, f"am get-standby-bucket {package}")
+        safe_package = shlex.quote(package)
+        appops = await self._shell(device, f"cmd appops get {safe_package} RUN_IN_BACKGROUND")
+        standby = await self._shell(device, f"am get-standby-bucket {safe_package}")
         return {"appops": appops, "standby_bucket": standby}
 
     async def last_anr(self, device: AdbDevice) -> str:
@@ -117,7 +118,7 @@ class ReliabilityManager:
         return output
 
     async def jobscheduler(self, device: AdbDevice, package: str) -> str:
-        return await self._shell(device, f"dumpsys jobscheduler {package}")
+        return await self._shell(device, f"dumpsys jobscheduler {shlex.quote(package)}")
 
     async def process_info(self, device: AdbDevice, package: str) -> dict[str, str | int]:
         pid = await self._pidof(device, package)
@@ -135,16 +136,17 @@ class ReliabilityManager:
         }
 
     async def meminfo(self, device: AdbDevice, package: str) -> str:
-        return await self._shell(device, f"dumpsys meminfo {package}")
+        return await self._shell(device, f"dumpsys meminfo {shlex.quote(package)}")
 
     async def gfxinfo(self, device: AdbDevice, package: str) -> str:
-        return await self._shell(device, f"dumpsys gfxinfo {package}")
+        return await self._shell(device, f"dumpsys gfxinfo {shlex.quote(package)}")
 
     async def compile_package(self, device: AdbDevice, package: str, mode: str) -> str:
+        safe_package = shlex.quote(package)
         if mode == "reset":
-            return await self._shell(device, f"cmd package compile --reset {package}")
+            return await self._shell(device, f"cmd package compile --reset {safe_package}")
         if mode == "speed":
-            return await self._shell(device, f"cmd package compile -m speed -f {package}")
+            return await self._shell(device, f"cmd package compile -m speed -f {safe_package}")
         raise AgentError(
             code="ERR_INVALID_MODE",
             message=f"Invalid compile mode: {mode}",
@@ -157,8 +159,9 @@ class ReliabilityManager:
         return await self._shell(device, f"settings put global always_finish_activities {value}")
 
     async def run_as_ls(self, device: AdbDevice, package: str, path: str) -> str:
+        safe_package = shlex.quote(package)
         safe_path = shlex.quote(path)
-        return await self._shell(device, f"run-as {package} ls -R {safe_path}")
+        return await self._shell(device, f"run-as {safe_package} ls -R {safe_path}")
 
     async def dump_heap(
         self,
@@ -170,13 +173,16 @@ class ReliabilityManager:
         timestamp = self._timestamp()
         safe_pkg = package.replace(".", "_")
         remote_path = f"/data/local/tmp/{safe_pkg}_{timestamp}.hprof"
-        await self._shell(device, f"am dumpheap {package} {remote_path}")
+        await self._shell(
+            device,
+            f"am dumpheap {shlex.quote(package)} {shlex.quote(remote_path)}",
+        )
 
         local_path = self.output_dir / f"heap_{safe_pkg}_{timestamp}.hprof"
         await self._run_adb(serial, ["pull", remote_path, str(local_path)])
 
         if not keep_remote:
-            await self._shell(device, f"rm -f {remote_path}")
+            await self._shell(device, f"rm -f {shlex.quote(remote_path)}")
 
         logger.info("heap_dump_saved", serial=serial, path=str(local_path))
         return local_path
@@ -192,7 +198,10 @@ class ReliabilityManager:
         return pid
 
     async def trim_memory(self, device: AdbDevice, package: str, level: str) -> str:
-        return await self._shell(device, f"am send-trim-memory {package} {level}")
+        return await self._shell(
+            device,
+            f"am send-trim-memory {shlex.quote(package)} {shlex.quote(level)}",
+        )
 
     async def pull_root_dir(
         self,
@@ -227,7 +236,7 @@ class ReliabilityManager:
         return await self._shell(device, f"su -c {shlex.quote(command)}")
 
     async def _pidof(self, device: AdbDevice, package: str) -> int:
-        output = await self._shell(device, f"pidof {package}")
+        output = await self._shell(device, f"pidof {shlex.quote(package)}")
         pid = output.strip().split(" ")[0] if output.strip() else ""
         if not pid.isdigit():
             raise process_not_found_error(package)

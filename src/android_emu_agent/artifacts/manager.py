@@ -103,7 +103,7 @@ class ArtifactManager:
     """Manages artifact capture and storage."""
 
     def __init__(self, output_dir: Path | None = None) -> None:
-        default_dir = Path.home() / ".android-agent" / "artifacts"
+        default_dir = Path.home() / ".android-emu-agent" / "artifacts"
         self.output_dir = output_dir or default_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
 

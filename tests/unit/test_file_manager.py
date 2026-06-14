@@ -125,3 +125,31 @@ async def test_list_metadata_builds_command() -> None:
     assert "-mindepth 1" in command
     assert "-maxdepth 1" in command
     assert "-type d" in command
+
+
+@pytest.mark.asyncio
+async def test_app_pull_quotes_remote_paths(tmp_path: Path) -> None:
+    """Should quote app-private remote paths before running root shell commands."""
+    from android_emu_agent.files.manager import FileManager
+
+    manager = FileManager(output_dir=tmp_path)
+    calls: list[str] = []
+
+    async def fake_shell_su(_device: MagicMock, command: str) -> str:
+        calls.append(command)
+        return ""
+
+    with (
+        patch.object(manager, "_shell_su", new=AsyncMock(side_effect=fake_shell_su)),
+        patch.object(manager, "_run_adb", new=AsyncMock()),
+    ):
+        await manager.app_pull(
+            MagicMock(),
+            "emulator-5554",
+            "com.example.app",
+            "files/config;id.json",
+            None,
+        )
+
+    assert calls
+    assert "cp -r '/data/data/com.example.app/files/config;id.json'" in calls[0]

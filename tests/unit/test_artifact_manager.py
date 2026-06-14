@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from android_emu_agent.errors import AgentError
+
+
+def test_default_output_dir_uses_android_emu_agent_home(tmp_path) -> None:
+    """Default artifacts should live under ~/.android-emu-agent."""
+    from android_emu_agent.artifacts.manager import ArtifactManager
+
+    with patch("pathlib.Path.home", return_value=tmp_path):
+        manager = ArtifactManager()
+
+    assert manager.output_dir == tmp_path / ".android-emu-agent" / "artifacts"
 
 
 class TestPullLogs:

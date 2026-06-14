@@ -16,6 +16,15 @@ def _sha256_hex(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def test_default_version_matches_package_version(tmp_path: Path) -> None:
+    """Default bridge downloads should track the Python package version."""
+    from android_emu_agent import __version__
+
+    downloader = BridgeDownloader(cache_dir=tmp_path, repo="example/repo")
+
+    assert downloader._jar_name == f"jdi-bridge-{__version__}-all.jar"
+
+
 def test_resolve_uses_cached_jar_when_checksum_matches(tmp_path: Path) -> None:
     jar_bytes = b"bridge-jar"
     expected_sha = _sha256_hex(jar_bytes)

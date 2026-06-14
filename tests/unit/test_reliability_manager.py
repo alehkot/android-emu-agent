@@ -70,3 +70,23 @@ class TestMemGfxInfo:
 
         assert output == "GFXINFO"
         shell_mock.assert_awaited_once_with(mock_device, "dumpsys gfxinfo com.example.app")
+
+
+class TestDropboxPrint:
+    """Tests for DropBoxManager entry printing."""
+
+    @pytest.mark.asyncio
+    async def test_dropbox_print_quotes_tag(self) -> None:
+        """Should quote tags before passing them to adb shell."""
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        manager = ReliabilityManager()
+        mock_device = MagicMock()
+
+        with patch.object(manager, "_shell", AsyncMock(return_value="ENTRY")) as shell_mock:
+            output = await manager.dropbox_print(mock_device, "data_app_crash;id")
+
+        assert output == "ENTRY"
+        shell_mock.assert_awaited_once_with(
+            mock_device, "dumpsys dropbox --print 'data_app_crash;id'"
+        )

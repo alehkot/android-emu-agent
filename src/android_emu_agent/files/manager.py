@@ -78,14 +78,16 @@ class FileManager:
         stage_dir = self._stage_dir(package)
         stage_path = f"{stage_dir}/{self._stage_name(package)}"
         stage_cmd = (
-            f"rm -rf {stage_path} && mkdir -p {stage_dir} && cp -r {remote_abs} {stage_path}"
+            f"rm -rf {shlex.quote(stage_path)} "
+            f"&& mkdir -p {shlex.quote(stage_dir)} "
+            f"&& cp -r {shlex.quote(remote_abs)} {shlex.quote(stage_path)}"
         )
         await self._shell_su(device, stage_cmd)
 
         local = self._resolve_local_path(serial, remote_path, local_path, prefix=f"{package}_")
         local.parent.mkdir(parents=True, exist_ok=True)
         await self._run_adb(serial, ["pull", stage_path, str(local)])
-        await self._shell_su(device, f"rm -rf {stage_path}")
+        await self._shell_su(device, f"rm -rf {shlex.quote(stage_path)}")
         logger.info("app_file_pulled", serial=serial, remote=remote_abs, local=str(local))
         return local
 
