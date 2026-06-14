@@ -2,6 +2,11 @@ site_name: android-emu-agent
 site_url: https://alehkot.github.io/android-emu-agent/
 repo_url: https://github.com/alehkot/android-emu-agent
 repo_name: alehkot/android-emu-agent
+edit_uri: ""
 nav:
   - Home: index.md
   - CLI Reference: reference.md
+markdown_extensions:
+  - tables
+extra_css:
+  - stylesheets/home.css
