@@ -23,6 +23,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/alehkot/android-emu-agent"
+Documentation = "https://alehkot.github.io/android-emu-agent/"
 
 [project.optional-dependencies]
 dev = [

@@ -1,5 +1,7 @@
-# android-emu-agent docs
+# android-emu-agent
 
-Welcome to the local documentation site.
+Android Emu Agent is a daemon-first Android automation and debugging system for coding agents.
 
-- Go to the [CLI reference](reference.md) for all available commands and flags.
+- [CLI reference](reference.md): all available commands and flags.
+- [GitHub repository](https://github.com/alehkot/android-emu-agent): source code, issues, and
+  release history.

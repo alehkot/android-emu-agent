@@ -2,6 +2,10 @@
 
 CLI + daemon for LLM-driven Android UI control — ships with **ready-to-use coding agent skills**.
 
+[Documentation](https://alehkot.github.io/android-emu-agent/) |
+[CLI reference](https://alehkot.github.io/android-emu-agent/reference/) |
+[Source](https://github.com/alehkot/android-emu-agent)
+
 ## Overview
 
 Android Emu Agent automates Android apps using a fast observe-act-verify loop:
