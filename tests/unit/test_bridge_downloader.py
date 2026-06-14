@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 from unittest.mock import patch
 
@@ -23,6 +24,18 @@ def test_default_version_matches_package_version(tmp_path: Path) -> None:
     downloader = BridgeDownloader(cache_dir=tmp_path, repo="example/repo")
 
     assert downloader._jar_name == f"jdi-bridge-{__version__}-all.jar"
+
+
+def test_gradle_bridge_version_matches_package_version() -> None:
+    """Bridge artifact builds should use the Python package version."""
+    from android_emu_agent import __version__
+
+    build_file = Path(__file__).resolve().parents[2] / "jdi-bridge" / "build.gradle.kts"
+    text = build_file.read_text(encoding="utf-8")
+    match = re.search(r'^version = "([^"]+)"$', text, flags=re.MULTILINE)
+
+    assert match is not None
+    assert match.group(1) == __version__
 
 
 def test_resolve_uses_cached_jar_when_checksum_matches(tmp_path: Path) -> None:

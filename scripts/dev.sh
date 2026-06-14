@@ -146,6 +146,44 @@ render_init_with_version() {
     ' src/android_emu_agent/__init__.py > "$output_file"
 }
 
+render_bridge_downloader_with_version() {
+    local new_version="$1"
+    local output_file="$2"
+
+    awk -v version="$new_version" '
+        BEGIN { updated = 0 }
+        !updated && /^[[:space:]]*_DEFAULT_BRIDGE_VERSION[[:space:]]*=/ {
+            sub(/"[^"]*"/, "\"" version "\"")
+            updated = 1
+        }
+        { print }
+        END {
+            if (!updated) {
+                exit 1
+            }
+        }
+    ' src/android_emu_agent/debugger/bridge_downloader.py > "$output_file"
+}
+
+render_bridge_gradle_with_version() {
+    local new_version="$1"
+    local output_file="$2"
+
+    awk -v version="$new_version" '
+        BEGIN { updated = 0 }
+        !updated && /^[[:space:]]*version[[:space:]]*=/ {
+            sub(/"[^"]*"/, "\"" version "\"")
+            updated = 1
+        }
+        { print }
+        END {
+            if (!updated) {
+                exit 1
+            }
+        }
+    ' jdi-bridge/build.gradle.kts > "$output_file"
+}
+
 maybe_update_uv_lock() {
     if [ ! -f uv.lock ]; then
         return 0
@@ -284,42 +322,76 @@ bump_version() {
 
     local pyproject_tmp
     local init_tmp
+    local bridge_downloader_tmp
+    local bridge_gradle_tmp
     local pyproject_backup
     local init_backup
+    local bridge_downloader_backup
+    local bridge_gradle_backup
     pyproject_tmp="$(mktemp)"
     init_tmp="$(mktemp)"
+    bridge_downloader_tmp="$(mktemp)"
+    bridge_gradle_tmp="$(mktemp)"
     pyproject_backup="$(mktemp)"
     init_backup="$(mktemp)"
+    bridge_downloader_backup="$(mktemp)"
+    bridge_gradle_backup="$(mktemp)"
 
     cp pyproject.toml "$pyproject_backup"
     cp src/android_emu_agent/__init__.py "$init_backup"
+    cp src/android_emu_agent/debugger/bridge_downloader.py "$bridge_downloader_backup"
+    cp jdi-bridge/build.gradle.kts "$bridge_gradle_backup"
 
     if ! render_pyproject_with_version "$new_version" "$pyproject_tmp"; then
-        rm -f "$pyproject_tmp" "$init_tmp" "$pyproject_backup" "$init_backup"
+        rm -f "$pyproject_tmp" "$init_tmp" "$bridge_downloader_tmp" "$bridge_gradle_tmp" \
+            "$pyproject_backup" "$init_backup" "$bridge_downloader_backup" "$bridge_gradle_backup"
         echo "Failed to prepare updated pyproject.toml."
         return 1
     fi
 
     if ! render_init_with_version "$new_version" "$init_tmp"; then
-        rm -f "$pyproject_tmp" "$init_tmp" "$pyproject_backup" "$init_backup"
+        rm -f "$pyproject_tmp" "$init_tmp" "$bridge_downloader_tmp" "$bridge_gradle_tmp" \
+            "$pyproject_backup" "$init_backup" "$bridge_downloader_backup" "$bridge_gradle_backup"
         echo "Failed to prepare updated __init__.py."
         return 1
     fi
 
-    if ! mv "$pyproject_tmp" pyproject.toml || ! mv "$init_tmp" src/android_emu_agent/__init__.py; then
+    if ! render_bridge_downloader_with_version "$new_version" "$bridge_downloader_tmp"; then
+        rm -f "$pyproject_tmp" "$init_tmp" "$bridge_downloader_tmp" "$bridge_gradle_tmp" \
+            "$pyproject_backup" "$init_backup" "$bridge_downloader_backup" "$bridge_gradle_backup"
+        echo "Failed to prepare updated bridge_downloader.py."
+        return 1
+    fi
+
+    if ! render_bridge_gradle_with_version "$new_version" "$bridge_gradle_tmp"; then
+        rm -f "$pyproject_tmp" "$init_tmp" "$bridge_downloader_tmp" "$bridge_gradle_tmp" \
+            "$pyproject_backup" "$init_backup" "$bridge_downloader_backup" "$bridge_gradle_backup"
+        echo "Failed to prepare updated jdi-bridge/build.gradle.kts."
+        return 1
+    fi
+
+    if ! mv "$pyproject_tmp" pyproject.toml \
+        || ! mv "$init_tmp" src/android_emu_agent/__init__.py \
+        || ! mv "$bridge_downloader_tmp" src/android_emu_agent/debugger/bridge_downloader.py \
+        || ! mv "$bridge_gradle_tmp" jdi-bridge/build.gradle.kts; then
         cp "$pyproject_backup" pyproject.toml
         cp "$init_backup" src/android_emu_agent/__init__.py
-        rm -f "$pyproject_tmp" "$init_tmp" "$pyproject_backup" "$init_backup"
+        cp "$bridge_downloader_backup" src/android_emu_agent/debugger/bridge_downloader.py
+        cp "$bridge_gradle_backup" jdi-bridge/build.gradle.kts
+        rm -f "$pyproject_tmp" "$init_tmp" "$bridge_downloader_tmp" "$bridge_gradle_tmp" \
+            "$pyproject_backup" "$init_backup" "$bridge_downloader_backup" "$bridge_gradle_backup"
         echo "Failed to write version updates. Original files restored."
         return 1
     fi
 
-    rm -f "$pyproject_backup" "$init_backup"
+    rm -f "$pyproject_backup" "$init_backup" "$bridge_downloader_backup" "$bridge_gradle_backup"
 
     echo "Version bumped: $current_version -> $new_version"
     echo "Updated files:"
     echo "  pyproject.toml"
     echo "  src/android_emu_agent/__init__.py"
+    echo "  src/android_emu_agent/debugger/bridge_downloader.py"
+    echo "  jdi-bridge/build.gradle.kts"
 
     if ! maybe_update_uv_lock; then
         return 1
@@ -331,6 +403,8 @@ bump_version() {
     case "$tag_confirm" in
         y|Y|yes|YES)
             git add pyproject.toml src/android_emu_agent/__init__.py
+            git add src/android_emu_agent/debugger/bridge_downloader.py
+            git add jdi-bridge/build.gradle.kts
             if [ -f uv.lock ]; then
                 git add uv.lock
             fi
