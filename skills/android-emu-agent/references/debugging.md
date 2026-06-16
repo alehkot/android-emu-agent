@@ -33,11 +33,16 @@ What are you investigating?
 
 Debugger commands follow the same observe-act-verify rhythm as UI automation:
 
+- `debug observe`: Observe (current app + latest UI refs + debugger status/events/logpoints/stack).
 - `debug step-over`: Act + Observe (returns new state atomically).
 - `debug inspect`: Observe (bounded inspection).
 - `debug break set`: Act + Verify (confirmation or pending state).
 
 This allows safe interleaving of UI and debugger operations in one session.
+
+`debug observe --session <id> --json` is the preferred first debugger read for agents. It is
+non-destructive by default because it peeks queued events and buffered logpoint hits without
+draining them; add `--drain-events` only when you intentionally want to consume the queue.
 
 ## Deferred Breakpoints
 
@@ -136,6 +141,7 @@ uv run android-emu-agent debug break set com.example.LoginActivity 45 --session 
 uv run android-emu-agent debug break-exception set --session <session_id> --class '*' --no-caught --uncaught
 uv run android-emu-agent debug resume --session <session_id>
 uv run android-emu-agent debug events --session <session_id>
+uv run android-emu-agent debug observe --session <session_id> --json
 uv run android-emu-agent debug break hits --session <session_id> --limit 100
 uv run android-emu-agent debug inspect savedInstanceState --session <session_id>
 uv run android-emu-agent debug step-over --session <session_id>

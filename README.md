@@ -33,6 +33,8 @@ The CLI is a thin client. A long-running daemon handles all device I/O. All comm
 - **Visual grounding** — optional screenshot-to-ref metadata for human or vision-model evidence
 - **System surfaces** — open notifications/Quick Settings and list, grant, or revoke app permissions
   through validated shell-backed commands
+- **Debugger fusion** — combine current app state, latest UI refs, debugger status, events, logpoint
+  hits, and stack in one bounded observation
 - **Agent skills included** — structured reference docs, workflow templates, and safety guardrails
 - **Machine-readable output** — every command supports `--json` for agent pipelines
 
@@ -387,6 +389,9 @@ uv run android-emu-agent debug attach --session s-abc123 --package com.example.a
 # Check debug session status (VM name, version, thread count)
 uv run android-emu-agent debug status --session s-abc123
 
+# Fused app/UI/debug context for agent planning
+uv run android-emu-agent debug observe --session s-abc123 --json
+
 # Set/list/remove breakpoints
 uv run android-emu-agent debug break set com.example.app.MainActivity 42 --session s-abc123
 uv run android-emu-agent debug break list --session s-abc123
@@ -426,6 +431,10 @@ when a step cannot complete. If the main thread has been suspended for too long,
 an ANR warning so you can resume before Android's ANR threshold. When a mapping file is loaded,
 stack class/method names and inspect field names are deobfuscated. Mapping state is per attached
 bridge instance and clears on detach.
+
+`debug observe` is non-destructive by default: it peeks queued debugger events, reads buffered
+logpoint hits, summarizes the latest snapshot refs, and only drains events when `--drain-events` is
+set.
 
 Example debugger workflows
 

@@ -104,6 +104,50 @@ def debug_status(
     handle_response(resp, json_output=json_output)
 
 
+@app.command("observe")
+def debug_observe(
+    session_id: str = typer.Option(..., "--session", help="Session ID"),
+    thread: str = typer.Option("main", "--thread", help="Thread name for optional stack"),
+    max_frames: int = typer.Option(8, "--max-frames", help="Maximum stack frames"),
+    include_stack: bool = typer.Option(True, "--stack/--no-stack", help="Include stack summary"),
+    include_events: bool = typer.Option(
+        True,
+        "--events/--no-events",
+        help="Include queued debugger events",
+    ),
+    drain_events: bool = typer.Option(False, "--drain-events", help="Drain queued events"),
+    event_limit: int = typer.Option(20, "--event-limit", help="Maximum queued events"),
+    include_logpoints: bool = typer.Option(
+        True,
+        "--logpoints/--no-logpoints",
+        help="Include buffered logpoint hits",
+    ),
+    logpoint_limit: int = typer.Option(20, "--logpoint-limit", help="Maximum logpoint hits"),
+    ref_limit: int = typer.Option(20, "--ref-limit", help="Maximum latest-snapshot refs"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Return fused app, UI snapshot, and debugger context."""
+    client = DaemonClient(timeout=30.0)
+    resp = client.request(
+        "POST",
+        "/debug/observe",
+        json_body={
+            "session_id": session_id,
+            "thread": thread,
+            "max_frames": max_frames,
+            "include_stack": include_stack,
+            "include_events": include_events,
+            "drain_events": drain_events,
+            "event_limit": event_limit,
+            "include_logpoints": include_logpoints,
+            "logpoint_limit": logpoint_limit,
+            "ref_limit": ref_limit,
+        },
+    )
+    client.close()
+    handle_response(resp, json_output=json_output)
+
+
 @break_app.command("set")
 def debug_break_set(
     class_pattern: str = typer.Argument(..., help="Class pattern (e.g. com.example.MainActivity)"),

@@ -132,6 +132,7 @@ android-emu-agent debug [OPTIONS] COMMAND [ARGS]...
 - `attach`: Attach the debugger to a running app&#x27;s JVM.
 - `detach`: Detach the debugger from a session.
 - `status`: Get the debug session status.
+- `observe`: Return fused app, UI snapshot, and...
 - `threads`: List debugger-visible VM threads.
 - `events`: Drain and return queued debugger events.
 - `stack`: Return stack trace for a debugger thread.
@@ -212,6 +213,31 @@ android-emu-agent debug status [OPTIONS]
 **Options**:
 
 - `--session TEXT`: Session ID [required]
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent debug observe`
+
+Return fused app, UI snapshot, and debugger context.
+
+**Usage**:
+
+```console
+android-emu-agent debug observe [OPTIONS]
+```
+
+**Options**:
+
+- `--session TEXT`: Session ID [required]
+- `--thread TEXT`: Thread name for optional stack [default: main]
+- `--max-frames INTEGER`: Maximum stack frames [default: 8]
+- `--stack / --no-stack`: Include stack summary [default: stack]
+- `--events / --no-events`: Include queued debugger events [default: events]
+- `--drain-events`: Drain queued events
+- `--event-limit INTEGER`: Maximum queued events [default: 20]
+- `--logpoints / --no-logpoints`: Include buffered logpoint hits [default: logpoints]
+- `--logpoint-limit INTEGER`: Maximum logpoint hits [default: 20]
+- `--ref-limit INTEGER`: Maximum latest-snapshot refs [default: 20]
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 

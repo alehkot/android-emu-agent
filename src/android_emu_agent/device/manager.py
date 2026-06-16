@@ -207,6 +207,7 @@ class DeviceManager:
                 "trace_archives": True,
                 "visual_grounding": True,
                 "system_surfaces": True,
+                "debugger_fusion": True,
             },
             "device_features": {
                 "root_required_available": bool(info and info.is_rooted),

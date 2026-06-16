@@ -48,6 +48,7 @@ from android_emu_agent.daemon.models import (
     DebugInspectRequest,
     DebugMappingClearRequest,
     DebugMappingLoadRequest,
+    DebugObserveRequest,
     DebugPingRequest,
     DebugResumeRequest,
     DebugStackRequest,
@@ -484,6 +485,65 @@ def _system_command_failed_error(serial: str, exc: Exception) -> AgentError:
         context={"serial": serial},
         remediation="Verify the device is online and the Android system service is available.",
     )
+
+
+def _unavailable_payload(error: AgentError) -> dict[str, Any]:
+    return {"status": "unavailable", "error": error.to_dict()}
+
+
+def _latest_snapshot_summary(
+    snapshot: dict[str, Any] | None,
+    *,
+    ref_limit: int,
+) -> dict[str, Any]:
+    if not snapshot:
+        return {"status": "missing", "available": False}
+
+    raw_elements = snapshot.get("elements")
+    elements = raw_elements if isinstance(raw_elements, list) else []
+    refs: list[dict[str, Any]] = []
+    for raw_element in elements[:ref_limit]:
+        if not isinstance(raw_element, dict):
+            continue
+        refs.append(
+            {
+                key: raw_element.get(key)
+                for key in ("ref", "role", "label", "text", "resource_id", "bounds")
+                if raw_element.get(key) is not None
+            }
+        )
+
+    return {
+        "status": "done",
+        "available": True,
+        "generation": snapshot.get("generation"),
+        "context": snapshot.get("context", {}),
+        "element_count": len(elements),
+        "ref_limit": ref_limit,
+        "refs": refs,
+    }
+
+
+async def _current_app_observation(core: DaemonCore, serial: str) -> dict[str, Any]:
+    try:
+        data = await core.device_manager.app_current(serial)
+    except Exception as exc:
+        return _unavailable_payload(
+            AgentError(
+                code="ERR_DEBUG_OBSERVE_APP_UNAVAILABLE",
+                message=str(exc),
+                context={"serial": serial},
+                remediation="Verify the device is online and retry debug observe.",
+            )
+        )
+
+    return {
+        "status": "done",
+        "package": data.get("package"),
+        "activity": data.get("activity"),
+        "component": data.get("component"),
+        "line": data.get("line"),
+    }
 
 
 async def _resolve_locator(
@@ -2965,6 +3025,125 @@ async def debug_status(session_id: str) -> EndpointResponse:
 async def debug_status_query(session_id: str) -> EndpointResponse:
     """Get debug status using query string style: /debug/status?session_id=..."""
     return await debug_status(session_id)
+
+
+@app.post("/debug/observe", response_model=None)
+async def debug_observe(req: DebugObserveRequest) -> EndpointResponse:
+    """Return a fused app/UI/debug observation for agent planning."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    if req.include_stack and not req.thread.strip():
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_THREAD",
+                message="Invalid thread name: empty",
+                remediation="Provide a non-empty thread name, for example --thread main.",
+            ),
+            status_code=400,
+        )
+
+    if req.max_frames <= 0:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_MAX_FRAMES",
+                message=f"Invalid max_frames: {req.max_frames}",
+                context={"max_frames": req.max_frames},
+                remediation="Use a positive max frame count, for example --max-frames 8.",
+            ),
+            status_code=400,
+        )
+
+    if req.event_limit <= 0:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_LIMIT",
+                message=f"Invalid event_limit: {req.event_limit}",
+                context={"event_limit": req.event_limit},
+                remediation="Use a positive event limit.",
+            ),
+            status_code=400,
+        )
+
+    if req.logpoint_limit <= 0:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_LIMIT",
+                message=f"Invalid logpoint_limit: {req.logpoint_limit}",
+                context={"logpoint_limit": req.logpoint_limit},
+                remediation="Use a positive logpoint limit.",
+            ),
+            status_code=400,
+        )
+
+    if req.ref_limit < 0:
+        return _error_response(
+            AgentError(
+                code="ERR_INVALID_LIMIT",
+                message=f"Invalid ref_limit: {req.ref_limit}",
+                context={"ref_limit": req.ref_limit},
+                remediation="Use zero or a positive ref limit.",
+            ),
+            status_code=400,
+        )
+
+    debug_state = await core.debug_manager.status(req.session_id)
+    debug_status_value = str(debug_state.get("status", "unknown"))
+    snapshot = await core.session_manager.get_last_snapshot(req.session_id)
+
+    payload: dict[str, Any] = {
+        "status": "done",
+        "session_id": req.session_id,
+        "device_serial": session.device_serial,
+        "app": await _current_app_observation(core, session.device_serial),
+        "snapshot": _latest_snapshot_summary(snapshot, ref_limit=req.ref_limit),
+        "debug": debug_state,
+    }
+
+    if req.include_events:
+        if debug_status_value == "not_attached":
+            payload["events"] = {"status": "skipped", "reason": "debugger_not_attached"}
+        else:
+            try:
+                payload["events"] = await core.debug_manager.peek_events(
+                    req.session_id,
+                    drain=req.drain_events,
+                    limit=req.event_limit,
+                )
+            except AgentError as exc:
+                payload["events"] = _unavailable_payload(exc)
+
+    if req.include_logpoints:
+        if debug_status_value == "not_attached":
+            payload["logpoints"] = {"status": "skipped", "reason": "debugger_not_attached"}
+        else:
+            try:
+                payload["logpoints"] = await core.debug_manager.list_logpoint_hits(
+                    req.session_id,
+                    limit=req.logpoint_limit,
+                )
+            except AgentError as exc:
+                payload["logpoints"] = _unavailable_payload(exc)
+
+    if req.include_stack:
+        if debug_status_value != "attached":
+            payload["stack"] = {
+                "status": "skipped",
+                "reason": f"debugger_{debug_status_value}",
+            }
+        else:
+            try:
+                payload["stack"] = await core.debug_manager.stack_trace(
+                    session_id=req.session_id,
+                    thread_name=req.thread,
+                    max_frames=req.max_frames,
+                )
+            except AgentError as exc:
+                payload["stack"] = _unavailable_payload(exc)
+
+    return payload
 
 
 @app.post("/debug/breakpoint/set", response_model=None)

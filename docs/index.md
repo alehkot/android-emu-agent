@@ -33,7 +33,7 @@ generation: 43
 | **Generation-scoped refs**  | Short handles like `^a1` for precise taps and text entry, with ref healing when the target can be rebound.                 |
 | **Selector introspection**  | Exact, contains, regex, class, resource ID, content-desc, coordinate, and ref selector support is discoverable per target. |
 | **Daemon-first I/O**        | A FastAPI daemon over a Unix socket keeps device sessions warm while the CLI stays thin and scriptable.                    |
-| **Debugger bridge**         | Java 17+ JDI support for threads, stack traces, breakpoints, exception breaks, stepping, and constrained eval.             |
+| **Debugger bridge**         | Java 17+ JDI support plus fused app/UI/debug observations for agent planning.                                              |
 | **Forensics and artifacts** | Screenshots, log bundles, request diagnostics, process data, memory reports, and gfxinfo for evidence-driven debugging.    |
 | **Trace archives**          | `.aea-trace.zip` archives capture daemon exchanges for dry replay and Markdown reports.                                    |
 | **Task harness**            | JSON task specs run ordered steps with step-level and final verifiers.                                                     |

@@ -626,17 +626,32 @@ class DebugManager:
 
     async def drain_events(self, session_id: str) -> dict[str, Any]:
         """Drain and return queued debugger events for a session."""
+        return await self.peek_events(session_id, drain=True)
+
+    async def peek_events(
+        self,
+        session_id: str,
+        *,
+        drain: bool = False,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Return queued debugger events without draining by default."""
         ds = self._debug_sessions.get(session_id)
         if ds is None:
             raise debug_not_attached_error(session_id)
 
         queue = self._event_queues.setdefault(session_id, [])
         events = list(queue)
-        queue.clear()
+        if limit is not None and limit < len(events):
+            events = events[-limit:]
+        if drain:
+            queue.clear()
         return {
             "status": ds.state,
             "session_id": session_id,
             "count": len(events),
+            "buffer_count": len(queue),
+            "drained": drain,
             "events": events,
         }
 

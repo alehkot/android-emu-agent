@@ -408,6 +408,19 @@ class DebugDetachRequest(BaseModel):
     session_id: str
 
 
+class DebugObserveRequest(BaseModel):
+    session_id: str
+    thread: str = "main"
+    max_frames: int = 8
+    include_stack: bool = True
+    include_events: bool = True
+    drain_events: bool = False
+    event_limit: int = 20
+    include_logpoints: bool = True
+    logpoint_limit: int = 20
+    ref_limit: int = 20
+
+
 class DebugBreakpointSetRequest(BaseModel):
     session_id: str
     class_pattern: str

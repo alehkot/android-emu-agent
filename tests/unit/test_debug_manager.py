@@ -928,6 +928,28 @@ class TestMilestone2DebugMethods:
         assert second["events"] == []
 
     @pytest.mark.asyncio
+    async def test_peek_events_limits_without_draining(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+        manager._event_queues["s-test"] = [
+            {"type": "breakpoint_resolved", "breakpoint_id": 1},
+            {"type": "breakpoint_hit", "breakpoint_id": 1},
+            {"type": "exception_hit", "breakpoint_id": 2},
+        ]
+
+        result = await manager.peek_events("s-test", limit=2)
+
+        assert result["status"] == "attached"
+        assert result["count"] == 2
+        assert result["buffer_count"] == 3
+        assert result["drained"] is False
+        assert [event["type"] for event in result["events"]] == [
+            "breakpoint_hit",
+            "exception_hit",
+        ]
+        assert len(manager._event_queues["s-test"]) == 3
+
+    @pytest.mark.asyncio
     async def test_monitor_events_queues_breakpoint_notifications(self) -> None:
         manager = DebugManager()
         self._attach_session(manager)

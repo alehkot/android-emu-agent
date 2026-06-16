@@ -192,6 +192,8 @@ debugger to the app at startup:
 - `debug attach --session <session_id> --package <package> [--process <process_name>] [--keep-suspended]`
   Attach via JDWP and return VM status.
 - `debug status --session <session_id>` Show current debugger connection state.
+- `debug observe --session <session_id> [--thread <name>] [--max-frames <n>]` Return fused app,
+  latest-snapshot, debugger status, event, logpoint, and optional stack context.
 - `debug break set <class_pattern> <line> --session <session_id> [--condition <expr>]`
   `[--log-message <template>] [--capture-stack] [--stack-max-frames <n>]` Set a breakpoint,
   conditional breakpoint, or non-suspending logpoint.
@@ -235,6 +237,10 @@ Use `--process` when multiple debuggable processes are present (for example
 
 Use `--keep-suspended` when attaching to an app started with `--wait-debugger` and you need to set
 breakpoints before any app code resumes.
+
+Use `debug observe` when an agent needs one bounded planning payload. It is non-destructive by
+default: queued events are peeked, not drained, unless `--drain-events` is set. Use `--no-stack`
+when the target thread is running and a stack snapshot is not expected.
 
 Step commands return an Observe-Act-Verify payload with `status`, `location`, `method`, `thread`,
 `locals`, `token_usage_estimate`, and `truncated`. If stepping times out, `status=timeout` includes

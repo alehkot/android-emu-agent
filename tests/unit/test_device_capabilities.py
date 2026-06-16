@@ -90,6 +90,7 @@ def test_device_manager_capability_report_lists_selector_features() -> None:
     assert report["automation"]["task_harness"] is True
     assert report["automation"]["visual_grounding"] is True
     assert report["automation"]["system_surfaces"] is True
+    assert report["automation"]["debugger_fusion"] is True
     assert report["device_features"]["emulator_controls_available"] is True
     assert report["device_features"]["runtime_permissions"] is True
 
