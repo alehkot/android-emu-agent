@@ -315,6 +315,12 @@ class ReliabilityEventsRequest(DeviceTargetRequest):
     package: str | None = None
 
 
+class ReliabilityProfileRequest(DeviceTargetRequest):
+    package: str
+    since: str | None = None
+    include_raw: bool = False
+
+
 class ReliabilityDropboxListRequest(DeviceTargetRequest):
     package: str | None = None
 

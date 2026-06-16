@@ -7,10 +7,11 @@ import re
 import shlex
 import shutil
 import subprocess
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -141,6 +142,47 @@ class ReliabilityManager:
     async def gfxinfo(self, device: AdbDevice, package: str) -> str:
         return await self._shell(device, f"dumpsys gfxinfo {shlex.quote(package)}")
 
+    async def profile(
+        self,
+        device: AdbDevice,
+        package: str,
+        *,
+        since: str | None = None,
+        include_raw: bool = False,
+    ) -> dict[str, Any]:
+        """Collect a bounded app performance and reliability profile."""
+        process = await self._profile_section(
+            lambda: self._process_profile(device, package, include_raw)
+        )
+        memory = await self._profile_section(lambda: self._memory_profile(device, package, include_raw))
+        graphics = await self._profile_section(
+            lambda: self._graphics_profile(device, package, include_raw)
+        )
+        background = await self._profile_section(
+            lambda: self.background_restrictions(device, package)
+        )
+        exit_info = await self._profile_section(
+            lambda: self._exit_info_profile(device, package, include_raw)
+        )
+        events = await self._profile_section(
+            lambda: self._events_profile(device, package, since, include_raw)
+        )
+        sections = {
+            "process": process,
+            "memory": memory,
+            "graphics": graphics,
+            "background": background,
+            "exit_info": exit_info,
+            "events": events,
+        }
+        return {
+            "package": package,
+            "since": since,
+            "include_raw": include_raw,
+            "sections": sections,
+            "output": self._format_profile(package, sections),
+        }
+
     async def compile_package(self, device: AdbDevice, package: str, mode: str) -> str:
         safe_package = shlex.quote(package)
         if mode == "reset":
@@ -203,6 +245,112 @@ class ReliabilityManager:
             f"am send-trim-memory {shlex.quote(package)} {shlex.quote(level)}",
         )
 
+    async def _memory_profile(
+        self,
+        device: AdbDevice,
+        package: str,
+        include_raw: bool,
+    ) -> dict[str, Any]:
+        output = await self.meminfo(device, package)
+        payload: dict[str, Any] = {
+            "status": "done",
+            "summary": self.parse_meminfo_summary(output),
+            "line_count": len(output.splitlines()),
+        }
+        if include_raw:
+            payload["output"] = output
+        return payload
+
+    async def _process_profile(
+        self,
+        device: AdbDevice,
+        package: str,
+        include_raw: bool,
+    ) -> dict[str, Any]:
+        data = await self.process_info(device, package)
+        payload: dict[str, Any] = {
+            "status": "done",
+            "pid": data.get("pid"),
+            "oom_score_adj": data.get("oom_score_adj"),
+        }
+        if include_raw:
+            payload["ps"] = data.get("ps")
+            payload["process_state"] = data.get("process_state")
+        return payload
+
+    async def _graphics_profile(
+        self,
+        device: AdbDevice,
+        package: str,
+        include_raw: bool,
+    ) -> dict[str, Any]:
+        output = await self.gfxinfo(device, package)
+        payload: dict[str, Any] = {
+            "status": "done",
+            "summary": self.parse_gfxinfo_summary(output),
+            "line_count": len(output.splitlines()),
+        }
+        if include_raw:
+            payload["output"] = output
+        return payload
+
+    async def _exit_info_profile(
+        self,
+        device: AdbDevice,
+        package: str,
+        include_raw: bool,
+    ) -> dict[str, Any]:
+        output = await self.exit_info(device, package)
+        lines = [line for line in output.splitlines() if line.strip()]
+        payload: dict[str, Any] = {
+            "status": "done",
+            "line_count": len(lines),
+            "has_recent_exit": bool(lines),
+        }
+        if include_raw:
+            payload["output"] = output
+        return payload
+
+    async def _events_profile(
+        self,
+        device: AdbDevice,
+        package: str,
+        since: str | None,
+        include_raw: bool,
+    ) -> dict[str, Any]:
+        events = await self.logcat_events(device, DEFAULT_EVENTS_PATTERN, since)
+        filtered = [line for line in events.output.splitlines() if package in line]
+        output = "\n".join(filtered)
+        payload: dict[str, Any] = {
+            "status": "done",
+            "line_count": len(filtered),
+            "total_lines": events.total_lines,
+            "pattern": DEFAULT_EVENTS_PATTERN,
+        }
+        if include_raw:
+            payload["output"] = output
+        return payload
+
+    @staticmethod
+    async def _profile_section(
+        collector: Callable[[], Awaitable[dict[str, Any]]],
+    ) -> dict[str, Any]:
+        try:
+            result = await collector()
+        except AgentError as exc:
+            return {"status": "unavailable", "error": exc.to_dict()}
+        except Exception as exc:  # pragma: no cover - defensive around adb/device failures
+            error = AgentError(
+                code="ERR_PROFILE_SECTION_FAILED",
+                message=str(exc),
+                remediation="Retry the profile or run the individual reliability command.",
+            )
+            return {"status": "unavailable", "error": error.to_dict()}
+
+        if isinstance(result, dict):
+            return {"status": "done", **result}
+        return {"status": "done", "value": result}
+
     async def pull_root_dir(
         self,
         device: AdbDevice,
@@ -223,6 +371,109 @@ class ReliabilityManager:
         await self._shell(device, f"rm -rf {stage_dir}")
         logger.info("root_dir_pulled", serial=serial, remote=remote_dir, local=str(local_path))
         return local_path
+
+    @staticmethod
+    def parse_meminfo_summary(output: str) -> dict[str, int]:
+        """Extract stable headline memory counters from dumpsys meminfo output."""
+        summary: dict[str, int] = {}
+        patterns = {
+            "total_pss_kb": r"TOTAL\s+PSS:\s*([\d,]+)",
+            "total_rss_kb": r"TOTAL\s+RSS:\s*([\d,]+)",
+            "native_heap_kb": r"Native Heap\s+([\d,]+)",
+            "dalvik_heap_kb": r"Dalvik Heap\s+([\d,]+)",
+        }
+        for key, pattern in patterns.items():
+            match = re.search(pattern, output, flags=re.IGNORECASE)
+            if match:
+                summary[key] = int(match.group(1).replace(",", ""))
+
+        if "total_pss_kb" not in summary:
+            match = re.search(r"^\s*TOTAL\s+([\d,]+)", output, flags=re.IGNORECASE | re.MULTILINE)
+            if match:
+                summary["total_pss_kb"] = int(match.group(1).replace(",", ""))
+        return summary
+
+    @staticmethod
+    def parse_gfxinfo_summary(output: str) -> dict[str, Any]:
+        """Extract stable headline frame metrics from dumpsys gfxinfo output."""
+        summary: dict[str, Any] = {}
+        total_match = re.search(r"Total frames rendered:\s*(\d+)", output, flags=re.IGNORECASE)
+        if total_match:
+            summary["total_frames"] = int(total_match.group(1))
+
+        janky_match = re.search(
+            r"Janky frames:\s*(\d+)\s*\(([^)]+)\)",
+            output,
+            flags=re.IGNORECASE,
+        )
+        if janky_match:
+            summary["janky_frames"] = int(janky_match.group(1))
+            summary["janky_percent"] = janky_match.group(2).strip()
+
+        percentiles: dict[str, float] = {}
+        for match in re.finditer(
+            r"(\d+)th percentile:\s*([\d.]+)ms",
+            output,
+            flags=re.IGNORECASE,
+        ):
+            percentiles[f"p{match.group(1)}_ms"] = float(match.group(2))
+        if percentiles:
+            summary["percentiles"] = percentiles
+        return summary
+
+    @staticmethod
+    def _format_profile(package: str, sections: dict[str, dict[str, Any]]) -> str:
+        lines = [f"PROFILE {package}"]
+
+        process = sections.get("process", {})
+        if process.get("status") == "done":
+            lines.append(
+                f"PROCESS pid={process.get('pid', 'unknown')} "
+                f"oom_score_adj={process.get('oom_score_adj', 'unknown')}"
+            )
+        else:
+            lines.append("PROCESS unavailable")
+
+        memory_summary = sections.get("memory", {}).get("summary", {})
+        if isinstance(memory_summary, dict) and memory_summary:
+            memory_parts = " ".join(f"{key}={value}" for key, value in memory_summary.items())
+            lines.append(f"MEMORY {memory_parts}")
+        else:
+            lines.append("MEMORY unavailable")
+
+        graphics_summary = sections.get("graphics", {}).get("summary", {})
+        if isinstance(graphics_summary, dict) and graphics_summary:
+            graphics_parts = []
+            if "total_frames" in graphics_summary:
+                graphics_parts.append(f"frames={graphics_summary['total_frames']}")
+            if "janky_frames" in graphics_summary:
+                graphics_parts.append(
+                    f"janky={graphics_summary['janky_frames']}"
+                    f" ({graphics_summary.get('janky_percent', 'unknown')})"
+                )
+            lines.append(f"GRAPHICS {' '.join(graphics_parts) if graphics_parts else graphics_summary}")
+        else:
+            lines.append("GRAPHICS unavailable")
+
+        events = sections.get("events", {})
+        if events.get("status") == "done":
+            lines.append(
+                f"EVENTS matched={events.get('line_count', 0)} "
+                f"total={events.get('total_lines', 0)}"
+            )
+        else:
+            lines.append("EVENTS unavailable")
+
+        exit_info = sections.get("exit_info", {})
+        if exit_info.get("status") == "done":
+            lines.append(
+                f"EXIT_INFO lines={exit_info.get('line_count', 0)} "
+                f"recent={exit_info.get('has_recent_exit', False)}"
+            )
+        else:
+            lines.append("EXIT_INFO unavailable")
+
+        return "\n".join(lines)
 
     async def _shell(self, device: AdbDevice, command: str) -> str:
         def _run() -> str:

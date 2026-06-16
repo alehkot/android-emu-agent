@@ -71,6 +71,92 @@ class TestMemGfxInfo:
         assert output == "GFXINFO"
         shell_mock.assert_awaited_once_with(mock_device, "dumpsys gfxinfo com.example.app")
 
+    def test_parse_meminfo_summary_extracts_headline_counters(self) -> None:
+        """Should parse stable counters from dumpsys meminfo output."""
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        output = """
+        Native Heap     12,345
+        Dalvik Heap      6,789
+        TOTAL PSS:      22,222
+        TOTAL RSS:      33,333
+        """
+
+        assert ReliabilityManager.parse_meminfo_summary(output) == {
+            "total_pss_kb": 22222,
+            "total_rss_kb": 33333,
+            "native_heap_kb": 12345,
+            "dalvik_heap_kb": 6789,
+        }
+
+    def test_parse_gfxinfo_summary_extracts_frame_metrics(self) -> None:
+        """Should parse frame totals, jank, and percentiles."""
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        output = """
+        Total frames rendered: 120
+        Janky frames: 6 (5.00%)
+        50th percentile: 8ms
+        90th percentile: 17ms
+        """
+
+        assert ReliabilityManager.parse_gfxinfo_summary(output) == {
+            "total_frames": 120,
+            "janky_frames": 6,
+            "janky_percent": "5.00%",
+            "percentiles": {"p50_ms": 8.0, "p90_ms": 17.0},
+        }
+
+    @pytest.mark.asyncio
+    async def test_profile_collects_bounded_sections(self) -> None:
+        """Should aggregate process, memory, graphics, background, exit, and events data."""
+        from android_emu_agent.reliability.manager import CommandOutput, ReliabilityManager
+
+        manager = ReliabilityManager()
+        mock_device = MagicMock()
+
+        with (
+            patch.object(
+                manager,
+                "process_info",
+                AsyncMock(return_value={"pid": 123, "oom_score_adj": "0"}),
+            ),
+            patch.object(manager, "meminfo", AsyncMock(return_value="TOTAL PSS: 12345")),
+            patch.object(
+                manager,
+                "gfxinfo",
+                AsyncMock(return_value="Total frames rendered: 100\nJanky frames: 4 (4.00%)"),
+            ),
+            patch.object(
+                manager,
+                "background_restrictions",
+                AsyncMock(return_value={"appops": "allow", "standby_bucket": "active"}),
+            ),
+            patch.object(manager, "exit_info", AsyncMock(return_value="recent exit")),
+            patch.object(
+                manager,
+                "logcat_events",
+                AsyncMock(
+                    return_value=CommandOutput(
+                        output="06-01 am_crash com.example.app\n06-01 am_anr other.app",
+                        line_count=2,
+                        total_lines=10,
+                    )
+                ),
+            ),
+        ):
+            profile = await manager.profile(mock_device, "com.example.app", since="100")
+
+        assert profile["package"] == "com.example.app"
+        sections = profile["sections"]
+        assert sections["process"]["pid"] == 123
+        assert "ps" not in sections["process"]
+        assert sections["memory"]["summary"]["total_pss_kb"] == 12345
+        assert sections["graphics"]["summary"]["janky_frames"] == 4
+        assert sections["events"]["line_count"] == 1
+        assert "output" not in sections["memory"]
+        assert "PROFILE com.example.app" in profile["output"]
+
 
 class TestDropboxPrint:
     """Tests for DropBoxManager entry printing."""

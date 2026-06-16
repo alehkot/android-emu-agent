@@ -35,6 +35,8 @@ The CLI is a thin client. A long-running daemon handles all device I/O. All comm
   through validated shell-backed commands
 - **Debugger fusion** — combine current app state, latest UI refs, debugger status, events, logpoint
   hits, and stack in one bounded observation
+- **Performance profile** — aggregate process, memory, rendering, background, exit, and event
+  signals into one app health snapshot
 - **Agent skills included** — structured reference docs, workflow templates, and safety guardrails
 - **Machine-readable output** — every command supports `--json` for agent pipelines
 
@@ -360,6 +362,7 @@ App debug helpers
 uv run android-emu-agent app current --session s-abc123
 uv run android-emu-agent app task-stack --session s-abc123
 uv run android-emu-agent app resolve-intent --session s-abc123 --action android.intent.action.VIEW --data "https://example.com/deep"
+uv run android-emu-agent reliability profile com.example.app --session s-abc123 --json
 uv run android-emu-agent reliability process com.example.app --device emulator-5554
 uv run android-emu-agent reliability meminfo com.example.app --device emulator-5554
 uv run android-emu-agent reliability gfxinfo com.example.app --device emulator-5554
@@ -570,6 +573,7 @@ In practice, these are usually safe on non-root devices:
 - Device capabilities
 - System surfaces (`notifications`, `quick-settings`) and runtime permission list/grant/revoke
 - App list/install/uninstall/launch/intent/force-stop/reset/deeplink
+- Reliability profile, events, process, meminfo, gfxinfo, and background diagnostics
 - File `push` and `pull` to shared storage
 
 Emulator-only commands are `emulator snapshot save|restore`. Root-required commands are listed

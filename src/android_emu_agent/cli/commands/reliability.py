@@ -74,6 +74,28 @@ def reliability_events(
     handle_output_response(resp, json_output=json_output)
 
 
+@app.command("profile")
+def reliability_profile(
+    package: str = typer.Argument(..., help="Package name"),
+    device: str | None = typer.Option(None, "--device", "-d", help="Device serial"),
+    session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
+    since: str | None = typer.Option(
+        None,
+        "--since",
+        help="Logcat -t value for reliability events: timestamp or line count",
+    ),
+    include_raw: bool = typer.Option(False, "--raw", help="Include raw diagnostic dumps"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Collect a bounded app performance and reliability profile."""
+    payload = require_target(device, session_id)
+    payload.update({"package": package, "since": since, "include_raw": include_raw})
+    client = DaemonClient(timeout=RELIABILITY_TIMEOUT)
+    resp = client.request("POST", "/reliability/profile", json_body=payload)
+    client.close()
+    handle_output_response(resp, json_output=json_output)
+
+
 @dropbox_app.command("list")
 def reliability_dropbox_list(
     device: str | None = typer.Option(None, "--device", "-d", help="Device serial"),

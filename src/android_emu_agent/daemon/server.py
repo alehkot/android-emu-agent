@@ -82,6 +82,7 @@ from android_emu_agent.daemon.models import (
     ReliabilityExitInfoRequest,
     ReliabilityOomAdjRequest,
     ReliabilityPackageRequest,
+    ReliabilityProfileRequest,
     ReliabilityRunAsRequest,
     ReliabilitySigquitRequest,
     ReliabilityToggleRequest,
@@ -1870,6 +1871,33 @@ async def reliability_events(req: ReliabilityEventsRequest) -> EndpointResponse:
         "total_lines": result.total_lines,
         "output": output,
     }
+
+
+@app.post("/reliability/profile", response_model=None)
+async def reliability_profile(req: ReliabilityProfileRequest) -> EndpointResponse:
+    """Collect a bounded performance and reliability profile for a package."""
+    core: DaemonCore = app.state.core
+    try:
+        validate_package(req.package)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    resolved = await _resolve_device_target(core, req.session_id, req.serial)
+    if isinstance(resolved, JSONResponse):
+        return resolved
+    serial, device, _info = resolved
+
+    try:
+        result = await core.reliability_manager.profile(
+            device,
+            req.package,
+            since=req.since,
+            include_raw=req.include_raw,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", "serial": serial, **result}
 
 
 @app.post("/reliability/dropbox_list", response_model=None)

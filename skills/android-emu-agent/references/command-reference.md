@@ -319,6 +319,8 @@ compatible alias.
 
 ### Reliability
 
+- `reliability profile <package> --device <serial>` Bounded process, memory, rendering, background,
+  exit-info, and ActivityManager event profile.
 - `reliability exit-info <package> --device <serial>` App exit reasons (A11+).
 - `reliability events --device <serial>` ActivityManager events buffer.
 - `reliability bugreport --device <serial>` Capture system bugreport.

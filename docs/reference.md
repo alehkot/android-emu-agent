@@ -2431,6 +2431,7 @@ android-emu-agent reliability [OPTIONS] COMMAND [ARGS]...
 - `exit-info`: Show ApplicationExitInfo for a package.
 - `bugreport`: Capture a system bugreport.
 - `events`: Dump ActivityManager events log.
+- `profile`: Collect a bounded app performance and...
 - `background`: Check background restrictions and standby...
 - `last-anr`: Show the last ANR summary from...
 - `jobscheduler`: Inspect JobScheduler constraints for a...
@@ -2503,6 +2504,29 @@ android-emu-agent reliability events [OPTIONS]
 - `--pattern TEXT`: Regex filter for events
 - `--package TEXT`: Filter for package name
 - `--since TEXT`: Logcat -t value: timestamp (MM-DD HH:MM:SS.mmm) or line count
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent reliability profile`
+
+Collect a bounded app performance and reliability profile.
+
+**Usage**:
+
+```console
+android-emu-agent reliability profile [OPTIONS] PACKAGE
+```
+
+**Arguments**:
+
+- `PACKAGE`: Package name [required]
+
+**Options**:
+
+- `-d, --device TEXT`: Device serial
+- `-s, --session TEXT`: Session ID
+- `--since TEXT`: Logcat -t value for reliability events: timestamp or line count
+- `--raw`: Include raw diagnostic dumps
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 

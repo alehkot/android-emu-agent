@@ -6,6 +6,11 @@
 Use these commands when diagnosing crashes, ANRs, silent process death, or performance issues. All
 reliability commands accept **either** `--device <serial>` **or** `--session <session_id>`.
 
+Start with `reliability profile <package>` when you need a compact app health snapshot. It combines
+process/OOM state, memory headline counters, rendering/jank stats, background restrictions, recent
+exit-info presence, and filtered ActivityManager events. Add `--raw` only when you need the raw
+dumps in the JSON payload.
+
 ## Triage Decision Tree
 
 Start here when something goes wrong. Follow the path that matches your symptom:
@@ -14,10 +19,11 @@ Start here when something goes wrong. Follow the path that matches your symptom:
 What happened?
   │
   ├─ App crashed or was killed
-  │    1. exit-info  → get the exit reason (Android 11+)
-  │    2. events     → see the timeline of process deaths
-  │    3. dropbox    → get crash stack traces
-  │    4. bugreport  → full system capture (if above is insufficient)
+  │    1. profile    → compact health snapshot across process/memory/gfx/events
+  │    2. exit-info  → get the exit reason (Android 11+)
+  │    3. events     → see the timeline of process deaths
+  │    4. dropbox    → get crash stack traces
+  │    5. bugreport  → full system capture (if above is insufficient)
   │
   ├─ App froze (ANR)
   │    1. last-anr   → quick ANR summary
@@ -31,9 +37,10 @@ What happened?
   │    3. process    → check current oom_adj and process state
   │
   ├─ Performance regression (jank, slow start)
-  │    1. gfxinfo    → rendering frame stats
-  │    2. meminfo    → memory usage breakdown
-  │    3. compile    → reset ART compilation to test cold-start (--mode reset)
+  │    1. profile    → compact process/memory/gfx/event snapshot
+  │    2. gfxinfo    → rendering frame stats
+  │    3. meminfo    → memory usage breakdown
+  │    4. compile    → reset ART compilation to test cold-start (--mode reset)
   │
   └─ Need to stress-test resilience
        1. always-finish on → force activity destruction on background
@@ -129,6 +136,19 @@ uv run android-emu-agent reliability process com.example.app --device emulator-5
 900+) = cached/background (system may kill). `state` shows current scheduling state.
 
 ## Performance Diagnostics
+
+### App Health Profile
+
+```bash
+uv run android-emu-agent reliability profile com.example.app --session s-abc123 --json
+uv run android-emu-agent reliability profile com.example.app --device emulator-5554 --since 100
+```
+
+**Output interpretation:** Start with the `sections` object. `process` exposes pid and
+`oom_score_adj`, `memory.summary` exposes headline PSS/RSS counters when available,
+`graphics.summary` exposes rendered/janky frame counts, `background` shows app standby/appops state,
+`exit_info` reports whether recent exit records exist, and `events` counts matching ActivityManager
+events for the package.
 
 ### Memory Usage
 

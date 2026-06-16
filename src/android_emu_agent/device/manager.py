@@ -208,6 +208,7 @@ class DeviceManager:
                 "visual_grounding": True,
                 "system_surfaces": True,
                 "debugger_fusion": True,
+                "performance_profile": True,
             },
             "device_features": {
                 "root_required_available": bool(info and info.is_rooted),

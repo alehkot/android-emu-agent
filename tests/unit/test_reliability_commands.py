@@ -107,3 +107,41 @@ def test_reliability_gfxinfo_builds_payload() -> None:
     assert method == "POST"
     assert path == "/reliability/gfxinfo"
     assert payload == {"serial": "emulator-5554", "package": "com.example.app"}
+
+
+def test_reliability_profile_builds_payload() -> None:
+    """Should send profile payload to the daemon."""
+    from android_emu_agent.cli.commands import reliability
+
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+            calls.append((method, path, json_body))
+            return DummyResponse({"status": "done", "output": "ok"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(reliability, "DaemonClient", DummyClient):
+        reliability.reliability_profile(
+            "com.example.app",
+            device=None,
+            session_id="s-abc123",
+            since="100",
+            include_raw=True,
+            json_output=False,
+        )
+
+    method, path, payload = calls[0]
+    assert method == "POST"
+    assert path == "/reliability/profile"
+    assert payload == {
+        "session_id": "s-abc123",
+        "package": "com.example.app",
+        "since": "100",
+        "include_raw": True,
+    }
