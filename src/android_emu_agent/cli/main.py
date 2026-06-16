@@ -15,6 +15,7 @@ from android_emu_agent.cli.commands import (
     expect,
     reliability,
     session,
+    system,
     task,
     trace,
     ui,
@@ -44,6 +45,7 @@ app.add_typer(debug.app, name="debug")
 app.add_typer(device.app, name="device")
 app.add_typer(expect.app, name="expect")
 app.add_typer(session.app, name="session")
+app.add_typer(system.app, name="system")
 app.add_typer(task.app, name="task")
 app.add_typer(trace.app, name="trace")
 app.add_typer(ui.app, name="ui")

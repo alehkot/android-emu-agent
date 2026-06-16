@@ -23,6 +23,7 @@ android-emu-agent [OPTIONS] COMMAND [ARGS]...
 - `device`: Device management commands
 - `expect`: Expectation and assertion commands
 - `session`: Session management commands
+- `system`: Android system surface commands
 - `task`: Task harness commands
 - `trace`: Agent trace recording and replay commands
 - `ui`: UI observation commands
@@ -1056,6 +1057,199 @@ android-emu-agent session list [OPTIONS]
 
 **Options**:
 
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+## `android-emu-agent system`
+
+Android system surface commands
+
+**Usage**:
+
+```console
+android-emu-agent system [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+- `--help`: Show this message and exit.
+
+**Commands**:
+
+- `notifications`: Notification shade commands
+- `quick-settings`: Quick Settings commands
+- `permissions`: Permission commands
+
+### `android-emu-agent system notifications`
+
+Notification shade commands
+
+**Usage**:
+
+```console
+android-emu-agent system notifications [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+- `--help`: Show this message and exit.
+
+**Commands**:
+
+- `open`: Open the notification shade.
+- `close`: Close the notification shade.
+
+#### `android-emu-agent system notifications open`
+
+Open the notification shade.
+
+**Usage**:
+
+```console
+android-emu-agent system notifications open [OPTIONS]
+```
+
+**Options**:
+
+- `-d, --device TEXT`: Device serial
+- `-s, --session TEXT`: Session ID
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+#### `android-emu-agent system notifications close`
+
+Close the notification shade.
+
+**Usage**:
+
+```console
+android-emu-agent system notifications close [OPTIONS]
+```
+
+**Options**:
+
+- `-d, --device TEXT`: Device serial
+- `-s, --session TEXT`: Session ID
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent system quick-settings`
+
+Quick Settings commands
+
+**Usage**:
+
+```console
+android-emu-agent system quick-settings [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+- `--help`: Show this message and exit.
+
+**Commands**:
+
+- `open`: Open Quick Settings.
+
+#### `android-emu-agent system quick-settings open`
+
+Open Quick Settings.
+
+**Usage**:
+
+```console
+android-emu-agent system quick-settings open [OPTIONS]
+```
+
+**Options**:
+
+- `-d, --device TEXT`: Device serial
+- `-s, --session TEXT`: Session ID
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent system permissions`
+
+Permission commands
+
+**Usage**:
+
+```console
+android-emu-agent system permissions [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+- `--help`: Show this message and exit.
+
+**Commands**:
+
+- `list`: List requested and granted package...
+- `grant`: Grant a runtime permission.
+- `revoke`: Revoke a runtime permission.
+
+#### `android-emu-agent system permissions list`
+
+List requested and granted package permissions.
+
+**Usage**:
+
+```console
+android-emu-agent system permissions list [OPTIONS] PACKAGE
+```
+
+**Arguments**:
+
+- `PACKAGE`: Package name [required]
+
+**Options**:
+
+- `-d, --device TEXT`: Device serial
+- `-s, --session TEXT`: Session ID
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+#### `android-emu-agent system permissions grant`
+
+Grant a runtime permission.
+
+**Usage**:
+
+```console
+android-emu-agent system permissions grant [OPTIONS] PACKAGE PERMISSION
+```
+
+**Arguments**:
+
+- `PACKAGE`: Package name [required]
+- `PERMISSION`: Android permission name [required]
+
+**Options**:
+
+- `-d, --device TEXT`: Device serial
+- `-s, --session TEXT`: Session ID
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+#### `android-emu-agent system permissions revoke`
+
+Revoke a runtime permission.
+
+**Usage**:
+
+```console
+android-emu-agent system permissions revoke [OPTIONS] PACKAGE PERMISSION
+```
+
+**Arguments**:
+
+- `PACKAGE`: Package name [required]
+- `PERMISSION`: Android permission name [required]
+
+**Options**:
+
+- `-d, --device TEXT`: Device serial
+- `-s, --session TEXT`: Session ID
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 

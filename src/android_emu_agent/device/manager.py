@@ -206,11 +206,13 @@ class DeviceManager:
                 "expectations": True,
                 "trace_archives": True,
                 "visual_grounding": True,
+                "system_surfaces": True,
             },
             "device_features": {
                 "root_required_available": bool(info and info.is_rooted),
                 "emulator_controls_available": bool(info and info.is_emulator),
                 "debugger_bridge": True,
+                "runtime_permissions": True,
             },
         }
 

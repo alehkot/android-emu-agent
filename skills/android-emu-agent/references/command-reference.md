@@ -40,6 +40,24 @@ inspect AVD definitions outside `android-emu-agent`.
 - `device set mobile <on_or_off> -d <device_serial>` Toggle mobile data.
 - `device set doze <on_or_off> -d <device_serial>` Toggle doze mode.
 
+### System
+
+- `system notifications open [--device <serial> | --session <session_id>]` Open the notification
+  shade.
+- `system notifications close [--device <serial> | --session <session_id>]` Close the notification
+  shade.
+- `system quick-settings open [--device <serial> | --session <session_id>]` Open Quick Settings.
+- `system permissions list <package> [--device <serial> | --session <session_id>]` List requested
+  and granted package permissions from `dumpsys package`.
+- `system permissions grant <package> <permission> [--device <serial> | --session <session_id>]`
+  Grant a runtime permission.
+- `system permissions revoke <package> <permission> [--device <serial> | --session <session_id>]`
+  Revoke a runtime permission.
+
+System commands use validated package and permission names before invoking shell-backed Android
+services. Permission changes are useful for deterministic setup but still depend on Android's
+runtime permission rules for the target app and device.
+
 ### Session
 
 - `session start -d <device_serial>` Create a new session.

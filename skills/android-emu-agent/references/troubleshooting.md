@@ -28,6 +28,8 @@ Match your symptom to the right section:
 | `ERR_SNAPSHOT_REQUIRED`       | No latest UI snapshot        | Run `ui snapshot` before visual grounding              | Manual          |
 | `ERR_VISUAL_REF_NOT_FOUND`    | Ref missing from snapshot    | Use refs from the latest snapshot generation           | Manual          |
 | `ERR_VISUAL_SNAPSHOT_INVALID` | Bad snapshot metadata        | Re-run `ui snapshot` before grounding                  | Manual          |
+| `ERR_INVALID_PERMISSION`      | Invalid permission name      | Use a fully-qualified Android permission name          | Manual          |
+| `ERR_SYSTEM_COMMAND_FAILED`   | Android system shell failed  | Verify device state and system service support         | Manual          |
 | `ERR_DEVICE_OFFLINE`          | Device disconnected          | Run `device list`, reconnect device                    | Not recoverable |
 | `ERR_SDK_TOOL_NOT_FOUND`      | Android SDK CLI missing      | Add `adb` / `emulator` / `avdmanager` to PATH          | Not recoverable |
 | `ERR_SESSION_EXPIRED`         | Session timed out            | Create new session with `session start`                | Not recoverable |

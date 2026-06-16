@@ -24,6 +24,7 @@ Android Emu Agent is a daemon-first Android automation and debugging system:
 - `src/android_emu_agent/visual/`: optional screenshot-to-ref grounding metadata.
 - `src/android_emu_agent/actions/`: action dispatch, selectors, wait logic.
 - `src/android_emu_agent/expectations/`: assertion-style expectation result shaping.
+- `src/android_emu_agent/system/`: notifications, permissions, and Android system surfaces.
 - `src/android_emu_agent/debugger/`: bridge client/downloader and debug manager.
 - `src/android_emu_agent/files/`: host/app file push/pull/list/find.
 - `src/android_emu_agent/reliability/`: forensics helpers and root-gated diagnostics.
@@ -89,7 +90,7 @@ When adding or changing a CLI capability, update all relevant layers:
 2. Daemon request model in `src/android_emu_agent/daemon/models.py`.
 3. Daemon endpoint in `src/android_emu_agent/daemon/server.py`.
 4. Manager implementation in the relevant subsystem (`device`, `actions`, `expectations`, `tasks`,
-   `tracing`, `files`, `reliability`, `artifacts`, or `debugger`).
+   `tracing`, `system`, `files`, `reliability`, `artifacts`, or `debugger`).
 5. Unit tests for payload wiring and subsystem behavior.
 6. Docs and skills:
    - Run `./scripts/dev.sh docs-gen` for `docs/reference.md`.
@@ -136,6 +137,7 @@ Do not ship CLI/API/debugger changes that skip docs or tests sync.
 - Debug attach flows require a debuggable app and Java 17+ runtime.
 - Clean up debug resources (bridge process, ADB forward) on detach/stop paths.
 - Validate package names and URIs through shared validators when applicable.
+- Validate permission names before shell-backed permission changes.
 
 ## 9. Docs and Skill Synchronization
 
@@ -149,6 +151,7 @@ Do not ship CLI/API/debugger changes that skip docs or tests sync.
 
 - `docs/reference.md` is generated; regenerate instead of hand-editing command tables.
 - `site/` and `dist/` are build outputs; do not treat them as source of truth.
+- `artifacts/` and `*.aea-trace.zip` are local evidence outputs; do not commit them.
 - In `jdi-bridge/`, treat `src/` as source and avoid editing generated `bin/` artifacts.
 
 ## 11. Commits and PRs

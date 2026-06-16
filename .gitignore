@@ -60,6 +60,7 @@ dmypy.json
 # Project specific
 .android-agent/
 .android-agent-artifacts/
+*.aea-trace.zip
 *.db
 *-gitignore.md
 

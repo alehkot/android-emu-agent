@@ -292,6 +292,15 @@ class AppUninstallRequest(DeviceTargetRequest):
     keep_data: bool = False
 
 
+class SystemPermissionListRequest(DeviceTargetRequest):
+    package: str
+
+
+class SystemPermissionRequest(DeviceTargetRequest):
+    package: str
+    permission: str
+
+
 class ReliabilityPackageRequest(DeviceTargetRequest):
     package: str
 

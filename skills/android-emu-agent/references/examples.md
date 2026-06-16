@@ -61,6 +61,15 @@ uv run android-emu-agent ui snapshot s-abc123
 # context.activity = ".MainActivity"
 ```
 
+For setup-heavy tests where the permission dialog itself is not under test, grant the runtime
+permission before launch:
+
+```bash
+uv run android-emu-agent system permissions grant com.example.camera.app android.permission.CAMERA --session s-abc123
+uv run android-emu-agent app launch s-abc123 com.example.camera.app
+uv run android-emu-agent wait idle s-abc123 --timeout-ms 5000
+```
+
 ## Example 2: Login Flow
 
 Goal: Log into an app with email and password.

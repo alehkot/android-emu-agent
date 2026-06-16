@@ -14,6 +14,7 @@ from android_emu_agent.device.session import SessionManager
 from android_emu_agent.expectations import ExpectationManager
 from android_emu_agent.files.manager import FileManager
 from android_emu_agent.reliability.manager import ReliabilityManager
+from android_emu_agent.system import SystemManager
 from android_emu_agent.tasks import TaskManager
 from android_emu_agent.tracing import TraceManager
 from android_emu_agent.ui.context import ContextResolver
@@ -45,6 +46,7 @@ class DaemonCore:
         self.trace_manager = TraceManager()
         self.task_manager = TaskManager()
         self.expectation_manager = ExpectationManager()
+        self.system_manager = SystemManager()
         self.visual_grounding_manager = VisualGroundingManager(
             self.artifact_manager.output_dir / "visual"
         )

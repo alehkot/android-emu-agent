@@ -92,6 +92,8 @@ from android_emu_agent.daemon.models import (
     SetTextRequest,
     SnapshotRequest,
     SwipeRequest,
+    SystemPermissionListRequest,
+    SystemPermissionRequest,
     TaskRunRequest,
     TaskValidateRequest,
     TraceExportRequest,
@@ -475,6 +477,15 @@ async def _resolve_device_target(
     return serial, device, info
 
 
+def _system_command_failed_error(serial: str, exc: Exception) -> AgentError:
+    return AgentError(
+        code="ERR_SYSTEM_COMMAND_FAILED",
+        message=str(exc),
+        context={"serial": serial},
+        remediation="Verify the device is online and the Android system service is available.",
+    )
+
+
 async def _resolve_locator(
     core: DaemonCore,
     session_id: str,
@@ -675,6 +686,129 @@ async def set_doze(req: DozeRequest) -> EndpointResponse:
     except Exception:
         return _error_response(device_offline_error(req.serial), status_code=404)
     return {"status": "done", "serial": req.serial, "doze": "on" if req.enabled else "off"}
+
+
+@app.post("/system/notifications/open", response_model=None)
+async def system_notifications_open(req: DeviceTargetRequest) -> EndpointResponse:
+    """Open the notification shade."""
+    core: DaemonCore = app.state.core
+    resolved = await _resolve_device_target(core, req.session_id, req.serial)
+    if isinstance(resolved, JSONResponse):
+        return resolved
+    serial, device, _ = resolved
+
+    try:
+        result = await core.system_manager.open_notifications(device)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+    except Exception as exc:
+        return _error_response(_system_command_failed_error(serial, exc), status_code=500)
+    return {"serial": serial, **result}
+
+
+@app.post("/system/notifications/close", response_model=None)
+async def system_notifications_close(req: DeviceTargetRequest) -> EndpointResponse:
+    """Close the notification shade."""
+    core: DaemonCore = app.state.core
+    resolved = await _resolve_device_target(core, req.session_id, req.serial)
+    if isinstance(resolved, JSONResponse):
+        return resolved
+    serial, device, _ = resolved
+
+    try:
+        result = await core.system_manager.close_notifications(device)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+    except Exception as exc:
+        return _error_response(_system_command_failed_error(serial, exc), status_code=500)
+    return {"serial": serial, **result}
+
+
+@app.post("/system/quick_settings/open", response_model=None)
+async def system_quick_settings_open(req: DeviceTargetRequest) -> EndpointResponse:
+    """Open Quick Settings."""
+    core: DaemonCore = app.state.core
+    resolved = await _resolve_device_target(core, req.session_id, req.serial)
+    if isinstance(resolved, JSONResponse):
+        return resolved
+    serial, device, _ = resolved
+
+    try:
+        result = await core.system_manager.open_quick_settings(device)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+    except Exception as exc:
+        return _error_response(_system_command_failed_error(serial, exc), status_code=500)
+    return {"serial": serial, **result}
+
+
+@app.post("/system/permissions/list", response_model=None)
+async def system_permissions_list(req: SystemPermissionListRequest) -> EndpointResponse:
+    """List requested and granted runtime permissions for a package."""
+    core: DaemonCore = app.state.core
+    try:
+        validate_package(req.package)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    resolved = await _resolve_device_target(core, req.session_id, req.serial)
+    if isinstance(resolved, JSONResponse):
+        return resolved
+    serial, device, _ = resolved
+
+    try:
+        result = await core.system_manager.list_permissions(device, req.package)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+    except Exception as exc:
+        return _error_response(_system_command_failed_error(serial, exc), status_code=500)
+    return {"serial": serial, **result}
+
+
+@app.post("/system/permissions/grant", response_model=None)
+async def system_permissions_grant(req: SystemPermissionRequest) -> EndpointResponse:
+    """Grant a runtime permission to a package."""
+    core: DaemonCore = app.state.core
+    try:
+        validate_package(req.package)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    resolved = await _resolve_device_target(core, req.session_id, req.serial)
+    if isinstance(resolved, JSONResponse):
+        return resolved
+    serial, device, _ = resolved
+
+    try:
+        result = await core.system_manager.grant_permission(device, req.package, req.permission)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+    except Exception as exc:
+        return _error_response(_system_command_failed_error(serial, exc), status_code=500)
+    return {"serial": serial, **result}
+
+
+@app.post("/system/permissions/revoke", response_model=None)
+async def system_permissions_revoke(req: SystemPermissionRequest) -> EndpointResponse:
+    """Revoke a runtime permission from a package."""
+    core: DaemonCore = app.state.core
+    try:
+        validate_package(req.package)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    resolved = await _resolve_device_target(core, req.session_id, req.serial)
+    if isinstance(resolved, JSONResponse):
+        return resolved
+    serial, device, _ = resolved
+
+    try:
+        result = await core.system_manager.revoke_permission(device, req.package, req.permission)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+    except Exception as exc:
+        return _error_response(_system_command_failed_error(serial, exc), status_code=500)
+    return {"serial": serial, **result}
 
 
 @app.post("/sessions/start", response_model=None)

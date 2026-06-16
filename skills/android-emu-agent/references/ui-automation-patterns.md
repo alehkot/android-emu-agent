@@ -42,6 +42,15 @@ uv run android-emu-agent ui snapshot s-abc123
 # context.package should now be your app
 ```
 
+Deterministic setup alternative:
+
+```bash
+uv run android-emu-agent system permissions list com.example.camera.app --session s-abc123
+uv run android-emu-agent system permissions grant com.example.camera.app android.permission.CAMERA --session s-abc123
+uv run android-emu-agent app force-stop s-abc123 com.example.camera.app
+uv run android-emu-agent app launch s-abc123 com.example.camera.app
+```
+
 Android version differences:
 
 | Android Version | Permission Behavior                                    |
@@ -92,6 +101,21 @@ Strategy:
 2. If system package detected, identify dialog type
 3. Handle appropriately: dismiss, wait, or restart app
 4. Resume normal automation flow
+
+## Handling System Surfaces
+
+Use system surface commands when the task explicitly requires notification shade, Quick Settings, or
+permission setup. They are shell-backed state changes, so prefer snapshots for read-only questions
+and only open or close surfaces when the user requested interaction.
+
+```bash
+uv run android-emu-agent system notifications open --session s-abc123
+uv run android-emu-agent ui snapshot s-abc123
+uv run android-emu-agent system notifications close --session s-abc123
+
+uv run android-emu-agent system quick-settings open --session s-abc123
+uv run android-emu-agent ui snapshot s-abc123
+```
 
 ## Dealing With Stale Refs
 

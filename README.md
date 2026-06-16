@@ -31,6 +31,8 @@ The CLI is a thin client. A long-running daemon handles all device I/O. All comm
 - **Task harness** — run JSON task specs with step-level and final verifiers
 - **Expectations** — assertion-style commands for UI state, activity, and foreground app checks
 - **Visual grounding** — optional screenshot-to-ref metadata for human or vision-model evidence
+- **System surfaces** — open notifications/Quick Settings and list, grant, or revoke app permissions
+  through validated shell-backed commands
 - **Agent skills included** — structured reference docs, workflow templates, and safety guardrails
 - **Machine-readable output** — every command supports `--json` for agent pipelines
 
@@ -306,15 +308,25 @@ uv run android-emu-agent artifact bundle s-abc123
 uv run android-emu-agent artifact logs --session s-abc123 --app com.example.app --type errors --since "10m ago"
 ```
 
+System surfaces and permissions
+
+```bash
+uv run android-emu-agent system notifications open --session s-abc123
+uv run android-emu-agent system quick-settings open --session s-abc123
+uv run android-emu-agent system permissions list com.example.app --session s-abc123
+uv run android-emu-agent system permissions grant com.example.app android.permission.POST_NOTIFICATIONS --session s-abc123
+uv run android-emu-agent system permissions revoke com.example.app android.permission.POST_NOTIFICATIONS --session s-abc123
+```
+
 Trace an agent run
 
 ```bash
 uv run android-emu-agent trace start s-abc123 --label checkout-repro
 uv run android-emu-agent action tap s-abc123 ^a1
 uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent trace stop s-abc123 --output ./checkout-repro.aea-trace.zip
-uv run android-emu-agent trace replay ./checkout-repro.aea-trace.zip --until-failure
-uv run android-emu-agent trace export ./checkout-repro.aea-trace.zip --output ./checkout-repro.md
+uv run android-emu-agent trace stop s-abc123 --output ./artifacts/checkout-repro.aea-trace.zip
+uv run android-emu-agent trace replay ./artifacts/checkout-repro.aea-trace.zip --until-failure
+uv run android-emu-agent trace export ./artifacts/checkout-repro.aea-trace.zip --output ./artifacts/checkout-repro.md
 ```
 
 Run a task harness spec
@@ -547,6 +559,7 @@ In practice, these are usually safe on non-root devices:
 - Wait commands
 - Expect commands
 - Device capabilities
+- System surfaces (`notifications`, `quick-settings`) and runtime permission list/grant/revoke
 - App list/install/uninstall/launch/intent/force-stop/reset/deeplink
 - File `push` and `pull` to shared storage
 
@@ -576,6 +589,7 @@ Artifacts are written to `~/.android-emu-agent/artifacts` by default.
 - File transfers: `~/.android-emu-agent/artifacts/files`
 - Visual grounding: `~/.android-emu-agent/artifacts/visual`
 - Trace archives: `~/.android-emu-agent/traces`
+- Local repo artifact scratch space: `./artifacts/` (ignored by git)
 
 ## Troubleshooting
 
@@ -615,6 +629,8 @@ Common errors
 | `ERR_SNAPSHOT_REQUIRED`       | Missing UI snapshot      | Run `ui snapshot` before visual grounding       |
 | `ERR_VISUAL_REF_NOT_FOUND`    | Ref missing in snapshot  | Use refs from latest snapshot generation        |
 | `ERR_VISUAL_SNAPSHOT_INVALID` | Bad snapshot metadata    | Re-run `ui snapshot` before grounding           |
+| `ERR_INVALID_PERMISSION`      | Bad permission name      | Use a fully-qualified Android permission name   |
+| `ERR_SYSTEM_COMMAND_FAILED`   | System shell failed      | Check device state and Android service support  |
 
 For deeper guidance, see `skills/android-emu-agent/references/troubleshooting.md`.
 
