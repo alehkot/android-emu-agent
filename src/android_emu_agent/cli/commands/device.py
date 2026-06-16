@@ -5,7 +5,7 @@ from __future__ import annotations
 import typer
 
 from android_emu_agent.cli.daemon_client import DaemonClient, format_json
-from android_emu_agent.cli.utils import handle_response
+from android_emu_agent.cli.utils import handle_response, require_target
 
 app = typer.Typer(help="Device management commands")
 device_set_app = typer.Typer(help="Determinism controls")
@@ -29,6 +29,20 @@ def device_list(json_output: bool = typer.Option(False, "--json", help="Output J
             f"{device['serial']}  model={device['model']} sdk={device['sdk_version']} "
             f"root={device['is_rooted']} emulator={device['is_emulator']}"
         )
+
+
+@app.command("capabilities")
+def device_capabilities(
+    device: str | None = typer.Option(None, "--device", "-d", help="Device serial"),
+    session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Show target capabilities for agent planning."""
+    payload = require_target(device, session_id)
+    client = DaemonClient()
+    resp = client.request("POST", "/devices/capabilities", json_body=payload)
+    client.close()
+    handle_response(resp, json_output=json_output)
 
 
 @device_set_app.command("animations")

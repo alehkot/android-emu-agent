@@ -24,6 +24,8 @@ The CLI is a thin client. A long-running daemon handles all device I/O. All comm
   frameworks such as Compose and Litho
 - **Ref healing** — deterministic `^a1`-style handles with selector-chain rebinding when a newer
   snapshot still contains the same target
+- **Richer selectors** — exact, contains, regex, resource ID, content-desc, class, and coordinate
+  selectors with capability introspection
 - **Diagnostics** — JSON responses and headers include `diagnostic_id` for request-level tracing
 - **Trace archives** — record daemon exchanges into replayable `.aea-trace.zip` evidence bundles
 - **Task harness** — run JSON task specs with step-level and final verifiers
@@ -275,6 +277,15 @@ When elements are missing
 uv run android-emu-agent ui snapshot s-abc123 --full
 uv run android-emu-agent wait idle s-abc123 --timeout-ms 3000
 uv run android-emu-agent ui snapshot s-abc123
+```
+
+Inspect capabilities and use richer selectors
+
+```bash
+uv run android-emu-agent device capabilities --session s-abc123 --json
+uv run android-emu-agent action tap s-abc123 'text-contains:"Continue"'
+uv run android-emu-agent wait exists s-abc123 --id-matches '.*checkout.*'
+uv run android-emu-agent expect exists s-abc123 --class android.widget.Button --text-contains Pay
 ```
 
 Assert expected state
@@ -533,6 +544,7 @@ In practice, these are usually safe on non-root devices:
 - Actions (tap, set-text, swipe, scroll, back/home/recents)
 - Wait commands
 - Expect commands
+- Device capabilities
 - App list/install/uninstall/launch/intent/force-stop/reset/deeplink
 - File `push` and `pull` to shared storage
 

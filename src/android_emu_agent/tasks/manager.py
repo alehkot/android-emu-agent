@@ -392,14 +392,26 @@ class TaskManager:
 
         inline_selector: dict[str, str] = {}
         text = source.get("text")
+        text_contains = source.get("text_contains") or source.get("textContains")
         resource_id = source.get("id") or source.get("resource_id") or source.get("resourceId")
+        resource_id_matches = source.get("id_matches") or source.get("resourceIdMatches")
         desc = source.get("desc") or source.get("description")
+        desc_contains = source.get("desc_contains") or source.get("descriptionContains")
+        class_name = source.get("class") or source.get("class_name") or source.get("className")
         if isinstance(text, str) and text:
             inline_selector["text"] = text
+        if isinstance(text_contains, str) and text_contains:
+            inline_selector["textContains"] = text_contains
         if isinstance(resource_id, str) and resource_id:
             inline_selector["resourceId"] = resource_id
+        if isinstance(resource_id_matches, str) and resource_id_matches:
+            inline_selector["resourceIdMatches"] = resource_id_matches
         if isinstance(desc, str) and desc:
             inline_selector["description"] = desc
+        if isinstance(desc_contains, str) and desc_contains:
+            inline_selector["descriptionContains"] = desc_contains
+        if isinstance(class_name, str) and class_name:
+            inline_selector["className"] = class_name
         if inline_selector and "selector" not in payload:
             payload["selector"] = inline_selector
         return payload

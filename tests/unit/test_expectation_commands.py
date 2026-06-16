@@ -65,8 +65,12 @@ def test_expect_exists_builds_selector_payload() -> None:
             "s-abc123",
             ref=None,
             text="Checkout",
+            text_contains="Check",
             resource_id="checkout_button",
+            resource_id_matches=".*checkout.*",
             desc=None,
+            desc_contains="Pay",
+            class_name="android.widget.Button",
             timeout_ms=1000,
             json_output=False,
         )
@@ -77,7 +81,14 @@ def test_expect_exists_builds_selector_payload() -> None:
         {
             "session_id": "s-abc123",
             "ref": None,
-            "selector": {"text": "Checkout", "resourceId": "checkout_button"},
+            "selector": {
+                "text": "Checkout",
+                "textContains": "Check",
+                "resourceId": "checkout_button",
+                "resourceIdMatches": ".*checkout.*",
+                "descriptionContains": "Pay",
+                "className": "android.widget.Button",
+            },
             "timeout_ms": 1000,
         },
     )

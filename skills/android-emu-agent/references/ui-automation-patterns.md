@@ -161,6 +161,11 @@ uv run android-emu-agent wait text s-abc123 "Welcome back" --timeout-ms 5000
 # Wait for element with specific text to exist
 uv run android-emu-agent wait exists s-abc123 --text "Continue" --timeout-ms 5000
 
+# Use richer selectors when exact text is unstable
+uv run android-emu-agent wait exists s-abc123 --text-contains "Continue" --timeout-ms 5000
+uv run android-emu-agent wait exists s-abc123 --id-matches ".*checkout.*" --timeout-ms 5000
+uv run android-emu-agent wait exists s-abc123 --class android.widget.Button --desc-contains "Pay"
+
 # Wait for loading indicator to disappear
 uv run android-emu-agent wait gone s-abc123 --text "Loading..." --timeout-ms 15000
 ```
@@ -171,6 +176,8 @@ Best practices:
 2. Use `wait activity` for screen transitions when you know the target
 3. Use `wait idle` as a general-purpose stability check
 4. Combine waits for robustness
+5. Run `device capabilities --session <session_id> --json` when deciding which selector forms are
+   available for an automation plan
 
 ## Login and Authentication Flows
 

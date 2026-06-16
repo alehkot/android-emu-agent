@@ -1,9 +1,9 @@
 # Drive Android apps through a tight observe, act, verify loop
 
 Android Emu Agent gives LLMs and developer tools a practical control plane for emulators and rooted
-devices: compact UI snapshots, stable action refs, explicit expectations, task specs with verifiers,
-app diagnostics, artifacts, file transfer, JVM debugging, and replayable trace archives from one
-CLI.
+devices: compact UI snapshots, stable action refs, richer selectors with capability introspection,
+explicit expectations, task specs with verifiers, app diagnostics, artifacts, file transfer, JVM
+debugging, and replayable trace archives from one CLI.
 
 [Explore the CLI reference](reference.md) |
 [View source](https://github.com/alehkot/android-emu-agent)
@@ -26,17 +26,18 @@ generation: 43
 
 ## Core capabilities
 
-| Capability                  | What it gives you                                                                                                       |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| **Compact UI snapshots**    | Actionable snapshots across XML Views, Compose, Litho, and mixed Android screens.                                       |
-| **Generation-scoped refs**  | Short handles like `^a1` for precise taps and text entry, with ref healing when the target can be rebound.              |
-| **Daemon-first I/O**        | A FastAPI daemon over a Unix socket keeps device sessions warm while the CLI stays thin and scriptable.                 |
-| **Debugger bridge**         | Java 17+ JDI support for threads, stack traces, breakpoints, exception breaks, stepping, and constrained eval.          |
-| **Forensics and artifacts** | Screenshots, log bundles, request diagnostics, process data, memory reports, and gfxinfo for evidence-driven debugging. |
-| **Trace archives**          | `.aea-trace.zip` archives capture daemon exchanges for dry replay and Markdown reports.                                 |
-| **Task harness**            | JSON task specs run ordered steps with step-level and final verifiers.                                                  |
-| **Expectations**            | Assertion commands turn expected UI/app state into pass/fail JSON.                                                      |
-| **Agent skills included**   | Ready-to-install skill docs with command references, recovery protocols, workflow examples, and safety guardrails.      |
+| Capability                  | What it gives you                                                                                                          |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **Compact UI snapshots**    | Actionable snapshots across XML Views, Compose, Litho, and mixed Android screens.                                          |
+| **Generation-scoped refs**  | Short handles like `^a1` for precise taps and text entry, with ref healing when the target can be rebound.                 |
+| **Selector introspection**  | Exact, contains, regex, class, resource ID, content-desc, coordinate, and ref selector support is discoverable per target. |
+| **Daemon-first I/O**        | A FastAPI daemon over a Unix socket keeps device sessions warm while the CLI stays thin and scriptable.                    |
+| **Debugger bridge**         | Java 17+ JDI support for threads, stack traces, breakpoints, exception breaks, stepping, and constrained eval.             |
+| **Forensics and artifacts** | Screenshots, log bundles, request diagnostics, process data, memory reports, and gfxinfo for evidence-driven debugging.    |
+| **Trace archives**          | `.aea-trace.zip` archives capture daemon exchanges for dry replay and Markdown reports.                                    |
+| **Task harness**            | JSON task specs run ordered steps with step-level and final verifiers.                                                     |
+| **Expectations**            | Assertion commands turn expected UI/app state into pass/fail JSON.                                                         |
+| **Agent skills included**   | Ready-to-install skill docs with command references, recovery protocols, workflow examples, and safety guardrails.         |
 
 ## Built for repeated agent work
 

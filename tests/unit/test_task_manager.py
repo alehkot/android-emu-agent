@@ -58,7 +58,7 @@ async def test_task_run_executes_steps_and_verifiers() -> None:
                     "action": "set_text",
                     "ref": "^a1",
                     "text": "alice@example.com",
-                    "verify": [{"type": "text", "text": "alice@example.com"}],
+                    "verify": [{"type": "exists", "text_contains": "alice"}],
                 }
             ],
             "verifiers": [{"type": "idle", "timeout_ms": 1000}],
@@ -71,7 +71,7 @@ async def test_task_run_executes_steps_and_verifiers() -> None:
     assert result["passed"] is True
     assert [(call.kind, call.operation) for call in calls] == [
         ("action", "set_text"),
-        ("wait", "text"),
+        ("wait", "exists"),
         ("wait", "idle"),
     ]
     assert calls[0].payload == {
@@ -79,6 +79,7 @@ async def test_task_run_executes_steps_and_verifiers() -> None:
         "ref": "^a1",
         "text": "alice@example.com",
     }
+    assert calls[1].payload["selector"] == {"textContains": "alice"}
 
 
 @pytest.mark.asyncio

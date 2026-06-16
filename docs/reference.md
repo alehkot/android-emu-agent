@@ -629,6 +629,7 @@ android-emu-agent device [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 - `list`: List connected devices.
+- `capabilities`: Show target capabilities for agent planning.
 - `set`: Determinism controls
 
 ### `android-emu-agent device list`
@@ -643,6 +644,23 @@ android-emu-agent device list [OPTIONS]
 
 **Options**:
 
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent device capabilities`
+
+Show target capabilities for agent planning.
+
+**Usage**:
+
+```console
+android-emu-agent device capabilities [OPTIONS]
+```
+
+**Options**:
+
+- `-d, --device TEXT`: Device serial
+- `-s, --session TEXT`: Session ID
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 
@@ -892,8 +910,12 @@ android-emu-agent expect exists [OPTIONS] SESSION_ID
 
 - `--ref TEXT`: Element ref (^a1)
 - `--text TEXT`: Text selector
+- `--text-contains TEXT`: Text contains selector
 - `--id TEXT`: Resource ID selector
+- `--id-matches TEXT`: Resource ID regex selector
 - `--desc TEXT`: Content-desc selector
+- `--desc-contains TEXT`: Content-desc contains selector
+- `--class TEXT`: Class name selector
 - `--timeout-ms INTEGER`: Timeout in ms
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
@@ -916,8 +938,12 @@ android-emu-agent expect gone [OPTIONS] SESSION_ID
 
 - `--ref TEXT`: Element ref (^a1)
 - `--text TEXT`: Text selector
+- `--text-contains TEXT`: Text contains selector
 - `--id TEXT`: Resource ID selector
+- `--id-matches TEXT`: Resource ID regex selector
 - `--desc TEXT`: Content-desc selector
+- `--desc-contains TEXT`: Content-desc contains selector
+- `--class TEXT`: Class name selector
 - `--timeout-ms INTEGER`: Timeout in ms
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
@@ -1590,8 +1616,12 @@ android-emu-agent wait exists [OPTIONS] SESSION_ID
 
 - `--ref TEXT`: Element ref (^a1)
 - `--text TEXT`: Text selector
+- `--text-contains TEXT`: Text contains selector
 - `--id TEXT`: Resource ID selector
+- `--id-matches TEXT`: Resource ID regex selector
 - `--desc TEXT`: Content-desc selector
+- `--desc-contains TEXT`: Content-desc contains selector
+- `--class TEXT`: Class name selector
 - `--timeout-ms INTEGER`: Timeout in ms
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
@@ -1614,8 +1644,12 @@ android-emu-agent wait gone [OPTIONS] SESSION_ID
 
 - `--ref TEXT`: Element ref (^a1)
 - `--text TEXT`: Text selector
+- `--text-contains TEXT`: Text contains selector
 - `--id TEXT`: Resource ID selector
+- `--id-matches TEXT`: Resource ID regex selector
 - `--desc TEXT`: Content-desc selector
+- `--desc-contains TEXT`: Content-desc contains selector
+- `--class TEXT`: Class name selector
 - `--timeout-ms INTEGER`: Timeout in ms
 - `--json`: Output JSON
 - `--help`: Show this message and exit.

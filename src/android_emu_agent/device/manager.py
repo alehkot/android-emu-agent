@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from android_emu_agent.actions.selector import SUPPORTED_SELECTOR_KEYS, SUPPORTED_SELECTOR_SYNTAX
 from android_emu_agent.errors import (
     AgentError,
     adb_command_error,
@@ -170,6 +171,46 @@ class DeviceManager:
             "model": info.model,
             "is_rooted": info.is_rooted,
             "is_emulator": info.is_emulator,
+        }
+
+    def capability_report(
+        self,
+        *,
+        serial: str,
+        info: DeviceInfo | None,
+        session_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Return agent-facing capabilities for a target device/session."""
+        device_info = {
+            "serial": serial,
+            "session_id": session_id,
+            "model": info.model if info else None,
+            "sdk_version": info.sdk_version if info else None,
+            "is_rooted": info.is_rooted if info else False,
+            "is_emulator": info.is_emulator if info else False,
+        }
+        return {
+            "status": "done",
+            "target": device_info,
+            "selectors": {
+                "target_syntax": SUPPORTED_SELECTOR_SYNTAX,
+                "selector_keys": SUPPORTED_SELECTOR_KEYS,
+                "ref_healing": True,
+                "coordinates": True,
+            },
+            "automation": {
+                "uiautomator2": True,
+                "adb": True,
+                "observe_act_verify": True,
+                "task_harness": True,
+                "expectations": True,
+                "trace_archives": True,
+            },
+            "device_features": {
+                "root_required_available": bool(info and info.is_rooted),
+                "emulator_controls_available": bool(info and info.is_emulator),
+                "debugger_bridge": True,
+            },
         }
 
     async def set_animations(self, serial: str, enabled: bool) -> None:

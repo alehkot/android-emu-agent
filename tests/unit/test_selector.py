@@ -5,10 +5,16 @@ from __future__ import annotations
 import pytest
 
 from android_emu_agent.actions.selector import (
+    ClassSelector,
     CoordsSelector,
+    DescContainsSelector,
+    DescMatchesSelector,
     DescSelector,
     RefSelector,
+    ResourceIdMatchesSelector,
     ResourceIdSelector,
+    TextContainsSelector,
+    TextMatchesSelector,
     TextSelector,
     parse_selector,
 )
@@ -56,6 +62,18 @@ class TestTextSelector:
         selector = TextSelector(text="Click me")
         assert selector.to_u2_kwargs() == {"text": "Click me"}
 
+    def test_parse_text_contains(self) -> None:
+        """Should parse text-contains: syntax."""
+        result = parse_selector('text-contains:"Sign"')
+        assert isinstance(result, TextContainsSelector)
+        assert result.to_u2_kwargs() == {"textContains": "Sign"}
+
+    def test_parse_text_matches(self) -> None:
+        """Should parse text-matches: syntax."""
+        result = parse_selector("text-matches:^Sign.*")
+        assert isinstance(result, TextMatchesSelector)
+        assert result.to_u2_kwargs() == {"textMatches": "^Sign.*"}
+
 
 class TestResourceIdSelector:
     """Tests for ResourceIdSelector."""
@@ -70,6 +88,12 @@ class TestResourceIdSelector:
         """ResourceIdSelector returns resourceId kwargs."""
         selector = ResourceIdSelector(resource_id="com.app:id/submit")
         assert selector.to_u2_kwargs() == {"resourceId": "com.app:id/submit"}
+
+    def test_parse_resource_id_matches(self) -> None:
+        """Should parse id-matches: syntax."""
+        result = parse_selector("id-matches:.*submit")
+        assert isinstance(result, ResourceIdMatchesSelector)
+        assert result.to_u2_kwargs() == {"resourceIdMatches": ".*submit"}
 
 
 class TestDescSelector:
@@ -91,6 +115,28 @@ class TestDescSelector:
         """DescSelector returns description kwargs."""
         selector = DescSelector(desc="Search button")
         assert selector.to_u2_kwargs() == {"description": "Search button"}
+
+    def test_parse_desc_contains(self) -> None:
+        """Should parse desc-contains: syntax."""
+        result = parse_selector("desc-contains:Search")
+        assert isinstance(result, DescContainsSelector)
+        assert result.to_u2_kwargs() == {"descriptionContains": "Search"}
+
+    def test_parse_desc_matches(self) -> None:
+        """Should parse desc-matches: syntax."""
+        result = parse_selector("desc-matches:^Search")
+        assert isinstance(result, DescMatchesSelector)
+        assert result.to_u2_kwargs() == {"descriptionMatches": "^Search"}
+
+
+class TestClassSelector:
+    """Tests for ClassSelector."""
+
+    def test_parse_class_selector(self) -> None:
+        """Should parse class: syntax."""
+        result = parse_selector("class:android.widget.Button")
+        assert isinstance(result, ClassSelector)
+        assert result.to_u2_kwargs() == {"className": "android.widget.Button"}
 
 
 class TestCoordsSelector:

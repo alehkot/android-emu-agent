@@ -18,6 +18,33 @@ class Selector(ABC):
         pass
 
 
+SUPPORTED_SELECTOR_SYNTAX = [
+    "^ref",
+    "text:<value>",
+    "text-contains:<value>",
+    "text-matches:<regex>",
+    "id:<resource_id>",
+    "id-matches:<regex>",
+    "desc:<value>",
+    "desc-contains:<value>",
+    "desc-matches:<regex>",
+    "class:<class_name>",
+    "coords:x,y",
+]
+
+SUPPORTED_SELECTOR_KEYS = [
+    "text",
+    "textContains",
+    "textMatches",
+    "resourceId",
+    "resourceIdMatches",
+    "description",
+    "descriptionContains",
+    "descriptionMatches",
+    "className",
+]
+
+
 @dataclass
 class RefSelector(Selector):
     """Selector for ^ref syntax."""
@@ -41,6 +68,28 @@ class TextSelector(Selector):
 
 
 @dataclass
+class TextContainsSelector(Selector):
+    """Selector for text-contains: syntax."""
+
+    text: str
+
+    def to_u2_kwargs(self) -> dict[str, Any]:
+        """Return uiautomator2 textContains selector kwargs."""
+        return {"textContains": self.text}
+
+
+@dataclass
+class TextMatchesSelector(Selector):
+    """Selector for text-matches: syntax."""
+
+    pattern: str
+
+    def to_u2_kwargs(self) -> dict[str, Any]:
+        """Return uiautomator2 textMatches selector kwargs."""
+        return {"textMatches": self.pattern}
+
+
+@dataclass
 class ResourceIdSelector(Selector):
     """Selector for id: syntax."""
 
@@ -52,6 +101,17 @@ class ResourceIdSelector(Selector):
 
 
 @dataclass
+class ResourceIdMatchesSelector(Selector):
+    """Selector for id-matches: syntax."""
+
+    pattern: str
+
+    def to_u2_kwargs(self) -> dict[str, Any]:
+        """Return uiautomator2 resourceIdMatches selector kwargs."""
+        return {"resourceIdMatches": self.pattern}
+
+
+@dataclass
 class DescSelector(Selector):
     """Selector for desc: syntax."""
 
@@ -60,6 +120,39 @@ class DescSelector(Selector):
     def to_u2_kwargs(self) -> dict[str, Any]:
         """Return uiautomator2 description selector kwargs."""
         return {"description": self.desc}
+
+
+@dataclass
+class DescContainsSelector(Selector):
+    """Selector for desc-contains: syntax."""
+
+    desc: str
+
+    def to_u2_kwargs(self) -> dict[str, Any]:
+        """Return uiautomator2 descriptionContains selector kwargs."""
+        return {"descriptionContains": self.desc}
+
+
+@dataclass
+class DescMatchesSelector(Selector):
+    """Selector for desc-matches: syntax."""
+
+    pattern: str
+
+    def to_u2_kwargs(self) -> dict[str, Any]:
+        """Return uiautomator2 descriptionMatches selector kwargs."""
+        return {"descriptionMatches": self.pattern}
+
+
+@dataclass
+class ClassSelector(Selector):
+    """Selector for class: syntax."""
+
+    class_name: str
+
+    def to_u2_kwargs(self) -> dict[str, Any]:
+        """Return uiautomator2 className selector kwargs."""
+        return {"className": self.class_name}
 
 
 @dataclass
@@ -81,8 +174,14 @@ def parse_selector(target: str) -> Selector:
     Supported formats:
     - ^ref (e.g., ^a1, ^b5) - RefSelector
     - text:"..." or text:'...' or text:value - TextSelector
+    - text-contains:value - TextContainsSelector
+    - text-matches:regex - TextMatchesSelector
     - id:resource_id - ResourceIdSelector
+    - id-matches:regex - ResourceIdMatchesSelector
     - desc:"..." or desc:'...' or desc:value - DescSelector
+    - desc-contains:value - DescContainsSelector
+    - desc-matches:regex - DescMatchesSelector
+    - class:class_name - ClassSelector
     - coords:x,y - CoordsSelector
 
     Args:
@@ -101,15 +200,31 @@ def parse_selector(target: str) -> Selector:
         return RefSelector(ref=target)
 
     if target.startswith("text:"):
-        text = target[5:].strip('"').strip("'")
-        return TextSelector(text=text)
+        return TextSelector(text=_selector_value(target, "text:"))
+
+    if target.startswith("text-contains:"):
+        return TextContainsSelector(text=_selector_value(target, "text-contains:"))
+
+    if target.startswith("text-matches:"):
+        return TextMatchesSelector(pattern=_selector_value(target, "text-matches:"))
 
     if target.startswith("id:"):
-        return ResourceIdSelector(resource_id=target[3:])
+        return ResourceIdSelector(resource_id=_selector_value(target, "id:"))
+
+    if target.startswith("id-matches:"):
+        return ResourceIdMatchesSelector(pattern=_selector_value(target, "id-matches:"))
 
     if target.startswith("desc:"):
-        desc = target[5:].strip('"').strip("'")
-        return DescSelector(desc=desc)
+        return DescSelector(desc=_selector_value(target, "desc:"))
+
+    if target.startswith("desc-contains:"):
+        return DescContainsSelector(desc=_selector_value(target, "desc-contains:"))
+
+    if target.startswith("desc-matches:"):
+        return DescMatchesSelector(pattern=_selector_value(target, "desc-matches:"))
+
+    if target.startswith("class:"):
+        return ClassSelector(class_name=_selector_value(target, "class:"))
 
     if target.startswith("coords:"):
         try:
@@ -120,3 +235,10 @@ def parse_selector(target: str) -> Selector:
             raise invalid_selector_error(target) from None
 
     raise invalid_selector_error(target)
+
+
+def _selector_value(target: str, prefix: str) -> str:
+    value = target[len(prefix) :].strip().strip('"').strip("'")
+    if not value:
+        raise invalid_selector_error(target)
+    return value

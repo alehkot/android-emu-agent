@@ -11,15 +11,29 @@ app = typer.Typer(help="Wait/synchronization commands")
 
 
 def _build_selector(
-    text: str | None, resource_id: str | None, desc: str | None
+    text: str | None,
+    text_contains: str | None,
+    resource_id: str | None,
+    resource_id_matches: str | None,
+    desc: str | None,
+    desc_contains: str | None,
+    class_name: str | None,
 ) -> dict[str, str] | None:
     selector: dict[str, str] = {}
     if text:
         selector["text"] = text
+    if text_contains:
+        selector["textContains"] = text_contains
     if resource_id:
         selector["resourceId"] = resource_id
+    if resource_id_matches:
+        selector["resourceIdMatches"] = resource_id_matches
     if desc:
         selector["description"] = desc
+    if desc_contains:
+        selector["descriptionContains"] = desc_contains
+    if class_name:
+        selector["className"] = class_name
     return selector or None
 
 
@@ -81,13 +95,29 @@ def wait_exists(
     session_id: str = typer.Argument(..., help="Session ID"),
     ref: str | None = typer.Option(None, "--ref", help="Element ref (^a1)"),
     text: str | None = typer.Option(None, "--text", help="Text selector"),
+    text_contains: str | None = typer.Option(None, "--text-contains", help="Text contains selector"),
     resource_id: str | None = typer.Option(None, "--id", help="Resource ID selector"),
+    resource_id_matches: str | None = typer.Option(
+        None, "--id-matches", help="Resource ID regex selector"
+    ),
     desc: str | None = typer.Option(None, "--desc", help="Content-desc selector"),
+    desc_contains: str | None = typer.Option(
+        None, "--desc-contains", help="Content-desc contains selector"
+    ),
+    class_name: str | None = typer.Option(None, "--class", help="Class name selector"),
     timeout_ms: int | None = typer.Option(None, "--timeout-ms", help="Timeout in ms"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Wait for element to exist."""
-    selector = _build_selector(text, resource_id, desc)
+    selector = _build_selector(
+        text,
+        text_contains,
+        resource_id,
+        resource_id_matches,
+        desc,
+        desc_contains,
+        class_name,
+    )
 
     client = DaemonClient()
     resp = client.request(
@@ -109,13 +139,29 @@ def wait_gone(
     session_id: str = typer.Argument(..., help="Session ID"),
     ref: str | None = typer.Option(None, "--ref", help="Element ref (^a1)"),
     text: str | None = typer.Option(None, "--text", help="Text selector"),
+    text_contains: str | None = typer.Option(None, "--text-contains", help="Text contains selector"),
     resource_id: str | None = typer.Option(None, "--id", help="Resource ID selector"),
+    resource_id_matches: str | None = typer.Option(
+        None, "--id-matches", help="Resource ID regex selector"
+    ),
     desc: str | None = typer.Option(None, "--desc", help="Content-desc selector"),
+    desc_contains: str | None = typer.Option(
+        None, "--desc-contains", help="Content-desc contains selector"
+    ),
+    class_name: str | None = typer.Option(None, "--class", help="Class name selector"),
     timeout_ms: int | None = typer.Option(None, "--timeout-ms", help="Timeout in ms"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Wait for element to disappear."""
-    selector = _build_selector(text, resource_id, desc)
+    selector = _build_selector(
+        text,
+        text_contains,
+        resource_id,
+        resource_id_matches,
+        desc,
+        desc_contains,
+        class_name,
+    )
 
     client = DaemonClient()
     resp = client.request(

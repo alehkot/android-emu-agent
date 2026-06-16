@@ -325,7 +325,7 @@ async def _resolve_swipe_bounds(
                 code="ERR_INVALID_CONTAINER",
                 message="Swipe container cannot be a coordinate selector",
                 context={"container": container},
-                remediation="Use a ^ref, text selector, resource id selector, or description selector.",
+                remediation="Use a ^ref, text/id/desc/class selector, or rich selector variant.",
             ),
             status_code=400,
         )
@@ -568,6 +568,21 @@ async def list_devices() -> dict[str, list[dict[str, str]]]:
     core: DaemonCore = app.state.core
     devices = await core.device_manager.list_devices()
     return {"devices": devices}
+
+
+@app.post("/devices/capabilities", response_model=None)
+async def device_capabilities(req: DeviceTargetRequest) -> EndpointResponse:
+    """Return agent-facing capabilities for a device or session target."""
+    core: DaemonCore = app.state.core
+    resolved = await _resolve_device_target(core, req.session_id, req.serial)
+    if isinstance(resolved, JSONResponse):
+        return resolved
+    serial, _device, info = resolved
+    return core.device_manager.capability_report(
+        serial=serial,
+        info=info,
+        session_id=req.session_id,
+    )
 
 
 @app.post("/devices/animations", response_model=None)
@@ -1166,8 +1181,14 @@ async def action_tap(req: ActionRequest) -> EndpointResponse:
     Supports multiple selector formats:
     - ^ref (e.g., ^a1): Use element ref from snapshot
     - text:"..." : Find by text content
+    - text-contains:"..." : Find by partial text content
+    - text-matches:"..." : Find by text regex
     - id:resource_id : Find by resource ID
+    - id-matches:regex : Find by resource ID regex
     - desc:"..." : Find by content description
+    - desc-contains:"..." : Find by partial content description
+    - desc-matches:"..." : Find by content description regex
+    - class:class_name : Find by UI class name
     - coords:x,y : Tap at coordinates directly
     """
     core: DaemonCore = app.state.core

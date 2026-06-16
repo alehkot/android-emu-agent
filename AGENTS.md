@@ -12,7 +12,8 @@ Android Emu Agent is a daemon-first Android automation and debugging system:
 - Daemon is FastAPI over Unix socket (`/tmp/android-emu-agent.sock`).
 - Device I/O uses `adbutils` and `uiautomator2`.
 - Debugger flows use a Kotlin JDI Bridge JAR (Java 17+).
-- Core loop is observe -> act -> verify using snapshot refs (`^a1`, `^a2`, ...).
+- Core loop is observe -> act -> verify using snapshot refs (`^a1`, `^a2`, ...), richer selector
+  escape hatches, and capability introspection when planning automation.
 
 ## 2. Current Source Layout
 
@@ -123,6 +124,8 @@ Do not ship CLI/API/debugger changes that skip docs or tests sync.
   - specific error code,
   - clear message,
   - remediation hint.
+- When adding selector forms, update parser tests, wait/expect/task selector payloads, command docs,
+  and `device capabilities` output together.
 
 ## 8. Device and Debug Safety
 

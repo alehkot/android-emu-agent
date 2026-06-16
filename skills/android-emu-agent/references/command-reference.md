@@ -30,6 +30,8 @@ inspect AVD definitions outside `android-emu-agent`.
 ### Device
 
 - `device list` List connected devices.
+- `device capabilities [--device <serial> | --session <session_id>]` Show selector and subsystem
+  capabilities for a target.
 - `device set animations <on_or_off> -d <device_serial>` Toggle animations.
 - `device set stay_awake <on_or_off> -d <device_serial>` Keep screen awake.
 - `device set rotation <orientation> -d <device_serial>` Set rotation (`portrait`, `landscape`,
@@ -114,6 +116,7 @@ description:
 
 - `wait exists <session_id> --id <id> | --desc <desc> | --ref <ref>` Alternate selectors.
 - `wait gone <session_id> --id <id> | --desc <desc> | --ref <ref>` Alternate selectors.
+- Rich selector flags: `--text-contains`, `--id-matches`, `--desc-contains`, and `--class`.
 
 `wait exists` and `wait gone` can also heal stale refs when the daemon can confidently rebind the
 target against the latest snapshot.
@@ -127,6 +130,7 @@ target against the latest snapshot.
 - `expect gone <session_id> --text <text>` Assert an element disappears.
 - `expect current-app <session_id> [--package <package>] [--activity <activity>]` Assert foreground
   app/activity.
+- Rich selector flags: `--text-contains`, `--id-matches`, `--desc-contains`, and `--class`.
 
 Expect commands reuse wait/app primitives but return explicit pass/fail payloads. On failure they
 return `ERR_EXPECTATION_FAILED`; `current-app` without an expected package or activity returns
