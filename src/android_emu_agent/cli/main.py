@@ -12,6 +12,7 @@ from android_emu_agent.cli.commands import (
     debug,
     device,
     emulator,
+    expect,
     reliability,
     session,
     task,
@@ -41,6 +42,7 @@ def version() -> None:
 app.add_typer(daemon.app, name="daemon")
 app.add_typer(debug.app, name="debug")
 app.add_typer(device.app, name="device")
+app.add_typer(expect.app, name="expect")
 app.add_typer(session.app, name="session")
 app.add_typer(task.app, name="task")
 app.add_typer(trace.app, name="trace")

@@ -21,6 +21,7 @@ android-emu-agent [OPTIONS] COMMAND [ARGS]...
 - `daemon`: Daemon lifecycle commands
 - `debug`: Debugger commands (JDI Bridge)
 - `device`: Device management commands
+- `expect`: Expectation and assertion commands
 - `session`: Session management commands
 - `task`: Task harness commands
 - `trace`: Agent trace recording and replay commands
@@ -785,6 +786,160 @@ android-emu-agent device set doze [OPTIONS] STATE
 **Options**:
 
 - `-d, --device TEXT`: Device serial [required]
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+## `android-emu-agent expect`
+
+Expectation and assertion commands
+
+**Usage**:
+
+```console
+android-emu-agent expect [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+- `--help`: Show this message and exit.
+
+**Commands**:
+
+- `idle`: Assert that the UI becomes idle.
+- `text`: Assert that text appears.
+- `activity`: Assert that the current activity appears.
+- `exists`: Assert that an element exists.
+- `gone`: Assert that an element is gone.
+- `current-app`: Assert the foreground app/activity.
+
+### `android-emu-agent expect idle`
+
+Assert that the UI becomes idle.
+
+**Usage**:
+
+```console
+android-emu-agent expect idle [OPTIONS] SESSION_ID
+```
+
+**Arguments**:
+
+- `SESSION_ID`: Session ID [required]
+
+**Options**:
+
+- `--timeout-ms INTEGER`: Timeout in ms
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent expect text`
+
+Assert that text appears.
+
+**Usage**:
+
+```console
+android-emu-agent expect text [OPTIONS] SESSION_ID TEXT
+```
+
+**Arguments**:
+
+- `SESSION_ID`: Session ID [required]
+- `TEXT`: Expected text [required]
+
+**Options**:
+
+- `--timeout-ms INTEGER`: Timeout in ms
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent expect activity`
+
+Assert that the current activity appears.
+
+**Usage**:
+
+```console
+android-emu-agent expect activity [OPTIONS] SESSION_ID ACTIVITY
+```
+
+**Arguments**:
+
+- `SESSION_ID`: Session ID [required]
+- `ACTIVITY`: Expected activity substring [required]
+
+**Options**:
+
+- `--timeout-ms INTEGER`: Timeout in ms
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent expect exists`
+
+Assert that an element exists.
+
+**Usage**:
+
+```console
+android-emu-agent expect exists [OPTIONS] SESSION_ID
+```
+
+**Arguments**:
+
+- `SESSION_ID`: Session ID [required]
+
+**Options**:
+
+- `--ref TEXT`: Element ref (^a1)
+- `--text TEXT`: Text selector
+- `--id TEXT`: Resource ID selector
+- `--desc TEXT`: Content-desc selector
+- `--timeout-ms INTEGER`: Timeout in ms
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent expect gone`
+
+Assert that an element is gone.
+
+**Usage**:
+
+```console
+android-emu-agent expect gone [OPTIONS] SESSION_ID
+```
+
+**Arguments**:
+
+- `SESSION_ID`: Session ID [required]
+
+**Options**:
+
+- `--ref TEXT`: Element ref (^a1)
+- `--text TEXT`: Text selector
+- `--id TEXT`: Resource ID selector
+- `--desc TEXT`: Content-desc selector
+- `--timeout-ms INTEGER`: Timeout in ms
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent expect current-app`
+
+Assert the foreground app/activity.
+
+**Usage**:
+
+```console
+android-emu-agent expect current-app [OPTIONS] SESSION_ID
+```
+
+**Arguments**:
+
+- `SESSION_ID`: Session ID [required]
+
+**Options**:
+
+- `-p, --package TEXT`: Expected package
+- `-a, --activity TEXT`: Expected activity substring
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 

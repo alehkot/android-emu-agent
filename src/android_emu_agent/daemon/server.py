@@ -58,6 +58,11 @@ from android_emu_agent.daemon.models import (
     EmulatorSnapshotRestoreRequest,
     EmulatorStartRequest,
     EmulatorStopRequest,
+    ExpectActivityRequest,
+    ExpectCurrentAppRequest,
+    ExpectIdleRequest,
+    ExpectSelectorRequest,
+    ExpectTextRequest,
     FileAppPullRequest,
     FileAppPushRequest,
     FileFindRequest,
@@ -902,6 +907,153 @@ def _endpoint_payload(response: EndpointResponse) -> dict[str, Any]:
     if isinstance(response, Response):
         return cast(dict[str, Any], json.loads(bytes(response.body).decode("utf-8")))
     return response
+
+
+@app.post("/expect/idle", response_model=None)
+async def expect_idle(req: ExpectIdleRequest) -> EndpointResponse:
+    """Assert that the UI becomes idle."""
+    response = await wait_idle(
+        WaitIdleRequest(session_id=req.session_id, timeout_ms=req.timeout_ms)
+    )
+    return _expect_wait_response(
+        response,
+        assertion="idle",
+        session_id=req.session_id,
+        expected={"timeout_ms": req.timeout_ms},
+    )
+
+
+@app.post("/expect/text", response_model=None)
+async def expect_text(req: ExpectTextRequest) -> EndpointResponse:
+    """Assert that text appears on screen."""
+    response = await wait_text(
+        WaitTextRequest(session_id=req.session_id, text=req.text, timeout_ms=req.timeout_ms)
+    )
+    return _expect_wait_response(
+        response,
+        assertion="text",
+        session_id=req.session_id,
+        expected={"text": req.text, "timeout_ms": req.timeout_ms},
+    )
+
+
+@app.post("/expect/activity", response_model=None)
+async def expect_activity(req: ExpectActivityRequest) -> EndpointResponse:
+    """Assert that the current activity matches a substring."""
+    response = await wait_activity(
+        WaitActivityRequest(
+            session_id=req.session_id,
+            activity=req.activity,
+            timeout_ms=req.timeout_ms,
+        )
+    )
+    return _expect_wait_response(
+        response,
+        assertion="activity",
+        session_id=req.session_id,
+        expected={"activity": req.activity, "timeout_ms": req.timeout_ms},
+    )
+
+
+@app.post("/expect/exists", response_model=None)
+async def expect_exists(req: ExpectSelectorRequest) -> EndpointResponse:
+    """Assert that an element exists."""
+    response = await wait_exists(
+        WaitSelectorRequest(
+            session_id=req.session_id,
+            ref=req.ref,
+            selector=req.selector,
+            timeout_ms=req.timeout_ms,
+        )
+    )
+    return _expect_wait_response(
+        response,
+        assertion="exists",
+        session_id=req.session_id,
+        expected={"ref": req.ref, "selector": req.selector, "timeout_ms": req.timeout_ms},
+    )
+
+
+@app.post("/expect/gone", response_model=None)
+async def expect_gone(req: ExpectSelectorRequest) -> EndpointResponse:
+    """Assert that an element is gone."""
+    response = await wait_gone(
+        WaitSelectorRequest(
+            session_id=req.session_id,
+            ref=req.ref,
+            selector=req.selector,
+            timeout_ms=req.timeout_ms,
+        )
+    )
+    return _expect_wait_response(
+        response,
+        assertion="gone",
+        session_id=req.session_id,
+        expected={"ref": req.ref, "selector": req.selector, "timeout_ms": req.timeout_ms},
+    )
+
+
+@app.post("/expect/current_app", response_model=None)
+async def expect_current_app(req: ExpectCurrentAppRequest) -> EndpointResponse:
+    """Assert that the foreground app/activity matches expectations."""
+    if not req.package and not req.activity:
+        return _error_response(
+            AgentError(
+                code="ERR_EXPECTATION_REQUIRED",
+                message="expect current-app requires package or activity",
+                context={"session_id": req.session_id},
+                remediation="Provide --package, --activity, or both.",
+            ),
+            status_code=400,
+        )
+    if req.package:
+        try:
+            validate_package(req.package)
+        except AgentError as exc:
+            return _error_response(exc, status_code=400)
+
+    response = await app_current(SessionRequest(session_id=req.session_id))
+    payload = _endpoint_payload(response)
+    if _should_preserve_upstream_error(response, payload):
+        return response
+    core: DaemonCore = app.state.core
+    return core.expectation_manager.current_app(
+        session_id=req.session_id,
+        expected_package=req.package,
+        expected_activity=req.activity,
+        response=payload,
+    )
+
+
+def _expect_wait_response(
+    response: EndpointResponse,
+    *,
+    assertion: str,
+    session_id: str,
+    expected: dict[str, Any],
+) -> EndpointResponse:
+    payload = _endpoint_payload(response)
+    if _should_preserve_upstream_error(response, payload):
+        return response
+    core: DaemonCore = app.state.core
+    return core.expectation_manager.from_wait_response(
+        assertion=assertion,
+        session_id=session_id,
+        expected=expected,
+        response=payload,
+    )
+
+
+def _should_preserve_upstream_error(
+    response: EndpointResponse,
+    payload: dict[str, Any],
+) -> bool:
+    if not isinstance(response, Response):
+        return False
+    if payload.get("status") == "done":
+        return False
+    error = payload.get("error")
+    return not (isinstance(error, dict) and error.get("code") == "ERR_TIMEOUT")
 
 
 @app.post("/ui/snapshot", response_model=None)

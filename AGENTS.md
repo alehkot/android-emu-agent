@@ -21,10 +21,13 @@ Android Emu Agent is a daemon-first Android automation and debugging system:
 - `src/android_emu_agent/device/`: device discovery/controls and session management.
 - `src/android_emu_agent/ui/`: snapshot generation, context, ref resolution.
 - `src/android_emu_agent/actions/`: action dispatch, selectors, wait logic.
+- `src/android_emu_agent/expectations/`: assertion-style expectation result shaping.
 - `src/android_emu_agent/debugger/`: bridge client/downloader and debug manager.
 - `src/android_emu_agent/files/`: host/app file push/pull/list/find.
 - `src/android_emu_agent/reliability/`: forensics helpers and root-gated diagnostics.
 - `src/android_emu_agent/artifacts/`: screenshots/log bundles and export helpers.
+- `src/android_emu_agent/tasks/`: JSON task harness orchestration and verifiers.
+- `src/android_emu_agent/tracing/`: agent trace archive recording, replay planning, and exports.
 - `src/android_emu_agent/db/`: async persistence.
 - `src/android_emu_agent/errors.py`: shared `AgentError` factories.
 - `src/android_emu_agent/validation.py`: package/URI validation helpers.
@@ -83,13 +86,15 @@ When adding or changing a CLI capability, update all relevant layers:
 1. CLI command handler in `src/android_emu_agent/cli/commands/`.
 2. Daemon request model in `src/android_emu_agent/daemon/models.py`.
 3. Daemon endpoint in `src/android_emu_agent/daemon/server.py`.
-4. Manager implementation in the relevant subsystem (`device`, `actions`, `files`, `reliability`,
-   `artifacts`, or `debugger`).
+4. Manager implementation in the relevant subsystem (`device`, `actions`, `expectations`, `tasks`,
+   `tracing`, `files`, `reliability`, `artifacts`, or `debugger`).
 5. Unit tests for payload wiring and subsystem behavior.
 6. Docs and skills:
    - Run `./scripts/dev.sh docs-gen` for `docs/reference.md`.
    - Update `skills/android-emu-agent/references/command-reference.md`.
    - Update other affected references/examples and README command examples.
+   - Update `AGENTS.md` when source layout, workflow expectations, or generated-artifact rules
+     change.
 
 If the change touches debugger behavior or bridge RPC:
 

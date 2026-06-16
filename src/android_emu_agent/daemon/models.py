@@ -67,6 +67,36 @@ class TaskRunRequest(BaseModel):
     stop_on_failure: bool = True
 
 
+class ExpectIdleRequest(BaseModel):
+    session_id: str
+    timeout_ms: int | None = None
+
+
+class ExpectTextRequest(BaseModel):
+    session_id: str
+    text: str
+    timeout_ms: int | None = None
+
+
+class ExpectActivityRequest(BaseModel):
+    session_id: str
+    activity: str
+    timeout_ms: int | None = None
+
+
+class ExpectSelectorRequest(BaseModel):
+    session_id: str
+    ref: str | None = None
+    selector: dict[str, str] | None = None
+    timeout_ms: int | None = None
+
+
+class ExpectCurrentAppRequest(BaseModel):
+    session_id: str
+    package: str | None = None
+    activity: str | None = None
+
+
 class ActionRequest(BaseModel):
     session_id: str
     ref: str  # Can be ^ref, text:"...", id:..., desc:"...", or coords:x,y

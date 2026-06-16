@@ -118,6 +118,20 @@ description:
 `wait exists` and `wait gone` can also heal stale refs when the daemon can confidently rebind the
 target against the latest snapshot.
 
+### Expect
+
+- `expect idle <session_id>` Assert that UI becomes idle.
+- `expect text <session_id> <text>` Assert text appears.
+- `expect activity <session_id> <name>` Assert activity appears.
+- `expect exists <session_id> --text <text>` Assert an element exists.
+- `expect gone <session_id> --text <text>` Assert an element disappears.
+- `expect current-app <session_id> [--package <package>] [--activity <activity>]` Assert foreground
+  app/activity.
+
+Expect commands reuse wait/app primitives but return explicit pass/fail payloads. On failure they
+return `ERR_EXPECTATION_FAILED`; `current-app` without an expected package or activity returns
+`ERR_EXPECTATION_REQUIRED`.
+
 ### App
 
 - `app list --device <serial>` List installed packages. Optional: `--scope all|system|third-party`.

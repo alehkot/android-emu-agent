@@ -27,6 +27,7 @@ The CLI is a thin client. A long-running daemon handles all device I/O. All comm
 - **Diagnostics** — JSON responses and headers include `diagnostic_id` for request-level tracing
 - **Trace archives** — record daemon exchanges into replayable `.aea-trace.zip` evidence bundles
 - **Task harness** — run JSON task specs with step-level and final verifiers
+- **Expectations** — assertion-style commands for UI state, activity, and foreground app checks
 - **Agent skills included** — structured reference docs, workflow templates, and safety guardrails
 - **Machine-readable output** — every command supports `--json` for agent pipelines
 
@@ -276,6 +277,14 @@ uv run android-emu-agent wait idle s-abc123 --timeout-ms 3000
 uv run android-emu-agent ui snapshot s-abc123
 ```
 
+Assert expected state
+
+```bash
+uv run android-emu-agent expect text s-abc123 "Welcome" --timeout-ms 5000
+uv run android-emu-agent expect exists s-abc123 --text "Checkout" --timeout-ms 5000
+uv run android-emu-agent expect current-app s-abc123 --package com.example.app --activity CheckoutActivity
+```
+
 Visual debug
 
 ```bash
@@ -523,6 +532,7 @@ In practice, these are usually safe on non-root devices:
 - UI snapshots and screenshots
 - Actions (tap, set-text, swipe, scroll, back/home/recents)
 - Wait commands
+- Expect commands
 - App list/install/uninstall/launch/intent/force-stop/reset/deeplink
 - File `push` and `pull` to shared storage
 
@@ -564,25 +574,29 @@ uv run android-emu-agent daemon status --json
 
 Common errors
 
-| Error Code               | Meaning                  | Fix                                             |
-| ------------------------ | ------------------------ | ----------------------------------------------- |
-| `ERR_STALE_REF`          | Ref from an old snapshot | Re-snapshot; if auto-healed, use warning as cue |
-| `ERR_NOT_FOUND`          | Element not found        | Verify screen, use `--full` or a selector       |
-| `ERR_BLOCKED_INPUT`      | Dialog/IME blocking      | `wait idle` or `back`                           |
-| `ERR_TIMEOUT`            | Wait condition not met   | Increase `--timeout-ms` or check condition      |
-| `ERR_DEVICE_OFFLINE`     | Device disconnected      | Reconnect and re-run `device list`              |
-| `ERR_SESSION_EXPIRED`    | Session is gone          | Start a new session                             |
-| `ERR_PERMISSION`         | Root required            | Use a rooted device/emulator                    |
-| `ERR_ADB_NOT_FOUND`      | `adb` not on PATH        | Install Android SDK and ensure `adb` is on PATH |
-| `ERR_SDK_TOOL_NOT_FOUND` | SDK CLI tool missing     | Add `emulator` / `avdmanager` to PATH           |
-| `ERR_ADB_COMMAND`        | ADB command failed       | Check device connectivity and retry             |
-| `ERR_ALREADY_ATTACHED`   | Debug session exists     | Detach first with `debug detach`                |
-| `ERR_DEBUG_NOT_ATTACHED` | No debug session         | Attach first with `debug attach`                |
-| `ERR_JDK_NOT_FOUND`      | Java not found           | Install JDK 17+ or set `JAVA_HOME`              |
-| `ERR_VM_DISCONNECTED`    | Target VM exited         | Re-launch the app and re-attach                 |
-| `ERR_TRACE_ACTIVE`       | Trace already active     | Stop the active trace before starting another   |
-| `ERR_TRACE_NOT_ACTIVE`   | No active trace          | Start a trace before stopping it                |
-| `ERR_TRACE_INVALID`      | Bad trace archive        | Use a `.aea-trace.zip` produced by `trace stop` |
+| Error Code                  | Meaning                  | Fix                                             |
+| --------------------------- | ------------------------ | ----------------------------------------------- |
+| `ERR_STALE_REF`             | Ref from an old snapshot | Re-snapshot; if auto-healed, use warning as cue |
+| `ERR_NOT_FOUND`             | Element not found        | Verify screen, use `--full` or a selector       |
+| `ERR_BLOCKED_INPUT`         | Dialog/IME blocking      | `wait idle` or `back`                           |
+| `ERR_TIMEOUT`               | Wait condition not met   | Increase `--timeout-ms` or check condition      |
+| `ERR_DEVICE_OFFLINE`        | Device disconnected      | Reconnect and re-run `device list`              |
+| `ERR_SESSION_EXPIRED`       | Session is gone          | Start a new session                             |
+| `ERR_PERMISSION`            | Root required            | Use a rooted device/emulator                    |
+| `ERR_ADB_NOT_FOUND`         | `adb` not on PATH        | Install Android SDK and ensure `adb` is on PATH |
+| `ERR_SDK_TOOL_NOT_FOUND`    | SDK CLI tool missing     | Add `emulator` / `avdmanager` to PATH           |
+| `ERR_ADB_COMMAND`           | ADB command failed       | Check device connectivity and retry             |
+| `ERR_ALREADY_ATTACHED`      | Debug session exists     | Detach first with `debug detach`                |
+| `ERR_DEBUG_NOT_ATTACHED`    | No debug session         | Attach first with `debug attach`                |
+| `ERR_JDK_NOT_FOUND`         | Java not found           | Install JDK 17+ or set `JAVA_HOME`              |
+| `ERR_VM_DISCONNECTED`       | Target VM exited         | Re-launch the app and re-attach                 |
+| `ERR_TRACE_ACTIVE`          | Trace already active     | Stop the active trace before starting another   |
+| `ERR_TRACE_NOT_ACTIVE`      | No active trace          | Start a trace before stopping it                |
+| `ERR_TRACE_INVALID`         | Bad trace archive        | Use a `.aea-trace.zip` produced by `trace stop` |
+| `ERR_TASK_INVALID`          | Bad task spec            | Fix JSON and run `task validate`                |
+| `ERR_TASK_UNSUPPORTED_STEP` | Unsupported task op      | Use supported action/wait/app/ui operations     |
+| `ERR_EXPECTATION_FAILED`    | Assertion failed         | Check state, selector, or timeout               |
+| `ERR_EXPECTATION_REQUIRED`  | Missing expected state   | Provide `--package` or `--activity`             |
 
 For deeper guidance, see `skills/android-emu-agent/references/troubleshooting.md`.
 

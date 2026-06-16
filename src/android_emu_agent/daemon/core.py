@@ -11,6 +11,7 @@ from android_emu_agent.db.models import Database
 from android_emu_agent.debugger.manager import DebugManager
 from android_emu_agent.device.manager import DeviceManager
 from android_emu_agent.device.session import SessionManager
+from android_emu_agent.expectations import ExpectationManager
 from android_emu_agent.files.manager import FileManager
 from android_emu_agent.reliability.manager import ReliabilityManager
 from android_emu_agent.tasks import TaskManager
@@ -42,6 +43,7 @@ class DaemonCore:
         self.diagnostics = RequestDiagnostics()
         self.trace_manager = TraceManager()
         self.task_manager = TaskManager()
+        self.expectation_manager = ExpectationManager()
         self._running = False
 
     async def start(self) -> None:
