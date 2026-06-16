@@ -26,6 +26,7 @@ The CLI is a thin client. A long-running daemon handles all device I/O. All comm
   snapshot still contains the same target
 - **Diagnostics** — JSON responses and headers include `diagnostic_id` for request-level tracing
 - **Trace archives** — record daemon exchanges into replayable `.aea-trace.zip` evidence bundles
+- **Task harness** — run JSON task specs with step-level and final verifiers
 - **Agent skills included** — structured reference docs, workflow templates, and safety guardrails
 - **Machine-readable output** — every command supports `--json` for agent pipelines
 
@@ -292,6 +293,29 @@ uv run android-emu-agent ui snapshot s-abc123
 uv run android-emu-agent trace stop s-abc123 --output ./checkout-repro.aea-trace.zip
 uv run android-emu-agent trace replay ./checkout-repro.aea-trace.zip --until-failure
 uv run android-emu-agent trace export ./checkout-repro.aea-trace.zip --output ./checkout-repro.md
+```
+
+Run a task harness spec
+
+```json
+{
+  "name": "checkout smoke",
+  "session_id": "s-abc123",
+  "steps": [
+    {
+      "name": "open checkout",
+      "action": "tap",
+      "ref": "text:\"Checkout\"",
+      "verify": [{ "type": "exists", "text": "Payment" }]
+    }
+  ],
+  "verifiers": [{ "type": "activity", "activity": "CheckoutActivity" }]
+}
+```
+
+```bash
+uv run android-emu-agent task validate ./checkout-task.json
+uv run android-emu-agent task run ./checkout-task.json --json
 ```
 
 App debug helpers

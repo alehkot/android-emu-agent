@@ -1,8 +1,8 @@
 # Drive Android apps through a tight observe, act, verify loop
 
 Android Emu Agent gives LLMs and developer tools a practical control plane for emulators and rooted
-devices: compact UI snapshots, stable action refs, app diagnostics, artifacts, file transfer, and
-JVM debugging, and replayable trace archives from one CLI.
+devices: compact UI snapshots, stable action refs, task specs with verifiers, app diagnostics,
+artifacts, file transfer, JVM debugging, and replayable trace archives from one CLI.
 
 [Explore the CLI reference](reference.md) |
 [View source](https://github.com/alehkot/android-emu-agent)
@@ -33,6 +33,7 @@ generation: 43
 | **Debugger bridge**         | Java 17+ JDI support for threads, stack traces, breakpoints, exception breaks, stepping, and constrained eval.          |
 | **Forensics and artifacts** | Screenshots, log bundles, request diagnostics, process data, memory reports, and gfxinfo for evidence-driven debugging. |
 | **Trace archives**          | `.aea-trace.zip` archives capture daemon exchanges for dry replay and Markdown reports.                                 |
+| **Task harness**            | JSON task specs run ordered steps with step-level and final verifiers.                                                  |
 | **Agent skills included**   | Ready-to-install skill docs with command references, recovery protocols, workflow examples, and safety guardrails.      |
 
 ## Built for repeated agent work
@@ -45,8 +46,8 @@ generation: 43
 
 ## Command surface
 
-`daemon` `device` `session` `trace` `ui` `action` `wait` `app` `artifact` `emulator` `reliability`
-`file` `debug`
+`daemon` `device` `session` `task` `trace` `ui` `action` `wait` `app` `artifact` `emulator`
+`reliability` `file` `debug`
 
 Every command keeps human output concise and supports stable JSON where machine consumers need it.
 The generated [CLI reference](reference.md) is the source of truth for flags and payloads.

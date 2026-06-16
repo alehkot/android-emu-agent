@@ -59,6 +59,18 @@ Trace archives record daemon request/response exchanges for the active session, 
 errors, and artifact paths. Replay is currently a dry-run plan so it never mutates a device by
 surprise.
 
+### Task
+
+- `task validate <task.json>` Validate a JSON task spec without running it.
+- `task run <task.json> [--session <session_id>] [--continue-on-failure]` Run ordered task steps and
+  verifiers.
+
+Task specs support action steps (`tap`, `long_tap`, `set_text`, `clear`, `back`, `home`, `recents`,
+`swipe`), wait/verifier operations (`idle`, `activity`, `text`, `exists`, `gone`), app steps
+(`launch`, `force_stop`, `deeplink`), and `ui` `snapshot` steps. Use `verify` on a step for
+post-step checks and top-level `verifiers` for final checks. A failed verifier returns
+`status=failed` with the failing step or verifier payload.
+
 ### UI
 
 - `ui snapshot <session_id>` Get actionable UI elements.

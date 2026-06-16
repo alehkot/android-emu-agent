@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, model_validator
 
@@ -55,6 +55,16 @@ class TraceExportRequest(BaseModel):
     path: str
     output_path: str | None = None
     format: str = "markdown"
+
+
+class TaskValidateRequest(BaseModel):
+    task: dict[str, Any]
+
+
+class TaskRunRequest(BaseModel):
+    session_id: str
+    task: dict[str, Any]
+    stop_on_failure: bool = True
 
 
 class ActionRequest(BaseModel):

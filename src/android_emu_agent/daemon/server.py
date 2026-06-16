@@ -86,6 +86,8 @@ from android_emu_agent.daemon.models import (
     SetTextRequest,
     SnapshotRequest,
     SwipeRequest,
+    TaskRunRequest,
+    TaskValidateRequest,
     TraceExportRequest,
     TraceReplayRequest,
     TraceStartRequest,
@@ -106,6 +108,7 @@ from android_emu_agent.errors import (
 )
 from android_emu_agent.files.manager import FileMatch
 from android_emu_agent.reliability.manager import DEFAULT_EVENTS_PATTERN, TRIM_LEVELS, require_root
+from android_emu_agent.tasks import TaskCall
 from android_emu_agent.ui.ref_resolver import LocatorBundle
 from android_emu_agent.utils.time_parser import parse_datetime
 from android_emu_agent.validation import validate_package, validate_uri
@@ -791,6 +794,114 @@ async def trace_export(req: TraceExportRequest) -> EndpointResponse:
             ),
             status_code=400,
         )
+
+
+@app.post("/tasks/validate", response_model=None)
+async def task_validate(req: TaskValidateRequest) -> EndpointResponse:
+    """Validate a JSON task spec without running device actions."""
+    core: DaemonCore = app.state.core
+    try:
+        return core.task_manager.validate(req.task)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+
+@app.post("/tasks/run", response_model=None)
+async def task_run(req: TaskRunRequest) -> EndpointResponse:
+    """Run a JSON task spec with step-level and task-level verifiers."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+    try:
+        return await core.task_manager.run(
+            req.task,
+            session_id=req.session_id,
+            dispatcher=_dispatch_task_call,
+            stop_on_failure=req.stop_on_failure,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+
+async def _dispatch_task_call(call: TaskCall) -> dict[str, Any]:
+    """Route a normalized task call through existing daemon endpoint handlers."""
+    try:
+        if call.kind == "action":
+            if call.operation == "tap":
+                response = await action_tap(ActionRequest(**call.payload))
+            elif call.operation == "long_tap":
+                response = await action_long_tap(ActionRequest(**call.payload))
+            elif call.operation == "set_text":
+                response = await action_set_text(SetTextRequest(**call.payload))
+            elif call.operation == "clear":
+                response = await action_clear(ActionRequest(**call.payload))
+            elif call.operation == "back":
+                response = await action_back(SessionRequest(**call.payload))
+            elif call.operation == "home":
+                response = await action_home(SessionRequest(**call.payload))
+            elif call.operation == "recents":
+                response = await action_recents(SessionRequest(**call.payload))
+            elif call.operation == "swipe":
+                response = await action_swipe(SwipeRequest(**call.payload))
+            else:
+                raise _unsupported_task_call(call)
+        elif call.kind == "wait":
+            if call.operation == "idle":
+                response = await wait_idle(WaitIdleRequest(**call.payload))
+            elif call.operation == "activity":
+                response = await wait_activity(WaitActivityRequest(**call.payload))
+            elif call.operation == "text":
+                response = await wait_text(WaitTextRequest(**call.payload))
+            elif call.operation == "exists":
+                response = await wait_exists(WaitSelectorRequest(**call.payload))
+            elif call.operation == "gone":
+                response = await wait_gone(WaitSelectorRequest(**call.payload))
+            else:
+                raise _unsupported_task_call(call)
+        elif call.kind == "app":
+            if call.operation == "launch":
+                response = await app_launch(AppLaunchRequest(**call.payload))
+            elif call.operation == "force_stop":
+                response = await app_force_stop(AppForceStopRequest(**call.payload))
+            elif call.operation == "deeplink":
+                response = await app_deeplink(AppDeeplinkRequest(**call.payload))
+            else:
+                raise _unsupported_task_call(call)
+        elif call.kind == "ui" and call.operation == "snapshot":
+            response = await ui_snapshot(SnapshotRequest(**call.payload))
+        else:
+            raise _unsupported_task_call(call)
+    except AgentError as exc:
+        return _agent_error_payload(exc)
+    return _endpoint_payload(response)
+
+
+def _unsupported_task_call(call: TaskCall) -> AgentError:
+    return AgentError(
+        code="ERR_TASK_UNSUPPORTED_STEP",
+        message=f"Unsupported task call: {call.kind}.{call.operation}",
+        context={"kind": call.kind, "operation": call.operation},
+        remediation="Run 'task validate' and use a supported task operation.",
+    )
+
+
+def _agent_error_payload(error: AgentError) -> dict[str, Any]:
+    return {
+        "status": "error",
+        "error": {
+            "code": error.code,
+            "message": error.message,
+            "context": error.context,
+            "remediation": error.remediation,
+        },
+    }
+
+
+def _endpoint_payload(response: EndpointResponse) -> dict[str, Any]:
+    if isinstance(response, Response):
+        return cast(dict[str, Any], json.loads(bytes(response.body).decode("utf-8")))
+    return response
 
 
 @app.post("/ui/snapshot", response_model=None)

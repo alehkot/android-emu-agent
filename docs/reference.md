@@ -22,6 +22,7 @@ android-emu-agent [OPTIONS] COMMAND [ARGS]...
 - `debug`: Debugger commands (JDI Bridge)
 - `device`: Device management commands
 - `session`: Session management commands
+- `task`: Task harness commands
 - `trace`: Agent trace recording and replay commands
 - `ui`: UI observation commands
 - `action`: Action execution commands
@@ -874,6 +875,65 @@ android-emu-agent session list [OPTIONS]
 
 **Options**:
 
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+## `android-emu-agent task`
+
+Task harness commands
+
+**Usage**:
+
+```console
+android-emu-agent task [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+- `--help`: Show this message and exit.
+
+**Commands**:
+
+- `validate`: Validate a task spec without running it.
+- `run`: Run a task spec with verifiers.
+
+### `android-emu-agent task validate`
+
+Validate a task spec without running it.
+
+**Usage**:
+
+```console
+android-emu-agent task validate [OPTIONS] PATH
+```
+
+**Arguments**:
+
+- `PATH`: Task JSON file [required]
+
+**Options**:
+
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent task run`
+
+Run a task spec with verifiers.
+
+**Usage**:
+
+```console
+android-emu-agent task run [OPTIONS] PATH
+```
+
+**Arguments**:
+
+- `PATH`: Task JSON file [required]
+
+**Options**:
+
+- `-s, --session TEXT`: Session ID override
+- `--continue-on-failure`: Continue after failed steps or verifiers
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 
