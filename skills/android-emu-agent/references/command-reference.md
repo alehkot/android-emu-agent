@@ -79,6 +79,8 @@ post-step checks and top-level `verifiers` for final checks. A failed verifier r
 - `ui snapshot <session_id> --format text` Compact text output.
 - `ui screenshot [<session_id>] [--device <serial> | --session <session_id>] [--pull] [--output <path>]`
   Capture screen image (optionally copy to local path).
+- `ui ground <session_id> [--ref <ref>] [--no-screenshot] [--pull]` Create optional
+  screenshot-to-ref grounding metadata from the latest snapshot.
 
 Default compact snapshots are actionable and work well on classic XML views plus modern frameworks
 such as Compose and Litho. Use `--full` when the target element is not in the default actionable
@@ -87,6 +89,10 @@ snapshot (e.g., labels, images, non-clickable containers):
 - `ui snapshot <session_id> --full` Include all nodes (not just interactive).
 - `ui snapshot <session_id> --raw` Return raw XML hierarchy (for low-level debugging of the UI
   tree).
+
+`ui ground` does not run vision, OCR, or image matching. It links existing snapshot refs to
+screenshot-space bounds so humans or external vision models can inspect evidence without making
+vision mandatory for automation.
 
 ### Action
 

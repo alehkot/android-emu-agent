@@ -37,6 +37,7 @@ generation: 43
 | **Trace archives**          | `.aea-trace.zip` archives capture daemon exchanges for dry replay and Markdown reports.                                    |
 | **Task harness**            | JSON task specs run ordered steps with step-level and final verifiers.                                                     |
 | **Expectations**            | Assertion commands turn expected UI/app state into pass/fail JSON.                                                         |
+| **Visual grounding**        | Optional screenshot-to-ref metadata ties bounds to image artifacts without requiring vision.                               |
 | **Agent skills included**   | Ready-to-install skill docs with command references, recovery protocols, workflow examples, and safety guardrails.         |
 
 ## Built for repeated agent work

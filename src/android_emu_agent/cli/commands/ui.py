@@ -12,6 +12,7 @@ from android_emu_agent.cli.utils import (
 )
 
 app = typer.Typer(help="UI observation commands")
+REFS_OPTION = typer.Option(None, "--ref", help="Limit to one or more refs")
 
 
 def _validate_snapshot_flags(full: bool, raw: bool) -> str:
@@ -108,5 +109,35 @@ def ui_screenshot(
     payload = require_target(device, resolved_session)
     client = DaemonClient()
     resp = client.request("POST", "/ui/screenshot", json_body=payload)
+    client.close()
+    handle_response_with_pull(resp, json_output=json_output, pull=pull, output=output)
+
+
+@app.command("ground")
+def ui_ground(
+    session_id: str = typer.Argument(..., help="Session ID"),
+    refs: list[str] | None = REFS_OPTION,
+    screenshot: bool = typer.Option(
+        True,
+        "--screenshot/--no-screenshot",
+        help="Capture a screenshot alongside grounding metadata",
+    ),
+    pull: bool = typer.Option(False, "--pull", help="Copy grounding JSON to local path"),
+    output: str | None = typer.Option(
+        None, "--output", "-o", help="Output path (file or directory)"
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Create screenshot-to-ref grounding metadata from the latest snapshot."""
+    client = DaemonClient()
+    resp = client.request(
+        "POST",
+        "/ui/ground",
+        json_body={
+            "session_id": session_id,
+            "refs": refs,
+            "screenshot": screenshot,
+        },
+    )
     client.close()
     handle_response_with_pull(resp, json_output=json_output, pull=pull, output=output)

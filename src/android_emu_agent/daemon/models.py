@@ -36,6 +36,12 @@ class SessionRequest(BaseModel):
     session_id: str
 
 
+class VisualGroundingRequest(BaseModel):
+    session_id: str
+    refs: list[str] | None = None
+    screenshot: bool = True
+
+
 class TraceStartRequest(BaseModel):
     session_id: str
     label: str | None = None

@@ -166,6 +166,9 @@ uv run android-emu-agent wait exists s-abc123 --text-contains "Continue" --timeo
 uv run android-emu-agent wait exists s-abc123 --id-matches ".*checkout.*" --timeout-ms 5000
 uv run android-emu-agent wait exists s-abc123 --class android.widget.Button --desc-contains "Pay"
 
+# Optional visual evidence for a ref from the latest snapshot
+uv run android-emu-agent ui ground s-abc123 --ref ^a1 --pull --output ./grounding.json
+
 # Wait for loading indicator to disappear
 uv run android-emu-agent wait gone s-abc123 --text "Loading..." --timeout-ms 15000
 ```

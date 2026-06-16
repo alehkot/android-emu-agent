@@ -88,6 +88,7 @@ def test_device_manager_capability_report_lists_selector_features() -> None:
     assert "text-contains:<value>" in report["selectors"]["target_syntax"]
     assert "resourceIdMatches" in report["selectors"]["selector_keys"]
     assert report["automation"]["task_harness"] is True
+    assert report["automation"]["visual_grounding"] is True
     assert report["device_features"]["emulator_controls_available"] is True
 
 

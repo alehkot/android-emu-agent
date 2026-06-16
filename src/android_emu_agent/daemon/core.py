@@ -19,6 +19,7 @@ from android_emu_agent.tracing import TraceManager
 from android_emu_agent.ui.context import ContextResolver
 from android_emu_agent.ui.ref_resolver import RefResolver
 from android_emu_agent.ui.snapshotter import UISnapshotter
+from android_emu_agent.visual import VisualGroundingManager
 
 logger = structlog.get_logger()
 
@@ -44,6 +45,9 @@ class DaemonCore:
         self.trace_manager = TraceManager()
         self.task_manager = TaskManager()
         self.expectation_manager = ExpectationManager()
+        self.visual_grounding_manager = VisualGroundingManager(
+            self.artifact_manager.output_dir / "visual"
+        )
         self._running = False
 
     async def start(self) -> None:

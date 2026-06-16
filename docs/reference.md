@@ -1254,6 +1254,7 @@ android-emu-agent ui [OPTIONS] COMMAND [ARGS]...
 
 - `snapshot`: Take a UI snapshot.
 - `screenshot`: Capture a screenshot.
+- `ground`: Create screenshot-to-ref grounding...
 
 ### `android-emu-agent ui snapshot`
 
@@ -1301,6 +1302,30 @@ android-emu-agent ui screenshot [OPTIONS] [SESSION_ID]
 - `-d, --device TEXT`: Device serial
 - `-s, --session TEXT`: Session ID
 - `--pull`: Copy screenshot to local path
+- `-o, --output TEXT`: Output path (file or directory)
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent ui ground`
+
+Create screenshot-to-ref grounding metadata from the latest snapshot.
+
+**Usage**:
+
+```console
+android-emu-agent ui ground [OPTIONS] SESSION_ID
+```
+
+**Arguments**:
+
+- `SESSION_ID`: Session ID [required]
+
+**Options**:
+
+- `--ref TEXT`: Limit to one or more refs
+- `--screenshot / --no-screenshot`: Capture a screenshot alongside grounding metadata [default:
+  screenshot]
+- `--pull`: Copy grounding JSON to local path
 - `-o, --output TEXT`: Output path (file or directory)
 - `--json`: Output JSON
 - `--help`: Show this message and exit.

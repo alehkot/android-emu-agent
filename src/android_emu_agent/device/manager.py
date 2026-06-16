@@ -205,6 +205,7 @@ class DeviceManager:
                 "task_harness": True,
                 "expectations": True,
                 "trace_archives": True,
+                "visual_grounding": True,
             },
             "device_features": {
                 "root_required_available": bool(info and info.is_rooted),

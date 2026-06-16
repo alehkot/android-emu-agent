@@ -21,6 +21,7 @@ Android Emu Agent is a daemon-first Android automation and debugging system:
 - `src/android_emu_agent/daemon/`: request models, API routes, daemon lifecycle, health.
 - `src/android_emu_agent/device/`: device discovery/controls and session management.
 - `src/android_emu_agent/ui/`: snapshot generation, context, ref resolution.
+- `src/android_emu_agent/visual/`: optional screenshot-to-ref grounding metadata.
 - `src/android_emu_agent/actions/`: action dispatch, selectors, wait logic.
 - `src/android_emu_agent/expectations/`: assertion-style expectation result shaping.
 - `src/android_emu_agent/debugger/`: bridge client/downloader and debug manager.

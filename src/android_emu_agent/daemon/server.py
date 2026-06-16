@@ -10,6 +10,7 @@ from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from hashlib import md5
+from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
 
@@ -97,6 +98,7 @@ from android_emu_agent.daemon.models import (
     TraceReplayRequest,
     TraceStartRequest,
     TraceStopRequest,
+    VisualGroundingRequest,
     WaitActivityRequest,
     WaitIdleRequest,
     WaitSelectorRequest,
@@ -1172,6 +1174,45 @@ async def ui_screenshot(req: DeviceTargetRequest) -> EndpointResponse:
     safe_label = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in label)
     path = await core.artifact_manager.screenshot(device, safe_label)
     return {"status": "done", "serial": serial, "path": str(path)}
+
+
+@app.post("/ui/ground", response_model=None)
+async def ui_ground(req: VisualGroundingRequest) -> EndpointResponse:
+    """Create optional screenshot-to-ref grounding metadata."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    snapshot = await core.session_manager.get_last_snapshot(req.session_id)
+    if not snapshot:
+        return _error_response(
+            AgentError(
+                code="ERR_SNAPSHOT_REQUIRED",
+                message="Visual grounding requires a latest UI snapshot",
+                context={"session_id": req.session_id},
+                remediation="Run 'ui snapshot' before 'ui ground'.",
+            ),
+            status_code=409,
+        )
+
+    screenshot_path: Path | None = None
+    if req.screenshot:
+        device = await core.device_manager.get_u2_device(session.device_serial)
+        if not device:
+            return _error_response(device_offline_error(session.device_serial), status_code=404)
+        screenshot_path = await core.artifact_manager.screenshot(device, req.session_id)
+
+    try:
+        return core.visual_grounding_manager.create_grounding(
+            session_id=req.session_id,
+            snapshot=snapshot,
+            screenshot_path=screenshot_path,
+            refs=req.refs,
+        )
+    except AgentError as exc:
+        status_code = 404 if exc.code == "ERR_VISUAL_REF_NOT_FOUND" else 400
+        return _error_response(exc, status_code=status_code)
 
 
 @app.post("/actions/tap", response_model=None)
