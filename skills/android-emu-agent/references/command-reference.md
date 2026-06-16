@@ -45,6 +45,20 @@ inspect AVD definitions outside `android-emu-agent`.
 - `session list` List active sessions.
 - `session info <session_id>` Session details.
 
+### Trace
+
+- `trace start <session_id> [--label <label>]` Start recording a session trace.
+- `trace stop <session_id> [--output <path_or_dir>]` Stop recording and write a `.aea-trace.zip`
+  archive.
+- `trace status [--session <session_id>]` List active traces.
+- `trace replay <path> [--until-failure]` Return a dry-run replay plan from an archive.
+- `trace export <path> [--output <path>]` Export a trace archive to Markdown.
+
+Trace archives record daemon request/response exchanges for the active session, including
+`diagnostic_id`, request payloads with sensitive fields redacted, response payloads, status codes,
+errors, and artifact paths. Replay is currently a dry-run plan so it never mutates a device by
+surprise.
+
 ### UI
 
 - `ui snapshot <session_id>` Get actionable UI elements.

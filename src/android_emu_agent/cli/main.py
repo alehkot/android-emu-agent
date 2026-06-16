@@ -14,6 +14,7 @@ from android_emu_agent.cli.commands import (
     emulator,
     reliability,
     session,
+    trace,
     ui,
     wait,
 )
@@ -40,6 +41,7 @@ app.add_typer(daemon.app, name="daemon")
 app.add_typer(debug.app, name="debug")
 app.add_typer(device.app, name="device")
 app.add_typer(session.app, name="session")
+app.add_typer(trace.app, name="trace")
 app.add_typer(ui.app, name="ui")
 app.add_typer(action.app, name="action")
 app.add_typer(wait.app, name="wait")

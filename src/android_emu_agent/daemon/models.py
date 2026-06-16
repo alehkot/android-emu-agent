@@ -36,6 +36,27 @@ class SessionRequest(BaseModel):
     session_id: str
 
 
+class TraceStartRequest(BaseModel):
+    session_id: str
+    label: str | None = None
+
+
+class TraceStopRequest(BaseModel):
+    session_id: str
+    output_path: str | None = None
+
+
+class TraceReplayRequest(BaseModel):
+    path: str
+    until_failure: bool = False
+
+
+class TraceExportRequest(BaseModel):
+    path: str
+    output_path: str | None = None
+    format: str = "markdown"
+
+
 class ActionRequest(BaseModel):
     session_id: str
     ref: str  # Can be ^ref, text:"...", id:..., desc:"...", or coords:x,y

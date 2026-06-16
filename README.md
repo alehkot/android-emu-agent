@@ -25,6 +25,7 @@ The CLI is a thin client. A long-running daemon handles all device I/O. All comm
 - **Ref healing** — deterministic `^a1`-style handles with selector-chain rebinding when a newer
   snapshot still contains the same target
 - **Diagnostics** — JSON responses and headers include `diagnostic_id` for request-level tracing
+- **Trace archives** — record daemon exchanges into replayable `.aea-trace.zip` evidence bundles
 - **Agent skills included** — structured reference docs, workflow templates, and safety guardrails
 - **Machine-readable output** — every command supports `--json` for agent pipelines
 
@@ -282,6 +283,17 @@ uv run android-emu-agent artifact bundle s-abc123
 uv run android-emu-agent artifact logs --session s-abc123 --app com.example.app --type errors --since "10m ago"
 ```
 
+Trace an agent run
+
+```bash
+uv run android-emu-agent trace start s-abc123 --label checkout-repro
+uv run android-emu-agent action tap s-abc123 ^a1
+uv run android-emu-agent ui snapshot s-abc123
+uv run android-emu-agent trace stop s-abc123 --output ./checkout-repro.aea-trace.zip
+uv run android-emu-agent trace replay ./checkout-repro.aea-trace.zip --until-failure
+uv run android-emu-agent trace export ./checkout-repro.aea-trace.zip --output ./checkout-repro.md
+```
+
 App debug helpers
 
 ```bash
@@ -514,6 +526,7 @@ Artifacts are written to `~/.android-emu-agent/artifacts` by default.
 
 - Reliability outputs: `~/.android-emu-agent/artifacts/reliability`
 - File transfers: `~/.android-emu-agent/artifacts/files`
+- Trace archives: `~/.android-emu-agent/traces`
 
 ## Troubleshooting
 
@@ -543,6 +556,9 @@ Common errors
 | `ERR_DEBUG_NOT_ATTACHED` | No debug session         | Attach first with `debug attach`                |
 | `ERR_JDK_NOT_FOUND`      | Java not found           | Install JDK 17+ or set `JAVA_HOME`              |
 | `ERR_VM_DISCONNECTED`    | Target VM exited         | Re-launch the app and re-attach                 |
+| `ERR_TRACE_ACTIVE`       | Trace already active     | Stop the active trace before starting another   |
+| `ERR_TRACE_NOT_ACTIVE`   | No active trace          | Start a trace before stopping it                |
+| `ERR_TRACE_INVALID`      | Bad trace archive        | Use a `.aea-trace.zip` produced by `trace stop` |
 
 For deeper guidance, see `skills/android-emu-agent/references/troubleshooting.md`.
 

@@ -13,6 +13,7 @@ from android_emu_agent.device.manager import DeviceManager
 from android_emu_agent.device.session import SessionManager
 from android_emu_agent.files.manager import FileManager
 from android_emu_agent.reliability.manager import ReliabilityManager
+from android_emu_agent.tracing import TraceManager
 from android_emu_agent.ui.context import ContextResolver
 from android_emu_agent.ui.ref_resolver import RefResolver
 from android_emu_agent.ui.snapshotter import UISnapshotter
@@ -38,6 +39,7 @@ class DaemonCore:
         self.context_resolver = ContextResolver()
         self.health_monitor = HealthMonitor(self.device_manager, self.session_manager)
         self.diagnostics = RequestDiagnostics()
+        self.trace_manager = TraceManager()
         self._running = False
 
     async def start(self) -> None:

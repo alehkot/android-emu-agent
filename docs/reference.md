@@ -22,6 +22,7 @@ android-emu-agent [OPTIONS] COMMAND [ARGS]...
 - `debug`: Debugger commands (JDI Bridge)
 - `device`: Device management commands
 - `session`: Session management commands
+- `trace`: Agent trace recording and replay commands
 - `ui`: UI observation commands
 - `action`: Action execution commands
 - `wait`: Wait/synchronization commands
@@ -873,6 +874,124 @@ android-emu-agent session list [OPTIONS]
 
 **Options**:
 
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+## `android-emu-agent trace`
+
+Agent trace recording and replay commands
+
+**Usage**:
+
+```console
+android-emu-agent trace [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+- `--help`: Show this message and exit.
+
+**Commands**:
+
+- `start`: Start recording a trace for a session.
+- `stop`: Stop recording and write a trace archive.
+- `status`: List active traces.
+- `replay`: Return a dry-run replay plan from a trace...
+- `export`: Export a trace archive to Markdown.
+
+### `android-emu-agent trace start`
+
+Start recording a trace for a session.
+
+**Usage**:
+
+```console
+android-emu-agent trace start [OPTIONS] SESSION_ID
+```
+
+**Arguments**:
+
+- `SESSION_ID`: Session ID [required]
+
+**Options**:
+
+- `-l, --label TEXT`: Optional trace label
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent trace stop`
+
+Stop recording and write a trace archive.
+
+**Usage**:
+
+```console
+android-emu-agent trace stop [OPTIONS] SESSION_ID
+```
+
+**Arguments**:
+
+- `SESSION_ID`: Session ID [required]
+
+**Options**:
+
+- `-o, --output TEXT`: Archive output path or directory
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent trace status`
+
+List active traces.
+
+**Usage**:
+
+```console
+android-emu-agent trace status [OPTIONS]
+```
+
+**Options**:
+
+- `-s, --session TEXT`: Filter by session ID
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent trace replay`
+
+Return a dry-run replay plan from a trace archive.
+
+**Usage**:
+
+```console
+android-emu-agent trace replay [OPTIONS] PATH
+```
+
+**Arguments**:
+
+- `PATH`: Trace archive path [required]
+
+**Options**:
+
+- `--until-failure`: Stop the dry-run replay plan at the first failed daemon exchange
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent trace export`
+
+Export a trace archive to Markdown.
+
+**Usage**:
+
+```console
+android-emu-agent trace export [OPTIONS] PATH
+```
+
+**Arguments**:
+
+- `PATH`: Trace archive path [required]
+
+**Options**:
+
+- `-o, --output TEXT`: Markdown output path
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 

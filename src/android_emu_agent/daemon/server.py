@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+import zipfile
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import asdict
@@ -85,6 +86,10 @@ from android_emu_agent.daemon.models import (
     SetTextRequest,
     SnapshotRequest,
     SwipeRequest,
+    TraceExportRequest,
+    TraceReplayRequest,
+    TraceStartRequest,
+    TraceStopRequest,
     WaitActivityRequest,
     WaitIdleRequest,
     WaitSelectorRequest,
@@ -167,6 +172,19 @@ async def diagnostics_middleware(request: Request, call_next: Any) -> Response:
             "error": payload.get("error"),
         }
         await diagnostics.record(event)
+    trace_manager = getattr(core, "trace_manager", None)
+    if trace_manager is not None:
+        session_id = _trace_session_id(request_context, payload)
+        await trace_manager.record_daemon_exchange(
+            session_id=session_id,
+            diagnostic_id=diagnostic_id,
+            method=request.method,
+            path=request.url.path,
+            status_code=response.status_code,
+            elapsed_ms=round((time.perf_counter() - started) * 1000, 2),
+            request_payload=request_context.get("request"),
+            response_payload=payload,
+        )
     return response
 
 
@@ -175,6 +193,20 @@ def _error_response(error: AgentError, status_code: int = 400) -> JSONResponse:
         status_code=status_code,
         content={"status": "error", "error": error.to_dict()},
     )
+
+
+def _trace_session_id(
+    request_context: dict[str, Any],
+    response_payload: dict[str, Any],
+) -> str | None:
+    """Find the session ID that should receive a trace event."""
+    session_id = request_context.get("session_id")
+    if isinstance(session_id, str):
+        return session_id
+    payload_session_id = response_payload.get("session_id")
+    if isinstance(payload_session_id, str):
+        return payload_session_id
+    return None
 
 
 def _bundle_from_dict(ref_dict: dict[str, Any], generation: int) -> LocatorBundle:
@@ -680,6 +712,85 @@ async def session_info(session_id: str) -> EndpointResponse:
         "generation": session.generation,
         "created_at": session.created_at.isoformat(),
     }
+
+
+@app.post("/trace/start", response_model=None)
+async def trace_start(req: TraceStartRequest) -> EndpointResponse:
+    """Start recording an agent trace for a session."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+    try:
+        result = await core.trace_manager.start(req.session_id, label=req.label)
+    except AgentError as exc:
+        return _error_response(exc, status_code=409)
+    return {"status": "done", **result}
+
+
+@app.post("/trace/stop", response_model=None)
+async def trace_stop(req: TraceStopRequest) -> EndpointResponse:
+    """Stop recording a session trace and write a zip archive."""
+    core: DaemonCore = app.state.core
+    try:
+        result = await core.trace_manager.stop(req.session_id, output_path=req.output_path)
+    except AgentError as exc:
+        status_code = 404 if exc.code == "ERR_TRACE_NOT_ACTIVE" else 400
+        return _error_response(exc, status_code=status_code)
+    return {"status": "done", **result}
+
+
+@app.get("/trace/status", response_model=None)
+async def trace_status(session_id: str | None = None) -> EndpointResponse:
+    """List active traces, optionally filtered to one session."""
+    core: DaemonCore = app.state.core
+    return await core.trace_manager.status(session_id=session_id)
+
+
+@app.post("/trace/replay", response_model=None)
+async def trace_replay(req: TraceReplayRequest) -> EndpointResponse:
+    """Return a dry-run replay plan from a trace archive."""
+    core: DaemonCore = app.state.core
+    try:
+        return core.trace_manager.replay_archive(req.path, until_failure=req.until_failure)
+    except (FileNotFoundError, zipfile.BadZipFile, KeyError, json.JSONDecodeError) as exc:
+        return _error_response(
+            AgentError(
+                code="ERR_TRACE_INVALID",
+                message=f"Invalid trace archive: {req.path}",
+                context={"path": req.path, "reason": str(exc)},
+                remediation="Provide a .aea-trace.zip produced by 'trace stop'.",
+            ),
+            status_code=400,
+        )
+
+
+@app.post("/trace/export", response_model=None)
+async def trace_export(req: TraceExportRequest) -> EndpointResponse:
+    """Export a trace archive to a human-readable report."""
+    core: DaemonCore = app.state.core
+    if req.format != "markdown":
+        return _error_response(
+            AgentError(
+                code="ERR_UNSUPPORTED_TRACE_FORMAT",
+                message=f"Unsupported trace export format: {req.format}",
+                context={"format": req.format},
+                remediation="Use format='markdown'.",
+            ),
+            status_code=400,
+        )
+    try:
+        return core.trace_manager.export_markdown(req.path, output_path=req.output_path)
+    except (FileNotFoundError, zipfile.BadZipFile, KeyError, json.JSONDecodeError) as exc:
+        return _error_response(
+            AgentError(
+                code="ERR_TRACE_INVALID",
+                message=f"Invalid trace archive: {req.path}",
+                context={"path": req.path, "reason": str(exc)},
+                remediation="Provide a .aea-trace.zip produced by 'trace stop'.",
+            ),
+            status_code=400,
+        )
 
 
 @app.post("/ui/snapshot", response_model=None)
