@@ -2,9 +2,10 @@
 
 Android Emu Agent gives LLMs and developer tools a practical control plane for emulators and rooted
 devices: compact UI snapshots, stable action refs, richer selectors with capability introspection,
-explicit expectations, task specs with verifiers, app diagnostics, artifacts, file transfer, JVM
-debugging, and replayable trace archives from one CLI. It also exposes shell-backed system surfaces
-for notification shade, Quick Settings, and runtime permission setup.
+explicit expectations, JSON task specs, human-editable `.aea` task scripts, app diagnostics,
+artifacts, native performance captures, file transfer, JVM debugging, and replayable trace archives
+from one CLI. It also exposes shell-backed system surfaces for notification shade, Quick Settings,
+and runtime permission setup.
 
 [Explore the CLI reference](reference.md) |
 [View source](https://github.com/alehkot/android-emu-agent)
@@ -27,20 +28,20 @@ generation: 43
 
 ## Core capabilities
 
-| Capability                  | What it gives you                                                                                                          |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| **Compact UI snapshots**    | Actionable snapshots across XML Views, Compose, Litho, and mixed Android screens.                                          |
-| **Generation-scoped refs**  | Short handles like `^a1` for precise taps and text entry, with ref healing when the target can be rebound.                 |
-| **Selector introspection**  | Exact, contains, regex, class, resource ID, content-desc, coordinate, and ref selector support is discoverable per target. |
-| **Daemon-first I/O**        | A FastAPI daemon over a Unix socket keeps device sessions warm while the CLI stays thin and scriptable.                    |
-| **Debugger bridge**         | Java 17+ JDI support plus fused app/UI/debug observations for agent planning.                                              |
-| **Forensics and artifacts** | App health profiles, screenshots, logs, process data, memory reports, and gfxinfo for evidence-driven debugging.           |
-| **Trace archives**          | `.aea-trace.zip` archives capture daemon exchanges for dry replay and Markdown reports.                                    |
-| **Task harness**            | JSON task specs run ordered steps with step-level and final verifiers.                                                     |
-| **Expectations**            | Assertion commands turn expected UI/app state into pass/fail JSON.                                                         |
-| **Visual grounding**        | Optional screenshot-to-ref metadata ties bounds to image artifacts without requiring vision.                               |
-| **System surfaces**         | Notification shade, Quick Settings, and runtime permission controls for setup and inspection.                              |
-| **Agent skills included**   | Ready-to-install skill docs with command references, recovery protocols, workflow examples, and safety guardrails.         |
+| Capability                  | What it gives you                                                                                                                                  |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Compact UI snapshots**    | Actionable snapshots across XML Views, Compose, Litho, and mixed Android screens.                                                                  |
+| **Generation-scoped refs**  | Short handles like `^a1` for precise taps and text entry, with ref healing when the target can be rebound.                                         |
+| **Selector introspection**  | Exact, contains, regex, fallback, state-filter, class, resource ID, content-desc, coordinate, and ref selector support is discoverable per target. |
+| **Daemon-first I/O**        | A FastAPI daemon over a Unix socket keeps device sessions warm while the CLI stays thin and scriptable.                                            |
+| **Debugger bridge**         | Java 17+ JDI support plus fused app/UI/debug observations for agent planning.                                                                      |
+| **Forensics and artifacts** | App health profiles, native perf captures, screenshots, logs, process data, memory reports, and gfxinfo for evidence.                              |
+| **Trace archives**          | `.aea-trace.zip` archives capture daemon exchanges for dry replay and Markdown reports.                                                            |
+| **Task harness**            | JSON task specs and `.aea` scripts run ordered steps with step-level and final verifiers.                                                          |
+| **Expectations**            | Assertion commands turn expected UI/app state into pass/fail JSON.                                                                                 |
+| **Visual grounding**        | Optional screenshot-to-ref metadata ties bounds to image artifacts without requiring vision.                                                       |
+| **System surfaces**         | Notification shade, Quick Settings, and runtime permission controls for setup and inspection.                                                      |
+| **Agent skills included**   | Ready-to-install skill docs with command references, recovery protocols, workflow examples, and safety guardrails.                                 |
 
 ## Built for repeated agent work
 

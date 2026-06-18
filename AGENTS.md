@@ -29,7 +29,7 @@ Android Emu Agent is a daemon-first Android automation and debugging system:
 - `src/android_emu_agent/files/`: host/app file push/pull/list/find.
 - `src/android_emu_agent/reliability/`: forensics helpers and root-gated diagnostics.
 - `src/android_emu_agent/artifacts/`: screenshots/log bundles and export helpers.
-- `src/android_emu_agent/tasks/`: JSON task harness orchestration and verifiers.
+- `src/android_emu_agent/tasks/`: JSON and `.aea` script task harness orchestration and verifiers.
 - `src/android_emu_agent/tracing/`: agent trace archive recording, replay planning, and exports.
 - `src/android_emu_agent/db/`: async persistence.
 - `src/android_emu_agent/errors.py`: shared `AgentError` factories.
@@ -64,9 +64,10 @@ Debugger bridge:
 Docs/skills:
 
 - `./scripts/dev.sh docs-gen` (regenerate `docs/reference.md`)
+- `./scripts/dev.sh skills-validate` (validate bundled Agent Skills frontmatter, routing, and refs)
 - `./scripts/dev.sh docs` / `./scripts/dev.sh docs-serve`
 - `./scripts/dev.sh md` (format + lint Markdown)
-- `./scripts/dev.sh skills codex|claude|all`
+- `./scripts/dev.sh skills codex|claude|vscode|all`
 
 Release workflow helper:
 
@@ -145,6 +146,8 @@ Do not ship CLI/API/debugger changes that skip docs or tests sync.
 - If command surface changes, update:
   - `skills/android-emu-agent/references/command-reference.md`,
   - related references (for example `debugging.md`, `examples.md`, `troubleshooting.md`).
+- Run `./scripts/dev.sh skills-validate` after skill frontmatter, reference routing, or use-case
+  documentation changes.
 - If asked about skills work, inspect `skills/android-emu-agent/` first.
 
 ## 10. Generated Artifacts

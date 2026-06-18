@@ -6,6 +6,20 @@
 Use debugging commands when UI-level signals are not enough to explain behavior. The debugger is
 most useful for state validation, breakpoint-driven tracing, and crash root-cause analysis.
 
+## Contents
+
+- Decision Tree
+- OAV Integration
+- Deferred Breakpoints
+- Conditional Breakpoints and Logpoints
+- Exception Breakpoints
+- Event Types to Watch
+- Token Budget Controls
+- Coroutine Tip
+- ANR Safety
+- JDK Requirement
+- End-to-End Flow
+
 ## Decision Tree
 
 ```text

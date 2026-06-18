@@ -138,6 +138,33 @@ def test_swipe_uses_ref_container_bounds() -> None:
     device.swipe.assert_called_once_with(200, 400, 200, 200, 0.4)
 
 
+def test_tap_tries_fallback_selectors_in_order() -> None:
+    """Tap should try selector alternatives separated by ||."""
+    device = MagicMock()
+    missing = MagicMock()
+    missing.exists.return_value = False
+    found = MagicMock()
+    found.exists.return_value = True
+    device.side_effect = [missing, found]
+
+    with _client_with_core(device) as (client, _ref_resolver):
+        resp = client.post(
+            "/actions/tap",
+            json={
+                "session_id": "s-abc123",
+                "ref": 'text:"Missing" || id:com.example:id/login',
+            },
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "done"
+    assert data["matched_selector"] == "resourceId:com.example:id/login"
+    assert device.call_args_list[0].kwargs == {"text": "Missing"}
+    assert device.call_args_list[1].kwargs == {"resourceId": "com.example:id/login"}
+    found.click.assert_called_once_with()
+
+
 def test_swipe_rejects_invalid_distance() -> None:
     """Swipe should reject distances outside the supported range."""
     device = MagicMock()

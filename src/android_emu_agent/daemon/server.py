@@ -21,7 +21,9 @@ from fastapi.responses import JSONResponse, Response
 from android_emu_agent.actions.executor import ActionType, SwipeDirection
 from android_emu_agent.actions.selector import (
     CoordsSelector,
+    FallbackSelector,
     RefSelector,
+    Selector,
     parse_selector,
 )
 from android_emu_agent.artifacts.manager import normalize_log_priority
@@ -82,9 +84,12 @@ from android_emu_agent.daemon.models import (
     ReliabilityExitInfoRequest,
     ReliabilityOomAdjRequest,
     ReliabilityPackageRequest,
+    ReliabilityPerfettoRequest,
     ReliabilityProfileRequest,
     ReliabilityRunAsRequest,
+    ReliabilityScreenrecordRequest,
     ReliabilitySigquitRequest,
+    ReliabilitySimpleperfRequest,
     ReliabilityToggleRequest,
     ReliabilityTrimMemoryRequest,
     RotationRequest,
@@ -97,6 +102,8 @@ from android_emu_agent.daemon.models import (
     SystemPermissionListRequest,
     SystemPermissionRequest,
     TaskRunRequest,
+    TaskScriptRunRequest,
+    TaskScriptValidateRequest,
     TaskValidateRequest,
     TraceExportRequest,
     TraceReplayRequest,
@@ -1023,6 +1030,18 @@ async def task_validate(req: TaskValidateRequest) -> EndpointResponse:
         return _error_response(exc, status_code=400)
 
 
+@app.post("/tasks/script/validate", response_model=None)
+async def task_script_validate(req: TaskScriptValidateRequest) -> EndpointResponse:
+    """Parse and validate a human-editable task script without running device actions."""
+    core: DaemonCore = app.state.core
+    try:
+        task = core.task_manager.parse_script(req.script, source_name=req.source_name)
+        plan = core.task_manager.validate(task)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+    return {"status": "done", "source_name": req.source_name, "task": task, "plan": plan}
+
+
 @app.post("/tasks/run", response_model=None)
 async def task_run(req: TaskRunRequest) -> EndpointResponse:
     """Run a JSON task spec with step-level and task-level verifiers."""
@@ -1039,6 +1058,26 @@ async def task_run(req: TaskRunRequest) -> EndpointResponse:
         )
     except AgentError as exc:
         return _error_response(exc, status_code=400)
+
+
+@app.post("/tasks/script/run", response_model=None)
+async def task_script_run(req: TaskScriptRunRequest) -> EndpointResponse:
+    """Parse and run a human-editable task script."""
+    core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+    try:
+        task = core.task_manager.parse_script(req.script, source_name=req.source_name)
+        result = await core.task_manager.run(
+            task,
+            session_id=req.session_id,
+            dispatcher=_dispatch_task_call,
+            stop_on_failure=req.stop_on_failure,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+    return {"source_name": req.source_name, "compiled_task": task, **result}
 
 
 async def _dispatch_task_call(call: TaskCall) -> dict[str, Any]:
@@ -1467,14 +1506,17 @@ async def action_tap(req: ActionRequest) -> EndpointResponse:
         await asyncio.to_thread(device.click, selector.x, selector.y)
         return {"status": "done", "selector": f"coords:{selector.x},{selector.y}"}
 
+    elif isinstance(selector, FallbackSelector):
+        for option in selector.options:
+            matched = await _tap_selector_option(device, option)
+            if matched:
+                return {"status": "done", "selector": req.ref, "matched_selector": matched}
+        return _error_response(not_found_error(req.ref), status_code=404)
+
     else:
-        # TextSelector, ResourceIdSelector, DescSelector - use u2 kwargs
-        kwargs = selector.to_u2_kwargs()
-        element = device(**kwargs)
-        exists = await asyncio.to_thread(element.exists)
-        if not exists:
+        matched = await _tap_selector_option(device, selector)
+        if not matched:
             return _error_response(not_found_error(req.ref), status_code=404)
-        await asyncio.to_thread(element.click)
         return {"status": "done", "selector": req.ref}
 
 
@@ -1556,6 +1598,26 @@ async def _action_with_locator(
     if warning and payload.get("status") == "done":
         payload["warning"] = warning
     return payload
+
+
+async def _tap_selector_option(device: Any, selector: Selector) -> str | None:
+    """Try tapping one parsed non-ref selector option."""
+    if isinstance(selector, CoordsSelector):
+        await asyncio.to_thread(device.click, selector.x, selector.y)
+        return f"coords:{selector.x},{selector.y}"
+    if isinstance(selector, (RefSelector, FallbackSelector)):
+        return None
+    kwargs = selector.to_u2_kwargs()
+    element = device(**kwargs)
+    exists = await asyncio.to_thread(element.exists)
+    if not exists:
+        return None
+    await asyncio.to_thread(element.click)
+    return _selector_label(kwargs)
+
+
+def _selector_label(kwargs: dict[str, Any]) -> str:
+    return " ".join(f"{key}:{value}" for key, value in kwargs.items())
 
 
 @app.post("/wait/idle", response_model=None)
@@ -1893,6 +1955,80 @@ async def reliability_profile(req: ReliabilityProfileRequest) -> EndpointRespons
             req.package,
             since=req.since,
             include_raw=req.include_raw,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", "serial": serial, **result}
+
+
+@app.post("/reliability/perfetto", response_model=None)
+async def reliability_perfetto(req: ReliabilityPerfettoRequest) -> EndpointResponse:
+    """Capture a bounded native Perfetto trace artifact."""
+    core: DaemonCore = app.state.core
+    resolved = await _resolve_device_target(core, req.session_id, req.serial)
+    if isinstance(resolved, JSONResponse):
+        return resolved
+    serial, device, _info = resolved
+
+    try:
+        result = await core.reliability_manager.perfetto_trace(
+            device,
+            serial,
+            duration_seconds=req.duration_seconds,
+            categories=req.categories,
+            filename=req.filename,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", "serial": serial, **result}
+
+
+@app.post("/reliability/simpleperf", response_model=None)
+async def reliability_simpleperf(req: ReliabilitySimpleperfRequest) -> EndpointResponse:
+    """Capture a bounded native simpleperf CPU profile artifact."""
+    core: DaemonCore = app.state.core
+    try:
+        validate_package(req.package)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    resolved = await _resolve_device_target(core, req.session_id, req.serial)
+    if isinstance(resolved, JSONResponse):
+        return resolved
+    serial, device, _info = resolved
+
+    try:
+        result = await core.reliability_manager.simpleperf_record(
+            device,
+            serial,
+            req.package,
+            duration_seconds=req.duration_seconds,
+            filename=req.filename,
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    return {"status": "done", "serial": serial, **result}
+
+
+@app.post("/reliability/screenrecord", response_model=None)
+async def reliability_screenrecord(req: ReliabilityScreenrecordRequest) -> EndpointResponse:
+    """Capture a bounded screen recording artifact."""
+    core: DaemonCore = app.state.core
+    resolved = await _resolve_device_target(core, req.session_id, req.serial)
+    if isinstance(resolved, JSONResponse):
+        return resolved
+    serial, device, _info = resolved
+
+    try:
+        result = await core.reliability_manager.screenrecord(
+            device,
+            serial,
+            duration_seconds=req.duration_seconds,
+            bit_rate=req.bit_rate,
+            filename=req.filename,
         )
     except AgentError as exc:
         return _error_response(exc, status_code=400)

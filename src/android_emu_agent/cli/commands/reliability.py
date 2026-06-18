@@ -96,6 +96,78 @@ def reliability_profile(
     handle_output_response(resp, json_output=json_output)
 
 
+@app.command("perfetto")
+def reliability_perfetto(
+    device: str | None = typer.Option(None, "--device", "-d", help="Device serial"),
+    session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
+    duration: int = typer.Option(10, "--duration", help="Trace duration in seconds"),
+    categories: str | None = typer.Option(None, "--categories", help="Perfetto data source list"),
+    output: str | None = typer.Option(None, "--output", help="Output filename"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Capture a bounded native Perfetto trace artifact."""
+    payload = require_target(device, session_id)
+    payload.update(
+        {
+            "duration_seconds": duration,
+            "categories": categories,
+            "filename": output,
+        }
+    )
+    client = DaemonClient(timeout=max(RELIABILITY_PULL_TIMEOUT, float(duration + 60)))
+    resp = client.request("POST", "/reliability/perfetto", json_body=payload)
+    client.close()
+    handle_response(resp, json_output=json_output)
+
+
+@app.command("simpleperf")
+def reliability_simpleperf(
+    package: str = typer.Argument(..., help="Package name"),
+    device: str | None = typer.Option(None, "--device", "-d", help="Device serial"),
+    session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
+    duration: int = typer.Option(10, "--duration", help="Record duration in seconds"),
+    output: str | None = typer.Option(None, "--output", help="Output .data filename"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Capture a bounded native simpleperf CPU profile artifact."""
+    payload = require_target(device, session_id)
+    payload.update(
+        {
+            "package": package,
+            "duration_seconds": duration,
+            "filename": output,
+        }
+    )
+    client = DaemonClient(timeout=max(RELIABILITY_PULL_TIMEOUT, float(duration + 60)))
+    resp = client.request("POST", "/reliability/simpleperf", json_body=payload)
+    client.close()
+    handle_response(resp, json_output=json_output)
+
+
+@app.command("screenrecord")
+def reliability_screenrecord(
+    device: str | None = typer.Option(None, "--device", "-d", help="Device serial"),
+    session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
+    duration: int = typer.Option(10, "--duration", help="Recording duration in seconds"),
+    bit_rate: int | None = typer.Option(None, "--bit-rate", help="Screenrecord bit rate"),
+    output: str | None = typer.Option(None, "--output", help="Output .mp4 filename"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+) -> None:
+    """Capture a bounded screen recording artifact."""
+    payload = require_target(device, session_id)
+    payload.update(
+        {
+            "duration_seconds": duration,
+            "bit_rate": bit_rate,
+            "filename": output,
+        }
+    )
+    client = DaemonClient(timeout=max(RELIABILITY_PULL_TIMEOUT, float(duration + 60)))
+    resp = client.request("POST", "/reliability/screenrecord", json_body=payload)
+    client.close()
+    handle_response(resp, json_output=json_output)
+
+
 @dropbox_app.command("list")
 def reliability_dropbox_list(
     device: str | None = typer.Option(None, "--device", "-d", help="Device serial"),

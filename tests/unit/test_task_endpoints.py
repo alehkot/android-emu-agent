@@ -84,6 +84,24 @@ def test_task_validate_endpoint_rejects_bad_spec() -> None:
     assert response.json()["error"]["code"] == "ERR_TASK_UNSUPPORTED_STEP"
 
 
+def test_task_script_validate_endpoint_parses_and_validates() -> None:
+    """Script validation endpoint should return compiled task and plan."""
+    device = MagicMock()
+
+    with _client_with_core(device) as client:
+        response = client.post(
+            "/tasks/script/validate",
+            json={"script": 'name "script smoke"\nwait idle\n', "source_name": "smoke.aea"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "done"
+    assert data["source_name"] == "smoke.aea"
+    assert data["task"]["name"] == "script smoke"
+    assert data["plan"]["step_count"] == 1
+
+
 def test_task_run_endpoint_dispatches_wait_verifier() -> None:
     """Run endpoint should execute verifier calls through existing wait handlers."""
     device = MagicMock()
@@ -109,3 +127,20 @@ def test_task_run_endpoint_dispatches_wait_verifier() -> None:
     assert data["passed"] is True
     assert data["verifiers"][0]["operation"] == "exists"
     device.assert_called_with(text="Ready")
+
+
+def test_task_script_run_endpoint_dispatches_compiled_script() -> None:
+    """Script run endpoint should parse then execute through existing task dispatcher."""
+    device = MagicMock()
+
+    with _client_with_core(device) as client:
+        response = client.post(
+            "/tasks/script/run",
+            json={"session_id": "s-abc123", "script": "wait idle\n", "source_name": "smoke.aea"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["source_name"] == "smoke.aea"
+    assert data["compiled_task"]["steps"] == [{"wait": "idle"}]
+    assert data["passed"] is True

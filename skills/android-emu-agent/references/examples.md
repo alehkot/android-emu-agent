@@ -8,6 +8,17 @@ permission handling, login fields, form filling), see `references/ui-automation-
 behavioral protocols (write-action confirmation, inquiry vs. action), see
 `references/behavioral-protocols.md`.
 
+## Contents
+
+- Example 0: Boot an AVD and Restore a Known State
+- Example 1: Launch App and Handle Permissions
+- Example 2: Login Flow
+- Example 3: Navigate and Interact with Settings
+- Example 4: Scroll to Find and Tap Element
+- Example 5: Handle App Crash and Recover
+- Example 6: Complete E2E Test Flow
+- Example 7: Action Failure Recovery Escalation
+
 ## Example 0: Boot an AVD and Restore a Known State
 
 Goal: Start an emulator from the CLI, restore a known snapshot, then begin a fresh automation
@@ -33,7 +44,7 @@ uv run android-emu-agent session start --device emulator-5554
 Goal: Launch an app that requests camera permission and grant it.
 
 Patterns used: permission dialog handling
-(`ui-automation-patterns.md > Handling Permission Dialogs`).
+(`references/ui-automation-patterns.md > Handling Permission Dialogs`).
 
 ```bash
 # 1. Start session
@@ -74,7 +85,7 @@ uv run android-emu-agent wait idle s-abc123 --timeout-ms 5000
 
 Goal: Log into an app with email and password.
 
-Patterns used: login flow (`ui-automation-patterns.md > Login and Authentication Flows`).
+Patterns used: login flow (`references/ui-automation-patterns.md > Login and Authentication Flows`).
 
 ```bash
 uv run android-emu-agent ui snapshot s-abc123
@@ -187,7 +198,8 @@ uv run android-emu-agent ui snapshot s-abc123
 
 Goal: Full end-to-end test - launch app, skip onboarding, login, verify home screen.
 
-Patterns used: onboarding skip, login flow, permission handling (`ui-automation-patterns.md`).
+Patterns used: onboarding skip, login flow, permission handling
+(`references/ui-automation-patterns.md`).
 
 ```bash
 uv run android-emu-agent daemon status

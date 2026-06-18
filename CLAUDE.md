@@ -53,8 +53,10 @@ uv run pyright             # Type check with pyright
 ./scripts/dev.sh docs             # Build documentation (mkdocs)
 ./scripts/dev.sh docs-serve       # Serve documentation locally
 ./scripts/dev.sh docs-gen         # Regenerate CLI reference from Typer app
-./scripts/dev.sh skills [target]  # Symlink skills to agent dirs (codex|claude|all)
+./scripts/dev.sh skills [target]  # Symlink skills to agent dirs (codex|claude|vscode|all)
+./scripts/dev.sh skills-validate  # Validate bundled Agent Skills
 ./scripts/dev.sh skills-codex     # Symlink skills into Codex agent directory
+./scripts/dev.sh skills-vscode    # Symlink skills into VS Code .agents/skills
 ./scripts/dev.sh skills-claude    # Symlink skills into Claude agent directory
 ```
 
@@ -203,7 +205,7 @@ Dev-only:
 - `tests/unit/`: Fast, isolated tests (no emulator required)
 - `tests/integration/`: Tests requiring real Android emulator
 - `scripts/`: Development helper scripts
-- `skills/android-emu-agent/`: Agent skill for Claude Code and other agent environments
+- `skills/android-emu-agent/`: Agent skill for Codex, Claude Code, VS Code, and similar tools
 - `docs/`: MkDocs source files for auto-generated CLI reference
 - `AGENTS.md`: Companion guidelines (coding style, commit conventions, environment tips)
 
@@ -213,11 +215,15 @@ Skills live in `skills/android-emu-agent/` and are consumed by coding agents (Cl
 etc.). Every line costs tokens and competes for the agent's context window. Write skills for agent
 consumption, not human marketing.
 
+Run `./scripts/dev.sh skills-validate` after changing skill frontmatter, routing, references, or
+use-case documentation.
+
 ### Current Structure
 
 ```text
 skills/android-emu-agent/
   SKILL.md                              # Entry point, quick start, decision guide
+  agents/openai.yaml                    # Optional Codex UI metadata
   references/
     command-reference.md                # CLI command syntax and selectors
     core-loop.md                        # Observe-Act-Verify loop

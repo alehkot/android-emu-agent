@@ -567,13 +567,18 @@ case "${1:-help}" in
                 echo "Installing skills for Claude..."
                 install_skills "$claude_root/skills" "Claude"
                 ;;
+            vscode)
+                echo "Installing skills for VS Code..."
+                install_skills "$PROJECT_DIR/.agents/skills" "VS Code"
+                ;;
             all)
-                echo "Installing skills for Codex and Claude..."
+                echo "Installing skills for Codex, Claude, and VS Code..."
                 install_skills "$codex_root/skills" "Codex"
                 install_skills "$claude_root/skills" "Claude"
+                install_skills "$PROJECT_DIR/.agents/skills" "VS Code"
                 ;;
             *)
-                echo "Unknown skills target '$target'. Use 'codex', 'claude', or 'all'."
+                echo "Unknown skills target '$target'. Use 'codex', 'claude', 'vscode', or 'all'."
                 exit 1
                 ;;
         esac
@@ -589,6 +594,12 @@ case "${1:-help}" in
         echo "Installing skills for Codex..."
         codex_root="${CODEX_HOME:-$HOME/.codex}"
         install_skills "$codex_root/skills" "Codex"
+        ;;
+
+    skills-vscode)
+        ensure_supported_os
+        echo "Installing skills for VS Code..."
+        install_skills "$PROJECT_DIR/.agents/skills" "VS Code"
         ;;
 
     docs)
@@ -647,9 +658,10 @@ case "${1:-help}" in
         echo "  docs             Build documentation (mkdocs)"
         echo "  docs-serve       Serve documentation locally"
         echo "  docs-gen         Regenerate CLI reference from Typer app"
-        echo "  skills [target]  Symlink skills into agent directories (codex|claude|all)"
+        echo "  skills [target]  Symlink skills into agent directories (codex|claude|vscode|all)"
         echo "  skills-validate  Validate bundled Agent Skills"
         echo "  skills-codex     Symlink skills into Codex agent directory"
+        echo "  skills-vscode    Symlink skills into VS Code .agents/skills"
         echo "  skills-claude    Symlink skills into Claude agent directory"
         echo "  help             Show this help"
         ;;

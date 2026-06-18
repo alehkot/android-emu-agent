@@ -24,11 +24,12 @@ The CLI is a thin client. A long-running daemon handles all device I/O. All comm
   frameworks such as Compose and Litho
 - **Ref healing** — deterministic `^a1`-style handles with selector-chain rebinding when a newer
   snapshot still contains the same target
-- **Richer selectors** — exact, contains, regex, resource ID, content-desc, class, and coordinate
-  selectors with capability introspection
+- **Richer selectors** — exact, contains, regex, fallback, state-filter, resource ID, content-desc,
+  class, and coordinate selectors with capability introspection
 - **Diagnostics** — JSON responses and headers include `diagnostic_id` for request-level tracing
 - **Trace archives** — record daemon exchanges into replayable `.aea-trace.zip` evidence bundles
-- **Task harness** — run JSON task specs with step-level and final verifiers
+- **Task harness** — run JSON task specs or human-editable `.aea` scripts with step-level and final
+  verifiers
 - **Expectations** — assertion-style commands for UI state, activity, and foreground app checks
 - **Visual grounding** — optional screenshot-to-ref metadata for human or vision-model evidence
 - **System surfaces** — open notifications/Quick Settings and list, grant, or revoke app permissions
@@ -37,6 +38,8 @@ The CLI is a thin client. A long-running daemon handles all device I/O. All comm
   hits, and stack in one bounded observation
 - **Performance profile** — aggregate process, memory, rendering, background, exit, and event
   signals into one app health snapshot
+- **Native performance artifacts** — capture bounded Perfetto traces, simpleperf CPU profiles, and
+  screen recordings as local evidence
 - **Agent skills included** — structured reference docs, workflow templates, and safety guardrails
 - **Machine-readable output** — every command supports `--json` for agent pipelines
 
@@ -138,9 +141,14 @@ agents that support skills (Claude Code, Codex, and similar environments).
 The skill provides:
 
 - **Structured reference docs** — command reference, troubleshooting, error codes
-- **Workflow templates** — login flows, navigation patterns, form filling
+- **Workflow templates** — screen inspection, login flows, navigation patterns, form filling
 - **Recovery protocols** — handling stale refs, dialog blockers, idle waits
-- **Safety guardrails** — root-required checks, emulator-only safeguards
+- **Reliability guidance** — crash/ANR triage, performance artifacts, debugger handoff
+- **Safety guardrails** — read-only inquiry handling, root checks, emulator-only safeguards
+
+Use it when an agent needs to inspect an Android screen, interact with an app, run emulator/device
+UI automation, diagnose missing or stale elements, collect screenshots/logs/traces, investigate
+crashes or performance regressions, push/pull device files, or use the debugger bridge.
 
 ### Install via dev script (recommended)
 
@@ -148,9 +156,18 @@ The skill provides:
 ./scripts/dev.sh skills          # Symlink to all supported agents
 ./scripts/dev.sh skills claude   # Claude Code only
 ./scripts/dev.sh skills codex    # Codex only
+./scripts/dev.sh skills vscode   # VS Code project-local .agents/skills
+./scripts/dev.sh skills-validate # Validate bundled skill structure and references
 ```
 
 ### Manual install
+
+**VS Code / project-local Agent Skills:**
+
+```bash
+mkdir -p .agents/skills
+ln -sfn "$(pwd)/skills/android-emu-agent" .agents/skills/android-emu-agent
+```
 
 **Claude Code:**
 
@@ -356,6 +373,21 @@ uv run android-emu-agent task validate ./checkout-task.json
 uv run android-emu-agent task run ./checkout-task.json --json
 ```
 
+Or use a human-editable `.aea` task script:
+
+```text
+name "checkout smoke"
+session s-abc123
+tap text:"Checkout" || id:com.example:id/checkout
+verify exists text:"Payment"
+expect activity CheckoutActivity
+```
+
+```bash
+uv run android-emu-agent task validate ./checkout-smoke.aea
+uv run android-emu-agent task run ./checkout-smoke.aea --json
+```
+
 App debug helpers
 
 ```bash
@@ -366,6 +398,9 @@ uv run android-emu-agent reliability profile com.example.app --session s-abc123 
 uv run android-emu-agent reliability process com.example.app --device emulator-5554
 uv run android-emu-agent reliability meminfo com.example.app --device emulator-5554
 uv run android-emu-agent reliability gfxinfo com.example.app --device emulator-5554
+uv run android-emu-agent reliability perfetto --session s-abc123 --duration 10
+uv run android-emu-agent reliability simpleperf com.example.app --session s-abc123 --duration 10
+uv run android-emu-agent reliability screenrecord --session s-abc123 --duration 10
 ```
 
 Debugger (JDI Bridge)
@@ -573,7 +608,8 @@ In practice, these are usually safe on non-root devices:
 - Device capabilities
 - System surfaces (`notifications`, `quick-settings`) and runtime permission list/grant/revoke
 - App list/install/uninstall/launch/intent/force-stop/reset/deeplink
-- Reliability profile, events, process, meminfo, gfxinfo, and background diagnostics
+- Reliability profile, native perf artifacts, events, process, meminfo, gfxinfo, and background
+  diagnostics
 - File `push` and `pull` to shared storage
 
 Emulator-only commands are `emulator snapshot save|restore`. Root-required commands are listed
@@ -727,8 +763,10 @@ The `./scripts/dev.sh` helper centralizes common development tasks. Make it exec
 | `./scripts/dev.sh docs`             | Build documentation (mkdocs)                             |
 | `./scripts/dev.sh docs-serve`       | Serve documentation locally                              |
 | `./scripts/dev.sh docs-gen`         | Regenerate CLI reference from Typer app                  |
-| `./scripts/dev.sh skills [target]`  | Symlink skills into agent directories (codex/claude/all) |
+| `./scripts/dev.sh skills [target]`  | Symlink skills into agent directories                    |
+| `./scripts/dev.sh skills-validate`  | Validate bundled skill structure and references          |
 | `./scripts/dev.sh skills-codex`     | Symlink skills into Codex agent directory                |
+| `./scripts/dev.sh skills-vscode`    | Symlink skills into VS Code `.agents/skills`             |
 | `./scripts/dev.sh skills-claude`    | Symlink skills into Claude agent directory               |
 
 ### Raw `uv run` commands

@@ -67,9 +67,21 @@ class TaskValidateRequest(BaseModel):
     task: dict[str, Any]
 
 
+class TaskScriptValidateRequest(BaseModel):
+    script: str
+    source_name: str = "<script>"
+
+
 class TaskRunRequest(BaseModel):
     session_id: str
     task: dict[str, Any]
+    stop_on_failure: bool = True
+
+
+class TaskScriptRunRequest(BaseModel):
+    session_id: str
+    script: str
+    source_name: str = "<script>"
     stop_on_failure: bool = True
 
 
@@ -319,6 +331,23 @@ class ReliabilityProfileRequest(DeviceTargetRequest):
     package: str
     since: str | None = None
     include_raw: bool = False
+
+
+class ReliabilityPerfettoRequest(DeviceTargetRequest):
+    duration_seconds: int = 10
+    categories: str | None = None
+    filename: str | None = None
+
+
+class ReliabilitySimpleperfRequest(ReliabilityPackageRequest):
+    duration_seconds: int = 10
+    filename: str | None = None
+
+
+class ReliabilityScreenrecordRequest(DeviceTargetRequest):
+    duration_seconds: int = 10
+    bit_rate: int | None = None
+    filename: str | None = None
 
 
 class ReliabilityDropboxListRequest(DeviceTargetRequest):

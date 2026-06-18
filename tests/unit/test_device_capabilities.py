@@ -85,12 +85,15 @@ def test_device_manager_capability_report_lists_selector_features() -> None:
     report = manager.capability_report(serial="emulator-5554", info=info, session_id="s-abc123")
 
     assert report["status"] == "done"
+    assert "<selector> || <selector>" in report["selectors"]["target_syntax"]
     assert "text-contains:<value>" in report["selectors"]["target_syntax"]
+    assert "enabled" in report["selectors"]["selector_keys"]
     assert "resourceIdMatches" in report["selectors"]["selector_keys"]
     assert report["automation"]["task_harness"] is True
     assert report["automation"]["visual_grounding"] is True
     assert report["automation"]["system_surfaces"] is True
     assert report["automation"]["debugger_fusion"] is True
+    assert report["automation"]["native_performance_artifacts"] is True
     assert report["device_features"]["emulator_controls_available"] is True
     assert report["device_features"]["runtime_permissions"] is True
 

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from android_emu_agent.errors import AgentError
+from android_emu_agent.tasks.dsl import parse_task_script
 
 TaskDispatcher = Callable[["TaskCall"], Awaitable[dict[str, Any]]]
 
@@ -30,6 +31,10 @@ class TaskCall:
 
 class TaskManager:
     """Validates and runs JSON task specs through a daemon dispatcher."""
+
+    def parse_script(self, script: str, *, source_name: str = "<script>") -> dict[str, Any]:
+        """Parse a human-editable task script into a JSON task spec."""
+        return parse_task_script(script, source_name=source_name)
 
     def validate(self, spec: Mapping[str, Any]) -> dict[str, Any]:
         """Validate a task spec and return a normalized execution plan."""

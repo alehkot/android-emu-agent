@@ -19,16 +19,25 @@ class Selector(ABC):
 
 
 SUPPORTED_SELECTOR_SYNTAX = [
+    "<selector> || <selector>",
     "^ref",
     "text:<value>",
     "text-contains:<value>",
     "text-matches:<regex>",
+    "label:<value>",
     "id:<resource_id>",
     "id-matches:<regex>",
     "desc:<value>",
     "desc-contains:<value>",
     "desc-matches:<regex>",
     "class:<class_name>",
+    "enabled:true|false",
+    "clickable:true|false",
+    "selected:true|false",
+    "checked:true|false",
+    "focused:true|false",
+    "scrollable:true|false",
+    "<selector> <state-filter:true|false>",
     "coords:x,y",
 ]
 
@@ -42,7 +51,22 @@ SUPPORTED_SELECTOR_KEYS = [
     "descriptionContains",
     "descriptionMatches",
     "className",
+    "enabled",
+    "clickable",
+    "selected",
+    "checked",
+    "focused",
+    "scrollable",
 ]
+
+BOOLEAN_SELECTOR_KEYS = {
+    "enabled": "enabled",
+    "clickable": "clickable",
+    "selected": "selected",
+    "checked": "checked",
+    "focused": "focused",
+    "scrollable": "scrollable",
+}
 
 
 @dataclass
@@ -87,6 +111,21 @@ class TextMatchesSelector(Selector):
     def to_u2_kwargs(self) -> dict[str, Any]:
         """Return uiautomator2 textMatches selector kwargs."""
         return {"textMatches": self.pattern}
+
+
+@dataclass
+class LabelSelector(Selector):
+    """Selector for label: syntax.
+
+    On Android this maps to content-desc first. Use a fallback selector when the
+    same user-facing label might be text in one build and content-desc in another.
+    """
+
+    label: str
+
+    def to_u2_kwargs(self) -> dict[str, Any]:
+        """Return uiautomator2 description selector kwargs."""
+        return {"description": self.label}
 
 
 @dataclass
@@ -167,6 +206,28 @@ class CoordsSelector(Selector):
         return {}
 
 
+@dataclass
+class U2Selector(Selector):
+    """Compound uiautomator2 selector kwargs."""
+
+    kwargs: dict[str, Any]
+
+    def to_u2_kwargs(self) -> dict[str, Any]:
+        """Return uiautomator2 selector kwargs."""
+        return dict(self.kwargs)
+
+
+@dataclass
+class FallbackSelector(Selector):
+    """Ordered selector alternatives separated by ||."""
+
+    options: list[Selector]
+
+    def to_u2_kwargs(self) -> dict[str, Any]:
+        """Fallback selectors are resolved by callers; expose the first option for compatibility."""
+        return self.options[0].to_u2_kwargs() if self.options else {}
+
+
 def parse_selector(target: str) -> Selector:
     """
     Parse escape hatch selector or ref.
@@ -196,6 +257,18 @@ def parse_selector(target: str) -> Selector:
     if not target:
         raise invalid_selector_error(target)
 
+    fallback_parts = _split_fallbacks(target)
+    if len(fallback_parts) > 1:
+        if any(not part.strip() for part in fallback_parts):
+            raise invalid_selector_error(target)
+        return FallbackSelector(
+            options=[parse_selector(part.strip()) for part in fallback_parts if part.strip()]
+        )
+
+    compound_parts = _split_compound(target)
+    if len(compound_parts) > 1 and not _is_unquoted_value_selector(compound_parts):
+        return U2Selector(kwargs=_compound_kwargs(compound_parts, target))
+
     if target.startswith("^"):
         return RefSelector(ref=target)
 
@@ -207,6 +280,9 @@ def parse_selector(target: str) -> Selector:
 
     if target.startswith("text-matches:"):
         return TextMatchesSelector(pattern=_selector_value(target, "text-matches:"))
+
+    if target.startswith("label:"):
+        return LabelSelector(label=_selector_value(target, "label:"))
 
     if target.startswith("id:"):
         return ResourceIdSelector(resource_id=_selector_value(target, "id:"))
@@ -226,6 +302,11 @@ def parse_selector(target: str) -> Selector:
     if target.startswith("class:"):
         return ClassSelector(class_name=_selector_value(target, "class:"))
 
+    for prefix in BOOLEAN_SELECTOR_KEYS:
+        token_prefix = f"{prefix}:"
+        if target.startswith(token_prefix):
+            return U2Selector(kwargs={BOOLEAN_SELECTOR_KEYS[prefix]: _bool_value(target, token_prefix)})
+
     if target.startswith("coords:"):
         try:
             coords_str = target[7:]
@@ -242,3 +323,108 @@ def _selector_value(target: str, prefix: str) -> str:
     if not value:
         raise invalid_selector_error(target)
     return value
+
+
+def _split_fallbacks(target: str) -> list[str]:
+    parts: list[str] = []
+    start = 0
+    in_single = False
+    in_double = False
+    escaped = False
+    index = 0
+    while index < len(target):
+        char = target[index]
+        if escaped:
+            escaped = False
+            index += 1
+            continue
+        if char == "\\":
+            escaped = True
+            index += 1
+            continue
+        if char == "'" and not in_double:
+            in_single = not in_single
+        elif char == '"' and not in_single:
+            in_double = not in_double
+        elif char == "|" and not in_single and not in_double and target[index : index + 2] == "||":
+            parts.append(target[start:index])
+            start = index + 2
+            index += 1
+        index += 1
+    parts.append(target[start:])
+    return parts
+
+
+def _split_compound(target: str) -> list[str]:
+    parts: list[str] = []
+    current: list[str] = []
+    in_single = False
+    in_double = False
+    escaped = False
+    for char in target:
+        if escaped:
+            current.append(char)
+            escaped = False
+            continue
+        if char == "\\":
+            current.append(char)
+            escaped = True
+            continue
+        if char == "'" and not in_double:
+            current.append(char)
+            in_single = not in_single
+            continue
+        if char == '"' and not in_single:
+            current.append(char)
+            in_double = not in_double
+            continue
+        if char.isspace() and not in_single and not in_double:
+            if current:
+                parts.append("".join(current))
+                current = []
+            continue
+        current.append(char)
+    if in_single or in_double:
+        raise invalid_selector_error(target)
+    if current:
+        parts.append("".join(current))
+    return parts
+
+
+def _is_unquoted_value_selector(parts: list[str]) -> bool:
+    if len(parts) <= 1:
+        return False
+    value_prefixes = (
+        "text:",
+        "text-contains:",
+        "text-matches:",
+        "label:",
+        "desc:",
+        "desc-contains:",
+        "desc-matches:",
+    )
+    return parts[0].startswith(value_prefixes) and all(":" not in part for part in parts[1:])
+
+
+def _compound_kwargs(parts: list[str], original: str) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {}
+    for part in parts:
+        selector = parse_selector(part)
+        if isinstance(selector, (RefSelector, CoordsSelector, FallbackSelector)):
+            raise invalid_selector_error(original)
+        for key, value in selector.to_u2_kwargs().items():
+            if key in kwargs:
+                raise invalid_selector_error(original)
+            kwargs[key] = value
+    if not kwargs:
+        raise invalid_selector_error(original)
+    return kwargs
+
+
+def _bool_value(target: str, prefix: str) -> bool:
+    value = _selector_value(target, prefix).lower()
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    raise invalid_selector_error(target)

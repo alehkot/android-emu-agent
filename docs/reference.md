@@ -1295,12 +1295,12 @@ android-emu-agent task [OPTIONS] COMMAND [ARGS]...
 
 **Commands**:
 
-- `validate`: Validate a task spec without running it.
-- `run`: Run a task spec with verifiers.
+- `validate`: Validate a task spec or script without...
+- `run`: Run a task spec or script with verifiers.
 
 ### `android-emu-agent task validate`
 
-Validate a task spec without running it.
+Validate a task spec or script without running it.
 
 **Usage**:
 
@@ -1310,7 +1310,7 @@ android-emu-agent task validate [OPTIONS] PATH
 
 **Arguments**:
 
-- `PATH`: Task JSON file [required]
+- `PATH`: Task JSON or .aea script file [required]
 
 **Options**:
 
@@ -1319,7 +1319,7 @@ android-emu-agent task validate [OPTIONS] PATH
 
 ### `android-emu-agent task run`
 
-Run a task spec with verifiers.
+Run a task spec or script with verifiers.
 
 **Usage**:
 
@@ -1329,7 +1329,7 @@ android-emu-agent task run [OPTIONS] PATH
 
 **Arguments**:
 
-- `PATH`: Task JSON file [required]
+- `PATH`: Task JSON or .aea script file [required]
 
 **Options**:
 
@@ -2432,6 +2432,9 @@ android-emu-agent reliability [OPTIONS] COMMAND [ARGS]...
 - `bugreport`: Capture a system bugreport.
 - `events`: Dump ActivityManager events log.
 - `profile`: Collect a bounded app performance and...
+- `perfetto`: Capture a bounded native Perfetto trace...
+- `simpleperf`: Capture a bounded native simpleperf CPU...
+- `screenrecord`: Capture a bounded screen recording artifact.
 - `background`: Check background restrictions and standby...
 - `last-anr`: Show the last ANR summary from...
 - `jobscheduler`: Inspect JobScheduler constraints for a...
@@ -2527,6 +2530,69 @@ android-emu-agent reliability profile [OPTIONS] PACKAGE
 - `-s, --session TEXT`: Session ID
 - `--since TEXT`: Logcat -t value for reliability events: timestamp or line count
 - `--raw`: Include raw diagnostic dumps
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent reliability perfetto`
+
+Capture a bounded native Perfetto trace artifact.
+
+**Usage**:
+
+```console
+android-emu-agent reliability perfetto [OPTIONS]
+```
+
+**Options**:
+
+- `-d, --device TEXT`: Device serial
+- `-s, --session TEXT`: Session ID
+- `--duration INTEGER`: Trace duration in seconds [default: 10]
+- `--categories TEXT`: Perfetto data source list
+- `--output TEXT`: Output filename
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent reliability simpleperf`
+
+Capture a bounded native simpleperf CPU profile artifact.
+
+**Usage**:
+
+```console
+android-emu-agent reliability simpleperf [OPTIONS] PACKAGE
+```
+
+**Arguments**:
+
+- `PACKAGE`: Package name [required]
+
+**Options**:
+
+- `-d, --device TEXT`: Device serial
+- `-s, --session TEXT`: Session ID
+- `--duration INTEGER`: Record duration in seconds [default: 10]
+- `--output TEXT`: Output .data filename
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent reliability screenrecord`
+
+Capture a bounded screen recording artifact.
+
+**Usage**:
+
+```console
+android-emu-agent reliability screenrecord [OPTIONS]
+```
+
+**Options**:
+
+- `-d, --device TEXT`: Device serial
+- `-s, --session TEXT`: Session ID
+- `--duration INTEGER`: Recording duration in seconds [default: 10]
+- `--bit-rate INTEGER`: Screenrecord bit rate
+- `--output TEXT`: Output .mp4 filename
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 

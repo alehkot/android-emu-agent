@@ -229,6 +229,114 @@ class ReliabilityManager:
         logger.info("heap_dump_saved", serial=serial, path=str(local_path))
         return local_path
 
+    async def perfetto_trace(
+        self,
+        device: AdbDevice,
+        serial: str,
+        *,
+        duration_seconds: int,
+        categories: str | None = None,
+        filename: str | None = None,
+    ) -> dict[str, Any]:
+        """Capture a bounded Perfetto trace and pull it locally."""
+        self._validate_duration(duration_seconds)
+        timestamp = self._timestamp()
+        local_name = self._artifact_name(filename, f"perfetto_{serial}_{timestamp}", ".perfetto-trace")
+        remote_path = f"/data/misc/perfetto-traces/{local_name}"
+        local_path = self.output_dir / local_name
+        trace_categories = categories or "sched freq idle am wm gfx view binder_driver hal dalvik input res"
+        category_tokens = shlex.split(trace_categories)
+        command = (
+            f"perfetto -o {shlex.quote(remote_path)} "
+            f"-t {duration_seconds}s "
+            f"{' '.join(shlex.quote(token) for token in category_tokens)}"
+        )
+        await self._shell(device, command)
+        await self._run_adb(serial, ["pull", remote_path, str(local_path)])
+        await self._shell(device, f"rm -f {shlex.quote(remote_path)}")
+        logger.info("perfetto_trace_saved", serial=serial, path=str(local_path))
+        return {
+            "path": str(local_path),
+            "remote_path": remote_path,
+            "duration_seconds": duration_seconds,
+            "categories": trace_categories,
+        }
+
+    async def simpleperf_record(
+        self,
+        device: AdbDevice,
+        serial: str,
+        package: str,
+        *,
+        duration_seconds: int,
+        filename: str | None = None,
+    ) -> dict[str, Any]:
+        """Capture a bounded simpleperf CPU profile and pull data plus report artifacts."""
+        self._validate_duration(duration_seconds)
+        pid = await self._pidof(device, package)
+        timestamp = self._timestamp()
+        safe_pkg = package.replace(".", "_")
+        base_name = self._artifact_name(filename, f"simpleperf_{safe_pkg}_{timestamp}", ".data")
+        if base_name.endswith(".data"):
+            stem = base_name[: -len(".data")]
+        else:
+            stem = base_name
+            base_name = f"{stem}.data"
+        remote_data = f"/data/local/tmp/{base_name}"
+        local_data = self.output_dir / base_name
+        local_report = self.output_dir / f"{stem}.txt"
+
+        await self._shell(
+            device,
+            (
+                f"simpleperf record -p {pid} --duration {duration_seconds} "
+                f"-o {shlex.quote(remote_data)}"
+            ),
+        )
+        report = await self._shell(device, f"simpleperf report -i {shlex.quote(remote_data)}")
+        local_report.write_text(report, encoding="utf-8")
+        await self._run_adb(serial, ["pull", remote_data, str(local_data)])
+        await self._shell(device, f"rm -f {shlex.quote(remote_data)}")
+        logger.info("simpleperf_saved", serial=serial, package=package, path=str(local_data))
+        return {
+            "path": str(local_data),
+            "report_path": str(local_report),
+            "remote_path": remote_data,
+            "package": package,
+            "pid": pid,
+            "duration_seconds": duration_seconds,
+        }
+
+    async def screenrecord(
+        self,
+        device: AdbDevice,
+        serial: str,
+        *,
+        duration_seconds: int,
+        bit_rate: int | None = None,
+        filename: str | None = None,
+    ) -> dict[str, Any]:
+        """Capture a bounded Android screen recording and pull it locally."""
+        self._validate_duration(duration_seconds, max_seconds=180)
+        timestamp = self._timestamp()
+        local_name = self._artifact_name(filename, f"screenrecord_{serial}_{timestamp}", ".mp4")
+        remote_path = f"/sdcard/{local_name}"
+        local_path = self.output_dir / local_name
+        command_parts = ["screenrecord", "--time-limit", str(duration_seconds)]
+        if bit_rate is not None:
+            command_parts.extend(["--bit-rate", str(bit_rate)])
+        command_parts.append(remote_path)
+        await self._shell(device, " ".join(shlex.quote(part) for part in command_parts))
+        await self._run_adb(serial, ["pull", remote_path, str(local_path)])
+        await self._shell(device, f"rm -f {shlex.quote(remote_path)}")
+        logger.info("screenrecord_saved", serial=serial, path=str(local_path))
+        return {
+            "path": str(local_path),
+            "remote_path": remote_path,
+            "duration_seconds": duration_seconds,
+            "bit_rate": bit_rate,
+        }
+
     async def sigquit(self, device: AdbDevice, package: str) -> int:
         pid = await self._pidof(device, package)
         await self._shell(device, f"kill -3 {pid}")
@@ -518,6 +626,21 @@ class ReliabilityManager:
     @staticmethod
     def _timestamp() -> str:
         return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    @staticmethod
+    def _artifact_name(filename: str | None, default_stem: str, suffix: str) -> str:
+        name = filename or f"{default_stem}{suffix}"
+        return name if name.endswith(suffix) else f"{name}{suffix}"
+
+    @staticmethod
+    def _validate_duration(duration_seconds: int, *, max_seconds: int = 120) -> None:
+        if duration_seconds < 1 or duration_seconds > max_seconds:
+            raise AgentError(
+                code="ERR_INVALID_DURATION",
+                message=f"Invalid duration_seconds: {duration_seconds}",
+                context={"duration_seconds": duration_seconds, "max_seconds": max_seconds},
+                remediation=f"Use a duration from 1 to {max_seconds} seconds.",
+            )
 
 
 def require_root(is_rooted: bool, operation: str) -> None:

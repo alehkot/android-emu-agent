@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -176,3 +177,116 @@ class TestDropboxPrint:
         shell_mock.assert_awaited_once_with(
             mock_device, "dumpsys dropbox --print 'data_app_crash;id'"
         )
+
+
+class TestNativePerformanceArtifacts:
+    """Tests for bounded native artifact captures."""
+
+    @pytest.mark.asyncio
+    async def test_perfetto_trace_captures_and_pulls_artifact(self, tmp_path: Path) -> None:
+        """Should run perfetto, pull the trace, and clean up the remote file."""
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        manager = ReliabilityManager(output_dir=tmp_path)
+        mock_device = MagicMock()
+
+        with (
+            patch.object(manager, "_timestamp", return_value="20260616_120000"),
+            patch.object(manager, "_shell", AsyncMock(return_value="")) as shell_mock,
+            patch.object(manager, "_run_adb", AsyncMock()) as adb_mock,
+        ):
+            result = await manager.perfetto_trace(
+                mock_device,
+                "emulator-5554",
+                duration_seconds=3,
+                categories="sched gfx",
+            )
+
+        assert result["path"] == str(tmp_path / "perfetto_emulator-5554_20260616_120000.perfetto-trace")
+        assert "perfetto -o" in shell_mock.await_args_list[0].args[1]
+        assert "-t 3s sched gfx" in shell_mock.await_args_list[0].args[1]
+        adb_mock.assert_awaited_once_with(
+            "emulator-5554",
+            [
+                "pull",
+                "/data/misc/perfetto-traces/perfetto_emulator-5554_20260616_120000.perfetto-trace",
+                str(tmp_path / "perfetto_emulator-5554_20260616_120000.perfetto-trace"),
+            ],
+        )
+        assert shell_mock.await_args_list[-1].args[1].startswith("rm -f ")
+
+    @pytest.mark.asyncio
+    async def test_simpleperf_record_writes_report_and_pulls_data(self, tmp_path: Path) -> None:
+        """Should record simpleperf data and write a local text report."""
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        manager = ReliabilityManager(output_dir=tmp_path)
+        mock_device = MagicMock()
+
+        with (
+            patch.object(manager, "_timestamp", return_value="20260616_120000"),
+            patch.object(manager, "_pidof", AsyncMock(return_value=1234)),
+            patch.object(
+                manager,
+                "_shell",
+                AsyncMock(side_effect=["", "Samples: 42", ""]),
+            ) as shell_mock,
+            patch.object(manager, "_run_adb", AsyncMock()) as adb_mock,
+        ):
+            result = await manager.simpleperf_record(
+                mock_device,
+                "emulator-5554",
+                "com.example.app",
+                duration_seconds=2,
+            )
+
+        assert result["pid"] == 1234
+        assert Path(result["report_path"]).read_text(encoding="utf-8") == "Samples: 42"
+        assert "simpleperf record -p 1234 --duration 2" in shell_mock.await_args_list[0].args[1]
+        assert "simpleperf report -i" in shell_mock.await_args_list[1].args[1]
+        adb_mock.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_screenrecord_captures_and_pulls_video(self, tmp_path: Path) -> None:
+        """Should run screenrecord with bounded duration and pull the mp4."""
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        manager = ReliabilityManager(output_dir=tmp_path)
+        mock_device = MagicMock()
+
+        with (
+            patch.object(manager, "_timestamp", return_value="20260616_120000"),
+            patch.object(manager, "_shell", AsyncMock(return_value="")) as shell_mock,
+            patch.object(manager, "_run_adb", AsyncMock()) as adb_mock,
+        ):
+            result = await manager.screenrecord(
+                mock_device,
+                "emulator-5554",
+                duration_seconds=5,
+                bit_rate=4_000_000,
+            )
+
+        assert result["path"] == str(tmp_path / "screenrecord_emulator-5554_20260616_120000.mp4")
+        assert (
+            shell_mock.await_args_list[0].args[1]
+            == "screenrecord --time-limit 5 --bit-rate 4000000 "
+            "/sdcard/screenrecord_emulator-5554_20260616_120000.mp4"
+        )
+        adb_mock.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_perfetto_rejects_unbounded_duration(self, tmp_path: Path) -> None:
+        """Native captures should enforce bounded durations."""
+        from android_emu_agent.errors import AgentError
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        manager = ReliabilityManager(output_dir=tmp_path)
+
+        with pytest.raises(AgentError) as exc_info:
+            await manager.perfetto_trace(
+                MagicMock(),
+                "emulator-5554",
+                duration_seconds=0,
+            )
+
+        assert exc_info.value.code == "ERR_INVALID_DURATION"

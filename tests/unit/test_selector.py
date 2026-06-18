@@ -10,12 +10,15 @@ from android_emu_agent.actions.selector import (
     DescContainsSelector,
     DescMatchesSelector,
     DescSelector,
+    FallbackSelector,
+    LabelSelector,
     RefSelector,
     ResourceIdMatchesSelector,
     ResourceIdSelector,
     TextContainsSelector,
     TextMatchesSelector,
     TextSelector,
+    U2Selector,
     parse_selector,
 )
 from android_emu_agent.errors import AgentError
@@ -73,6 +76,30 @@ class TestTextSelector:
         result = parse_selector("text-matches:^Sign.*")
         assert isinstance(result, TextMatchesSelector)
         assert result.to_u2_kwargs() == {"textMatches": "^Sign.*"}
+
+    def test_parse_label_alias(self) -> None:
+        """Should parse label: syntax as content description selector."""
+        result = parse_selector('label:"Login"')
+        assert isinstance(result, LabelSelector)
+        assert result.to_u2_kwargs() == {"description": "Login"}
+
+    def test_parse_compound_selector_with_state_filter(self) -> None:
+        """Should parse uiautomator2-compatible compound selector filters."""
+        result = parse_selector('text:"Sign in" enabled:true clickable:false')
+        assert isinstance(result, U2Selector)
+        assert result.to_u2_kwargs() == {
+            "text": "Sign in",
+            "enabled": True,
+            "clickable": False,
+        }
+
+    def test_parse_fallback_selector(self) -> None:
+        """Should parse ordered fallback selectors separated by ||."""
+        result = parse_selector('text:"Sign in" || id:com.example:id/login')
+        assert isinstance(result, FallbackSelector)
+        assert len(result.options) == 2
+        assert result.options[0].to_u2_kwargs() == {"text": "Sign in"}
+        assert result.options[1].to_u2_kwargs() == {"resourceId": "com.example:id/login"}
 
 
 class TestResourceIdSelector:
@@ -181,4 +208,10 @@ class TestInvalidSelectors:
         """Empty selector raises ERR_INVALID_SELECTOR."""
         with pytest.raises(AgentError) as exc_info:
             parse_selector("")
+        assert exc_info.value.code == "ERR_INVALID_SELECTOR"
+
+    def test_empty_fallback_branch_raises_error(self) -> None:
+        """Fallback selectors must contain both alternatives."""
+        with pytest.raises(AgentError) as exc_info:
+            parse_selector("text:OK ||")
         assert exc_info.value.code == "ERR_INVALID_SELECTOR"

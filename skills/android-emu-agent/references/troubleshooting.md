@@ -12,6 +12,14 @@ Match your symptom to the right section:
 - **App crashing or dying** → see `references/reliability.md` for crash/ANR triage workflows
 - **Daemon or device problems** → see Common Issues > Daemon Won't Start / Device Not Appearing
 
+## Contents
+
+- Quick Triage
+- Error Reference
+- Common Issues
+- Debug Tips
+- Reliability Forensics
+
 ## Error Reference
 
 | Error                         | Cause                        | Solution                                               | Recovery        |

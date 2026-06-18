@@ -9,6 +9,19 @@ onboarding, navigation, forms, and scrolling.
 For behavioral decision protocols (when to confirm actions, how to classify inquiry vs. action
 tasks), see `references/behavioral-protocols.md`.
 
+## Contents
+
+- Handling Permission Dialogs
+- Handling System Dialogs
+- Handling System Surfaces
+- Dealing With Stale Refs
+- Waiting for UI Stability
+- Login and Authentication Flows
+- Skipping Onboarding and Tutorials
+- Navigation Patterns
+- Form Filling
+- Scrolling to Find Elements
+
 ## Handling Permission Dialogs
 
 Android runtime permissions appear as system dialogs that block app interaction until dismissed.
@@ -189,6 +202,9 @@ uv run android-emu-agent wait exists s-abc123 --text "Continue" --timeout-ms 500
 uv run android-emu-agent wait exists s-abc123 --text-contains "Continue" --timeout-ms 5000
 uv run android-emu-agent wait exists s-abc123 --id-matches ".*checkout.*" --timeout-ms 5000
 uv run android-emu-agent wait exists s-abc123 --class android.widget.Button --desc-contains "Pay"
+
+# For tap escape hatches, try fallback selectors in priority order
+uv run android-emu-agent action tap s-abc123 'text:"Sign in" || id:com.example:id/login'
 
 # Optional visual evidence for a ref from the latest snapshot
 uv run android-emu-agent ui ground s-abc123 --ref ^a1 --pull --output ./grounding.json

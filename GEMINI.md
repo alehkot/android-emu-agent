@@ -108,3 +108,5 @@ The repository includes a specialized agent skill in `skills/android-emu-agent/`
 
 - **Sync Rule**: If the CLI surface changes, update
   `skills/android-emu-agent/references/command-reference.md` and `docs/reference.md`.
+- **Validation Rule**: Run `./scripts/dev.sh skills-validate` after changing skill frontmatter,
+  reference routing, or use-case documentation.

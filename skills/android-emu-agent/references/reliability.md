@@ -11,6 +11,15 @@ process/OOM state, memory headline counters, rendering/jank stats, background re
 exit-info presence, and filtered ActivityManager events. Add `--raw` only when you need the raw
 dumps in the JSON payload.
 
+## Contents
+
+- Triage Decision Tree
+- Crash / Kill Triage (Non-Rooted)
+- Performance Diagnostics
+- Rooted Devices / Emulators
+- Lifecycle and Scheduling Diagnostics
+- Debuggable App Access (No Root Needed)
+
 ## Triage Decision Tree
 
 Start here when something goes wrong. Follow the path that matches your symptom:
@@ -40,7 +49,10 @@ What happened?
   │    1. profile    → compact process/memory/gfx/event snapshot
   │    2. gfxinfo    → rendering frame stats
   │    3. meminfo    → memory usage breakdown
-  │    4. compile    → reset ART compilation to test cold-start (--mode reset)
+  │    4. perfetto   → bounded native system/app trace artifact
+  │    5. simpleperf → bounded native CPU profile for one app process
+  │    6. screenrecord → visual evidence synchronized with repro steps
+  │    7. compile    → reset ART compilation to test cold-start (--mode reset)
   │
   └─ Need to stress-test resilience
        1. always-finish on → force activity destruction on background
@@ -167,6 +179,26 @@ uv run android-emu-agent reliability gfxinfo com.example.app --device emulator-5
 
 **Output interpretation:** Look at frame stats — frames exceeding 16ms indicate jank. `Janky frames`
 percentage shows overall smoothness.
+
+### Native Performance Artifacts
+
+Use bounded captures when profile/gfxinfo identifies a regression but you need timeline or CPU
+evidence. These commands write local artifacts under `~/.android-emu-agent/artifacts/reliability`
+unless `--output` is provided.
+
+```bash
+# System/app timeline trace
+uv run android-emu-agent reliability perfetto --session s-abc123 --duration 10
+
+# App process CPU profile plus local text report
+uv run android-emu-agent reliability simpleperf com.example.app --session s-abc123 --duration 10
+
+# Visual reproduction evidence
+uv run android-emu-agent reliability screenrecord --session s-abc123 --duration 10
+```
+
+Keep durations short and repeatable. Use `--categories` on `perfetto` only when you know which data
+sources you need; the default captures common scheduling, graphics, input, and runtime categories.
 
 ### ART Compilation Mode
 

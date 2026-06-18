@@ -65,6 +65,69 @@ class DummyReliabilityManager:
             "output": "PROFILE com.example.app",
         }
 
+    async def perfetto_trace(
+        self,
+        device: object,
+        serial: str,
+        *,
+        duration_seconds: int,
+        categories: str | None,
+        filename: str | None,
+    ) -> dict[str, Any]:
+        self.calls.append(
+            {
+                "method": "perfetto",
+                "device": device,
+                "serial": serial,
+                "duration_seconds": duration_seconds,
+                "categories": categories,
+                "filename": filename,
+            }
+        )
+        return {"path": "/tmp/trace.perfetto-trace", "duration_seconds": duration_seconds}
+
+    async def simpleperf_record(
+        self,
+        device: object,
+        serial: str,
+        package: str,
+        *,
+        duration_seconds: int,
+        filename: str | None,
+    ) -> dict[str, Any]:
+        self.calls.append(
+            {
+                "method": "simpleperf",
+                "device": device,
+                "serial": serial,
+                "package": package,
+                "duration_seconds": duration_seconds,
+                "filename": filename,
+            }
+        )
+        return {"path": "/tmp/profile.data", "report_path": "/tmp/profile.txt", "pid": 123}
+
+    async def screenrecord(
+        self,
+        device: object,
+        serial: str,
+        *,
+        duration_seconds: int,
+        bit_rate: int | None,
+        filename: str | None,
+    ) -> dict[str, Any]:
+        self.calls.append(
+            {
+                "method": "screenrecord",
+                "device": device,
+                "serial": serial,
+                "duration_seconds": duration_seconds,
+                "bit_rate": bit_rate,
+                "filename": filename,
+            }
+        )
+        return {"path": "/tmp/recording.mp4", "duration_seconds": duration_seconds}
+
 
 class DummyCore:
     session_manager: DummySessionManager
@@ -141,3 +204,84 @@ def test_reliability_profile_rejects_invalid_package() -> None:
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "ERR_INVALID_PACKAGE"
     assert manager.calls == []
+
+
+def test_reliability_perfetto_endpoint_calls_manager() -> None:
+    """Should resolve target and call perfetto manager method."""
+    with _client_with_core() as (client, manager, device):
+        response = client.post(
+            "/reliability/perfetto",
+            json={
+                "serial": "emulator-5554",
+                "duration_seconds": 3,
+                "categories": "sched gfx",
+                "filename": "trace.perfetto-trace",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["path"] == "/tmp/trace.perfetto-trace"
+    assert manager.calls == [
+        {
+            "method": "perfetto",
+            "device": device,
+            "serial": "emulator-5554",
+            "duration_seconds": 3,
+            "categories": "sched gfx",
+            "filename": "trace.perfetto-trace",
+        }
+    ]
+
+
+def test_reliability_simpleperf_endpoint_calls_manager() -> None:
+    """Should validate package and call simpleperf manager method."""
+    with _client_with_core() as (client, manager, device):
+        response = client.post(
+            "/reliability/simpleperf",
+            json={
+                "session_id": "s-abc123",
+                "package": "com.example.app",
+                "duration_seconds": 4,
+                "filename": "profile.data",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["report_path"] == "/tmp/profile.txt"
+    assert manager.calls == [
+        {
+            "method": "simpleperf",
+            "device": device,
+            "serial": "emulator-5554",
+            "package": "com.example.app",
+            "duration_seconds": 4,
+            "filename": "profile.data",
+        }
+    ]
+
+
+def test_reliability_screenrecord_endpoint_calls_manager() -> None:
+    """Should resolve target and call screenrecord manager method."""
+    with _client_with_core() as (client, manager, device):
+        response = client.post(
+            "/reliability/screenrecord",
+            json={
+                "serial": "emulator-5554",
+                "duration_seconds": 6,
+                "bit_rate": 4000000,
+                "filename": "recording.mp4",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["path"] == "/tmp/recording.mp4"
+    assert manager.calls == [
+        {
+            "method": "screenrecord",
+            "device": device,
+            "serial": "emulator-5554",
+            "duration_seconds": 6,
+            "bit_rate": 4000000,
+            "filename": "recording.mp4",
+        }
+    ]
