@@ -5,6 +5,18 @@
 
 Structured 3-level escalation when an action fails. Each level is progressively more expensive.
 
+Recovery is complete only when a fresh snapshot or expectation confirms the requested state. If the
+limits below are exhausted, stop at Level 3 and ask the user for direction.
+
+## Contents
+
+- When to Trigger
+- Level 1: Re-snapshot Recovery (Automatic)
+- Level 2: Visual / Screenshot Recovery (Automatic)
+- Level 3: User Guidance (Interactive)
+- Recovery Limits
+- Quick Decision Flowchart
+
 ## When to Trigger
 
 | Error Code          | Start At | Notes                                             |

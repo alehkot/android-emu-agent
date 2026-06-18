@@ -1,9 +1,13 @@
 ---
 name: android-emu-agent
-description:
-  Automate Android apps on emulators and rooted devices via observe-act-verify UI snapshots and
-  actions. Use for Android UI automation/testing, emulator control, tapping/typing/navigation,
-  handling dialogs, diagnosing UI automation issues, and reliability forensics.
+description: >
+  Observe-act-verify Android emulators or rooted devices with UI snapshots, generation-scoped refs,
+  selector escape hatches, waits, app/system/file commands, reliability forensics, trace artifacts,
+  and debugger flows. Use when asked to inspect an Android screen, interact with an app, run
+  emulator/device UI automation, handle dialogs/forms/navigation, troubleshoot stale or missing
+  elements, capture screenshots/logs/traces, diagnose crashes/ANRs/performance, or use
+  android-emu-agent commands. Do not use for generic Android source-code edits unless a
+  device/emulator automation flow is involved.
 ---
 
 # Android Emu Agent Skill
@@ -12,6 +16,19 @@ Use the `android-emu-agent` CLI + daemon to control Android UI with actionable s
 generation-scoped element refs. Compact snapshots are designed to work well across classic XML
 layouts and modern frameworks such as Compose and Litho. If you're working inside this repo, prefer
 `uv run android-emu-agent ...` to ensure the correct environment.
+
+## Operating Process
+
+1. Classify the branch: readiness check, read-only inquiry, action flow, recovery, reliability,
+   debugger, file transfer, or command lookup. Completion: the active branch is named and only the
+   matching reference files from the Decision Guide are loaded.
+2. Establish the target: ensure the daemon, device, and session state needed for that branch.
+   Completion: a `session_id` or device serial is known, or the missing prerequisite is reported.
+3. Run the observe-act-verify loop for UI work: fresh snapshot, one action, wait as needed, fresh
+   snapshot or expectation. Completion: the requested state is observed, or the recovery protocol
+   reaches its stated limit.
+4. Report the outcome: current package/activity or device state, actions taken, relevant artifacts,
+   diagnostic IDs, and any unresolved blocker.
 
 ## SDK CLI Prerequisites
 
@@ -100,8 +117,12 @@ uv run android-emu-agent ui snapshot <session_id>
 
 ## Decision Guide
 
-Match your situation to the right file:
+Load only the branch files needed for the active task. Match your situation to the right file:
 
+- **Asked to inspect a screen, answer what is visible, or confirm whether UI exists** →
+  `references/behavioral-protocols.md` first, then `references/core-loop.md`
+- **Asked to run an app flow, test scenario, or repeated automation** → `references/core-loop.md`,
+  then `references/ui-automation-patterns.md` or `references/examples.md`
 - **Starting a session or understanding the loop** → `references/core-loop.md`
 - **Looking up a command or selector syntax** → `references/command-reference.md`
 - **Handling a UI scenario** (permissions, dialogs, login, onboarding, navigation, forms, scrolling)

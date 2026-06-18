@@ -2,10 +2,12 @@
 
 > **Read this file when** you need to look up a command, its arguments, or selector syntax.
 
-## Commands
-
 Examples in this repo assume `uv run android-emu-agent <command>`. If you installed the CLI
 globally, replace with `android-emu-agent <command>`.
+
+This file is a task-planning cheat sheet, not the exhaustive CLI source of truth. For current full
+help, use `uv run android-emu-agent --help` and subcommand help. In this repo, `docs/reference.md`
+is generated from the live CLI; regenerate it instead of hand-editing generated command tables.
 
 Most commands accept `--json` for machine-readable JSON output (useful for scripting or when you
 need to parse structured results programmatically).
@@ -16,6 +18,15 @@ header for request-level tracing.
 Emulator lifecycle commands expect `adb` and `emulator` to be available via `PATH` or discoverable
 through `ANDROID_SDK_ROOT` / `ANDROID_HOME`. `avdmanager` is recommended when you need to create or
 inspect AVD definitions outside `android-emu-agent`.
+
+## Contents
+
+- Commands
+- Target Selectors
+- Swipe and Scroll Directions
+- Wait Options
+
+## Commands
 
 ### CLI
 
@@ -81,15 +92,27 @@ surprise.
 
 ### Task
 
-- `task validate <task.json>` Validate a JSON task spec without running it.
-- `task run <task.json> [--session <session_id>] [--continue-on-failure]` Run ordered task steps and
-  verifiers.
+- `task validate <task.json|task.aea>` Validate a JSON task spec or human-editable `.aea` script.
+- `task run <task.json|task.aea> [--session <session_id>] [--continue-on-failure]` Run ordered task
+  steps and verifiers.
 
 Task specs support action steps (`tap`, `long_tap`, `set_text`, `clear`, `back`, `home`, `recents`,
 `swipe`), wait/verifier operations (`idle`, `activity`, `text`, `exists`, `gone`), app steps
 (`launch`, `force_stop`, `deeplink`), and `ui` `snapshot` steps. Use `verify` on a step for
 post-step checks and top-level `verifiers` for final checks. A failed verifier returns
 `status=failed` with the failing step or verifier payload.
+
+Task scripts use one command per line and compile to the same task harness:
+
+```text
+name "login smoke"
+session s-abc123
+launch com.example.app
+wait exists text:"Sign in" timeout_ms=10000
+tap text:"Sign in" || id:com.example:id/login
+verify exists text:"Email"
+expect activity MainActivity
+```
 
 ### UI
 
@@ -321,6 +344,12 @@ compatible alias.
 
 - `reliability profile <package> --device <serial>` Bounded process, memory, rendering, background,
   exit-info, and ActivityManager event profile.
+- `reliability perfetto --device <serial> --duration <seconds>` Capture a bounded native Perfetto
+  trace and pull a `.perfetto-trace` artifact.
+- `reliability simpleperf <package> --device <serial> --duration <seconds>` Capture a bounded
+  simpleperf CPU profile and local text report.
+- `reliability screenrecord --device <serial> --duration <seconds>` Capture a bounded screen
+  recording artifact.
 - `reliability exit-info <package> --device <serial>` App exit reasons (A11+).
 - `reliability events --device <serial>` ActivityManager events buffer.
 - `reliability bugreport --device <serial>` Capture system bugreport.
@@ -349,6 +378,9 @@ to preserve heap files on-device after pulling:
 - `reliability bugreport --device <serial> --output <path>` Choose output filename.
 - `reliability events --device <serial> --since <timestamp>` Limit events by time.
 - `reliability dumpheap <package> --device <serial> --keep-remote` Keep heap on device.
+- `reliability perfetto --session <session_id> --duration 10 --output trace.perfetto-trace`
+- `reliability simpleperf <package> --session <session_id> --duration 10 --output cpu.data`
+- `reliability screenrecord --session <session_id> --duration 10 --output repro.mp4`
 
 ### File
 
@@ -366,13 +398,14 @@ See `references/reliability.md` for reliability triage workflows and output inte
 
 The `action tap` command accepts these selector formats:
 
-| Selector     | Example                 | Description                           |
-| ------------ | ----------------------- | ------------------------------------- |
-| `^ref`       | `^a1`                   | Element ref from snapshot (preferred) |
-| `text:"..."` | `text:"Sign in"`        | Match by visible text                 |
-| `id:...`     | `id:com.example:id/btn` | Match by resource ID                  |
-| `desc:"..."` | `desc:"Open menu"`      | Match by content description          |
-| `coords:x,y` | `coords:540,1200`       | Tap at absolute coordinates           |
+- `^a1`: element ref from snapshot (preferred).
+- `text:"Sign in"`: match by visible text.
+- `id:com.example:id/btn`: match by resource ID.
+- `desc:"Open menu"`: match by content description.
+- `label:"Open menu"`: label alias for content description.
+- `text:"Sign in" enabled:true clickable:true`: add uiautomator2 state filters.
+- `text:"Sign in" || id:com.example:id/login`: try fallback selectors in order.
+- `coords:540,1200`: tap at absolute coordinates.
 
 `long-tap`, `set-text`, and `clear` require an `^ref`.
 

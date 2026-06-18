@@ -1,0 +1,4 @@
+interface:
+  display_name: "Android Emu Agent"
+  short_description: "Observe-act-verify Android automation"
+  default_prompt: "Use $android-emu-agent to observe, act, and verify on my connected Android emulator."

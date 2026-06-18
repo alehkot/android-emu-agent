@@ -3,11 +3,15 @@
 > **Read this file when** you need to decide whether to act or observe, whether to confirm before
 > acting, how to handle session startup, or how to approach unlabeled elements.
 
-Decision protocols that govern agent behavior: when to act vs. observe, when to confirm before
-acting, how to handle session startup, and how to approach unlabeled elements.
-
 For UI interaction patterns (permissions, login, forms, navigation), see
 `references/ui-automation-patterns.md`.
+
+## Contents
+
+- Session Readiness Check
+- Write-Action Confirmation Protocol
+- Inquiry vs. Action Tasks
+- Unknown and Unlabeled Elements
 
 ## Session Readiness Check
 
@@ -21,6 +25,9 @@ What to do:
 1. Verify the device is connected (`device list`)
 1. Ensure a session exists or create one (`session list` / `session start`)
 1. Report readiness to the user and **wait for their next request**
+
+Completion: daemon, connected device, and session state are known; no app launch, snapshot, or UI
+action has been taken unless the user explicitly asked for it.
 
 What **not** to do:
 
@@ -193,6 +200,9 @@ When the task is an inquiry, use only read-only methods in this order:
 6. **Scroll to reveal** — `action scroll` (read-only) and then repeat steps 1-5 for off-screen
    content
 7. **Ask the user** — if unresolved, report what was observed at each mode and ask for guidance
+
+Completion: the answer is supported by observed evidence, or the unresolved state is reported with
+the modes checked and the latest screenshot/summary.
 
 **Explicit trigger:** If the user says elements are missing, stale, or filtered out in the snapshot,
 the agent must run at least through step 3 (`--full`) before concluding the element is absent. If

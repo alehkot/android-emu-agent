@@ -510,6 +510,7 @@ case "${1:-help}" in
         uv run ruff check .
         uv run mypy src/
         uv run pyright
+        uv run python scripts/validate_skills.py
         "$PROJECT_DIR/jdi-bridge/gradlew" -p "$PROJECT_DIR/jdi-bridge" shadowJar
         "$PROJECT_DIR/jdi-bridge/gradlew" -p "$PROJECT_DIR/jdi-bridge" test
         uv run pytest tests/unit -q
@@ -578,6 +579,11 @@ case "${1:-help}" in
         esac
         ;;
 
+    skills-validate)
+        echo "Validating bundled Agent Skills..."
+        uv run python scripts/validate_skills.py
+        ;;
+
     skills-codex)
         ensure_supported_os
         echo "Installing skills for Codex..."
@@ -642,6 +648,7 @@ case "${1:-help}" in
         echo "  docs-serve       Serve documentation locally"
         echo "  docs-gen         Regenerate CLI reference from Typer app"
         echo "  skills [target]  Symlink skills into agent directories (codex|claude|all)"
+        echo "  skills-validate  Validate bundled Agent Skills"
         echo "  skills-codex     Symlink skills into Codex agent directory"
         echo "  skills-claude    Symlink skills into Claude agent directory"
         echo "  help             Show this help"
