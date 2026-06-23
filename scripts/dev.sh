@@ -733,9 +733,8 @@ release_current_version() {
     fi
 
     verify_github_release_assets "$tag" "$version"
-    echo "Release $tag is published with bridge artifacts."
-    publish_python_release_artifacts "$version"
-    echo "Release $tag is published to GitHub and PyPI."
+    echo "Release $tag is published to GitHub with bridge artifacts."
+    echo "Next: run './scripts/dev.sh publish-pypi' to upload Python distributions to PyPI."
 }
 
 verify_current_release() {
@@ -891,7 +890,8 @@ bump_version() {
     case "$tag_confirm" in
         y|Y|yes|YES)
             commit_and_tag_version_bump "$new_version" || return 1
-            echo "Next: run './scripts/dev.sh release' to push, upload, and verify bridge assets."
+            echo "Next: run './scripts/dev.sh release' to push and verify GitHub release assets."
+            echo "Then run './scripts/dev.sh publish-pypi' to upload Python distributions to PyPI."
             ;;
         *)
             echo "Skipped commit and tag creation."
@@ -1140,7 +1140,7 @@ case "${1:-help}" in
         echo "  daemon           Start the daemon server"
         echo "  bump-version     Interactively bump package version (patch/minor/major/custom),"
         echo "                   optionally refresh uv.lock, and optionally create a git tag"
-        echo "  release [--bump] Build artifacts, push branch+tag, publish GitHub release and PyPI"
+        echo "  release [--bump] Build artifacts, push branch+tag, and publish GitHub release assets"
         echo "  verify-release   Verify the GitHub release has bridge JAR and checksum assets"
         echo "  publish-pypi     Rebuild checked Python dist artifacts and upload with Twine"
         echo "  docs             Build documentation (mkdocs)"
