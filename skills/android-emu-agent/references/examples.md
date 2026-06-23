@@ -6,7 +6,9 @@
 End-to-end task walkthroughs that compose multiple patterns. For individual pattern details (e.g.,
 permission handling, login fields, form filling), see `references/ui-automation-patterns.md`. For
 behavioral protocols (write-action confirmation, inquiry vs. action), see
-`references/behavioral-protocols.md`.
+`references/behavioral-protocols.md`. For targeted workflow examples such as visual grounding, trace
+archives, capability-guided selector planning, intent preflight, and evidence bundles, see
+`references/workflow-examples.md`.
 
 ## Contents
 

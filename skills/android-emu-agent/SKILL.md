@@ -132,6 +132,8 @@ Load only the branch files needed for the active task. Match your situation to t
 - **Action failed with an error** → `references/recovery.md`
 - **Hit an error or unexpected behavior** → `references/troubleshooting.md`
 - **Need a complete end-to-end walkthrough** → `references/examples.md`
+- **Need targeted workflow examples** (visual grounding, trace archive, capabilities, intent
+  preflight, evidence bundle) → `references/workflow-examples.md`
 - **Diagnosing a crash, ANR, or process death** → `references/reliability.md`
 - **Investigating runtime behavior with breakpoints/stack/inspect** → `references/debugging.md`
 - **Pushing or pulling files to/from device** → `references/files.md`

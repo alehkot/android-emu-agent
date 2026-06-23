@@ -5,6 +5,7 @@ repo_name: alehkot/android-emu-agent
 edit_uri: ""
 nav:
   - Home: index.md
+  - Workflow Examples: workflow-examples.md
   - Task Scripts: tasks.md
   - AEA Spec: aea-spec.md
   - CLI Reference: reference.md

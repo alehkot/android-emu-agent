@@ -6,6 +6,12 @@ CLI + daemon for LLM-driven Android UI control — ships with **ready-to-use cod
 [CLI reference](https://alehkot.github.io/android-emu-agent/reference/) |
 [Source](https://github.com/alehkot/android-emu-agent)
 
+Useful local docs:
+
+- [Workflow examples](docs/workflow-examples.md)
+- [Task script examples](docs/tasks.md)
+- [`.aea` task script specification](docs/aea-spec.md)
+
 ## Overview
 
 Android Emu Agent automates Android apps using a fast observe-act-verify loop:
@@ -284,6 +290,10 @@ uv run android-emu-agent daemon start
 ```
 
 ## Common Workflows
+
+For fuller multi-command sequences covering visual grounding, trace archives, capability-guided
+selectors, intent preflight, and evidence bundles, see
+[`docs/workflow-examples.md`](docs/workflow-examples.md).
 
 Login flow
 
