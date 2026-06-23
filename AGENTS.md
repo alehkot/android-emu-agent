@@ -72,8 +72,9 @@ Docs/skills:
 Release workflow helper:
 
 - `./scripts/dev.sh bump-version`
-- `./scripts/dev.sh release` (build bridge assets, push branch+tag, upload GitHub release assets)
+- `./scripts/dev.sh release` (build artifacts, push branch+tag, publish GitHub and PyPI)
 - `./scripts/dev.sh verify-release` (confirm the GitHub release has bridge JAR/checksum assets)
+- `./scripts/dev.sh publish-pypi` (rebuild checked Python dist artifacts and upload them with Twine)
 
 ## 4. Coding Standards
 

@@ -310,18 +310,29 @@ ensure_release_tag_at_head() {
         return 0
     fi
 
-    local tag_confirm
-    read -r -p "Create local tag $tag at HEAD? [y/N]: " tag_confirm
-    case "$tag_confirm" in
-        y|Y|yes|YES)
-            git tag "$tag"
-            echo "Created local tag: $tag"
-            ;;
-        *)
-            echo "Release requires tag $tag."
-            return 1
-            ;;
-    esac
+    git tag "$tag"
+    echo "Created local tag: $tag"
+}
+
+github_push_url() {
+    local repo_slug
+    if ! repo_slug="$(gh repo view --json nameWithOwner --jq .nameWithOwner)" \
+        || [ -z "$repo_slug" ]; then
+        echo "Unable to determine GitHub repository from gh." >&2
+        return 1
+    fi
+
+    printf "https://github.com/%s.git\n" "$repo_slug"
+}
+
+push_release_refs() {
+    local branch="$1"
+    local tag="$2"
+    local push_url
+
+    push_url="$(github_push_url)" || return 1
+    echo "Pushing $branch and $tag to GitHub..."
+    git push "$push_url" "$branch" "$tag"
 }
 
 build_bridge_release_artifacts() {
@@ -341,6 +352,50 @@ build_bridge_release_artifacts() {
     echo "Prepared release assets:"
     echo "  $jar_path"
     echo "  $checksum_path"
+}
+
+build_python_release_artifacts() {
+    local version="$1"
+    local wheel_path="$PROJECT_DIR/dist/android_emu_agent-$version-py3-none-any.whl"
+    local sdist_path="$PROJECT_DIR/dist/android_emu_agent-$version.tar.gz"
+
+    ensure_command uv "Install uv from https://docs.astral.sh/uv/." || return 1
+    ensure_command uvx "Install uv from https://docs.astral.sh/uv/." || return 1
+
+    echo "Building Python release distributions..."
+    mkdir -p "$PROJECT_DIR/dist"
+    rm -f "$PROJECT_DIR/dist"/*.whl "$PROJECT_DIR/dist"/*.tar.gz "$PROJECT_DIR/dist"/*.zip
+    uv build
+
+    if [ ! -f "$wheel_path" ]; then
+        echo "Expected wheel was not built: $wheel_path"
+        return 1
+    fi
+
+    if [ ! -f "$sdist_path" ]; then
+        echo "Expected source distribution was not built: $sdist_path"
+        return 1
+    fi
+
+    echo "Checking Python distributions with Twine..."
+    uvx --from twine twine check "$wheel_path" "$sdist_path"
+
+    echo "Prepared Python distributions:"
+    echo "  $wheel_path"
+    echo "  $sdist_path"
+}
+
+publish_python_release_artifacts() {
+    local version="$1"
+    local wheel_path="$PROJECT_DIR/dist/android_emu_agent-$version-py3-none-any.whl"
+    local sdist_path="$PROJECT_DIR/dist/android_emu_agent-$version.tar.gz"
+
+    if [ ! -f "$wheel_path" ] || [ ! -f "$sdist_path" ]; then
+        build_python_release_artifacts "$version" || return 1
+    fi
+
+    echo "Uploading Python distributions to PyPI..."
+    uvx --from twine twine upload "$wheel_path" "$sdist_path"
 }
 
 verify_github_release_assets() {
@@ -396,19 +451,9 @@ release_current_version() {
     local checksum_path="$jar_path.sha256"
 
     ensure_release_tag_at_head "$tag" || return 1
+    build_python_release_artifacts "$version" || return 1
     build_bridge_release_artifacts "$version" || return 1
-
-    local push_confirm
-    read -r -p "Push $branch and $tag to origin? [y/N]: " push_confirm
-    case "$push_confirm" in
-        y|Y|yes|YES)
-            git push origin "$branch" "$tag"
-            ;;
-        *)
-            echo "Skipped push. Release assets cannot be uploaded until $branch and $tag are on origin."
-            return 1
-            ;;
-    esac
+    push_release_refs "$branch" "$tag" || return 1
 
     if gh release view "$tag" >/dev/null 2>&1; then
         gh release upload "$tag" "$jar_path" "$checksum_path" --clobber
@@ -420,6 +465,8 @@ release_current_version() {
 
     verify_github_release_assets "$tag" "$version"
     echo "Release $tag is published with bridge artifacts."
+    publish_python_release_artifacts "$version"
+    echo "Release $tag is published to GitHub and PyPI."
 }
 
 verify_current_release() {
@@ -434,6 +481,21 @@ verify_current_release() {
 
     ensure_version_consistency "$version" || return 1
     verify_github_release_assets "v$version" "$version"
+}
+
+publish_current_python_version() {
+    ensure_clean_worktree || return 1
+
+    local version
+    version="$(read_project_version)"
+    if [ -z "$version" ]; then
+        echo "Unable to read version from pyproject.toml [project].version."
+        return 1
+    fi
+
+    ensure_version_consistency "$version" || return 1
+    build_python_release_artifacts "$version" || return 1
+    publish_python_release_artifacts "$version"
 }
 
 bump_version() {
@@ -790,6 +852,10 @@ case "${1:-help}" in
         verify_current_release
         ;;
 
+    publish-pypi)
+        publish_current_python_version
+        ;;
+
     skills)
         ensure_supported_os
         target="${2:-all}"
@@ -893,8 +959,9 @@ case "${1:-help}" in
         echo "  daemon           Start the daemon server"
         echo "  bump-version     Interactively bump package version (patch/minor/major/custom),"
         echo "                   optionally refresh uv.lock, and optionally create a git tag"
-        echo "  release          Build bridge assets, push branch+tag, upload GitHub release assets"
+        echo "  release          Build artifacts, push branch+tag, publish GitHub release and PyPI"
         echo "  verify-release   Verify the GitHub release has bridge JAR and checksum assets"
+        echo "  publish-pypi     Rebuild checked Python dist artifacts and upload with Twine"
         echo "  docs             Build documentation (mkdocs)"
         echo "  docs-serve       Serve documentation locally"
         echo "  docs-gen         Regenerate CLI reference from Typer app"
