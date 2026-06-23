@@ -5,6 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+RELEASE_FORCE_TAG_PUSH_OLD_SHA=""
 
 cd "$PROJECT_DIR"
 
@@ -301,11 +302,37 @@ ensure_version_consistency() {
 
 ensure_release_tag_at_head() {
     local tag="$1"
+    local head_sha
+    local local_tag_sha
+    local remote_tag_sha
+
+    head_sha="$(git rev-parse HEAD)"
 
     if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
-        if [ "$(git rev-list -n 1 "$tag")" != "$(git rev-parse HEAD)" ]; then
-            echo "Tag $tag exists but does not point at HEAD. Move it manually or check out the tagged commit."
-            return 1
+        local_tag_sha="$(git rev-list -n 1 "$tag")"
+        if [ "$local_tag_sha" != "$head_sha" ]; then
+            remote_tag_sha="$(remote_tag_commit "$tag")"
+            echo "Tag $tag exists but does not point at HEAD."
+            echo "  tag:  $local_tag_sha"
+            echo "  HEAD: $head_sha"
+            if [ -n "$remote_tag_sha" ]; then
+                echo "  GitHub tag: $remote_tag_sha"
+            fi
+
+            local move_confirm
+            read -r -p "Move $tag to HEAD and update the GitHub tag during release? [y/N]: " \
+                move_confirm
+            case "$move_confirm" in
+                y|Y|yes|YES)
+                    git tag -f "$tag" "$head_sha"
+                    RELEASE_FORCE_TAG_PUSH_OLD_SHA="$remote_tag_sha"
+                    echo "Moved local tag $tag to HEAD."
+                    ;;
+                *)
+                    echo "Release cancelled. Check out $tag or move the tag before retrying."
+                    return 1
+                    ;;
+            esac
         fi
         return 0
     fi
@@ -325,6 +352,23 @@ github_push_url() {
     printf "https://github.com/%s.git\n" "$repo_slug"
 }
 
+remote_tag_commit() {
+    local tag="$1"
+    local push_url
+    local remote_ref
+
+    push_url="$(github_push_url)" || return 1
+    if ! remote_ref="$(git ls-remote --tags "$push_url" "refs/tags/$tag")"; then
+        echo "Unable to inspect GitHub tag $tag." >&2
+        return 1
+    fi
+    if [ -z "$remote_ref" ]; then
+        return 0
+    fi
+
+    printf "%s\n" "${remote_ref%%[[:space:]]*}"
+}
+
 push_release_refs() {
     local branch="$1"
     local tag="$2"
@@ -332,7 +376,13 @@ push_release_refs() {
 
     push_url="$(github_push_url)" || return 1
     echo "Pushing $branch and $tag to GitHub..."
-    git push "$push_url" "$branch" "$tag"
+    git push "$push_url" "$branch"
+    if [ -n "$RELEASE_FORCE_TAG_PUSH_OLD_SHA" ]; then
+        git push --force-with-lease="refs/tags/$tag:$RELEASE_FORCE_TAG_PUSH_OLD_SHA" \
+            "$push_url" "refs/tags/$tag"
+    else
+        git push "$push_url" "$tag"
+    fi
 }
 
 build_bridge_release_artifacts() {
