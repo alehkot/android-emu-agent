@@ -209,6 +209,17 @@ maybe_update_uv_lock() {
     return 1
 }
 
+update_uv_lock() {
+    if [ ! -f uv.lock ]; then
+        return 0
+    fi
+
+    ensure_command uv "Install uv from https://docs.astral.sh/uv/." || return 1
+    echo "Updating uv.lock..."
+    uv lock
+    echo "Updated uv.lock."
+}
+
 ensure_command() {
     local command_name="$1"
     local install_hint="$2"
@@ -472,7 +483,215 @@ verify_github_release_assets() {
     echo "Verified GitHub release assets for $tag."
 }
 
+apply_version_bump() {
+    local current_version="$1"
+    local new_version="$2"
+    local pyproject_tmp
+    local init_tmp
+    local bridge_downloader_tmp
+    local bridge_gradle_tmp
+    local pyproject_backup
+    local init_backup
+    local bridge_downloader_backup
+    local bridge_gradle_backup
+
+    pyproject_tmp="$(mktemp)"
+    init_tmp="$(mktemp)"
+    bridge_downloader_tmp="$(mktemp)"
+    bridge_gradle_tmp="$(mktemp)"
+    pyproject_backup="$(mktemp)"
+    init_backup="$(mktemp)"
+    bridge_downloader_backup="$(mktemp)"
+    bridge_gradle_backup="$(mktemp)"
+
+    cp pyproject.toml "$pyproject_backup"
+    cp src/android_emu_agent/__init__.py "$init_backup"
+    cp src/android_emu_agent/debugger/bridge_downloader.py "$bridge_downloader_backup"
+    cp jdi-bridge/build.gradle.kts "$bridge_gradle_backup"
+
+    if ! render_pyproject_with_version "$new_version" "$pyproject_tmp"; then
+        rm -f "$pyproject_tmp" "$init_tmp" "$bridge_downloader_tmp" "$bridge_gradle_tmp" \
+            "$pyproject_backup" "$init_backup" "$bridge_downloader_backup" "$bridge_gradle_backup"
+        echo "Failed to prepare updated pyproject.toml."
+        return 1
+    fi
+
+    if ! render_init_with_version "$new_version" "$init_tmp"; then
+        rm -f "$pyproject_tmp" "$init_tmp" "$bridge_downloader_tmp" "$bridge_gradle_tmp" \
+            "$pyproject_backup" "$init_backup" "$bridge_downloader_backup" "$bridge_gradle_backup"
+        echo "Failed to prepare updated __init__.py."
+        return 1
+    fi
+
+    if ! render_bridge_downloader_with_version "$new_version" "$bridge_downloader_tmp"; then
+        rm -f "$pyproject_tmp" "$init_tmp" "$bridge_downloader_tmp" "$bridge_gradle_tmp" \
+            "$pyproject_backup" "$init_backup" "$bridge_downloader_backup" "$bridge_gradle_backup"
+        echo "Failed to prepare updated bridge_downloader.py."
+        return 1
+    fi
+
+    if ! render_bridge_gradle_with_version "$new_version" "$bridge_gradle_tmp"; then
+        rm -f "$pyproject_tmp" "$init_tmp" "$bridge_downloader_tmp" "$bridge_gradle_tmp" \
+            "$pyproject_backup" "$init_backup" "$bridge_downloader_backup" "$bridge_gradle_backup"
+        echo "Failed to prepare updated jdi-bridge/build.gradle.kts."
+        return 1
+    fi
+
+    if ! mv "$pyproject_tmp" pyproject.toml \
+        || ! mv "$init_tmp" src/android_emu_agent/__init__.py \
+        || ! mv "$bridge_downloader_tmp" src/android_emu_agent/debugger/bridge_downloader.py \
+        || ! mv "$bridge_gradle_tmp" jdi-bridge/build.gradle.kts; then
+        cp "$pyproject_backup" pyproject.toml
+        cp "$init_backup" src/android_emu_agent/__init__.py
+        cp "$bridge_downloader_backup" src/android_emu_agent/debugger/bridge_downloader.py
+        cp "$bridge_gradle_backup" jdi-bridge/build.gradle.kts
+        rm -f "$pyproject_tmp" "$init_tmp" "$bridge_downloader_tmp" "$bridge_gradle_tmp" \
+            "$pyproject_backup" "$init_backup" "$bridge_downloader_backup" "$bridge_gradle_backup"
+        echo "Failed to write version updates. Original files restored."
+        return 1
+    fi
+
+    rm -f "$pyproject_backup" "$init_backup" "$bridge_downloader_backup" "$bridge_gradle_backup"
+
+    echo "Version bumped: $current_version -> $new_version"
+    echo "Updated files:"
+    echo "  pyproject.toml"
+    echo "  src/android_emu_agent/__init__.py"
+    echo "  src/android_emu_agent/debugger/bridge_downloader.py"
+    echo "  jdi-bridge/build.gradle.kts"
+}
+
+commit_and_tag_version_bump() {
+    local new_version="$1"
+    local tag="v$new_version"
+
+    git add pyproject.toml src/android_emu_agent/__init__.py
+    git add src/android_emu_agent/debugger/bridge_downloader.py
+    git add jdi-bridge/build.gradle.kts
+    if [ -f uv.lock ]; then
+        git add uv.lock
+    fi
+
+    if git commit -m "chore: bump version to $new_version"; then
+        echo "Committed version bump."
+    else
+        echo "Failed to commit version bump."
+        return 1
+    fi
+
+    if git tag "$tag"; then
+        echo "Created git tag: $tag"
+    else
+        echo "Failed to create git tag $tag."
+        return 1
+    fi
+}
+
+resolve_bump_version() {
+    local current_version="$1"
+    local bump_spec="$2"
+
+    case "$bump_spec" in
+        ""|patch|minor|major)
+            calculate_next_version "$current_version" "${bump_spec:-patch}" || {
+                echo "Cannot calculate $bump_spec bump from version '$current_version'." >&2
+                return 1
+            }
+            ;;
+        *)
+            if ! is_semver "$bump_spec"; then
+                echo "Invalid bump value '$bump_spec'. Use patch, minor, major, or x.y.z." >&2
+                return 1
+            fi
+            printf "%s\n" "$bump_spec"
+            ;;
+    esac
+}
+
+release_bump_version() {
+    local bump_spec="$1"
+    local current_version
+    local new_version
+
+    ensure_clean_worktree || return 1
+
+    current_version="$(read_project_version)"
+    if [ -z "$current_version" ]; then
+        echo "Unable to read version from pyproject.toml [project].version."
+        return 1
+    fi
+
+    new_version="$(resolve_bump_version "$current_version" "$bump_spec")" || return 1
+    if [ "$new_version" = "$current_version" ]; then
+        echo "Version unchanged ($current_version)."
+        return 1
+    fi
+
+    echo "Release bump: $current_version -> $new_version"
+    apply_version_bump "$current_version" "$new_version" || return 1
+    update_uv_lock || return 1
+    commit_and_tag_version_bump "$new_version"
+}
+
+parse_release_args() {
+    RELEASE_BUMP_SPEC=""
+    RELEASE_SHOW_HELP="false"
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --bump)
+                if [ -n "$RELEASE_BUMP_SPEC" ]; then
+                    echo "--bump can only be provided once."
+                    return 1
+                fi
+                if [ "$#" -gt 1 ] && [[ "$2" != --* ]]; then
+                    RELEASE_BUMP_SPEC="$2"
+                    shift 2
+                else
+                    RELEASE_BUMP_SPEC="patch"
+                    shift
+                fi
+                ;;
+            --bump=*)
+                if [ -n "$RELEASE_BUMP_SPEC" ]; then
+                    echo "--bump can only be provided once."
+                    return 1
+                fi
+                RELEASE_BUMP_SPEC="${1#--bump=}"
+                if [ -z "$RELEASE_BUMP_SPEC" ]; then
+                    RELEASE_BUMP_SPEC="patch"
+                fi
+                shift
+                ;;
+            -h|--help)
+                echo "Usage: $0 release [--bump[=patch|minor|major|VERSION]]"
+                echo "Examples:"
+                echo "  $0 release --bump"
+                echo "  $0 release --bump minor"
+                echo "  $0 release --bump=0.2.0"
+                RELEASE_SHOW_HELP="true"
+                return 0
+                ;;
+            *)
+                echo "Unknown release option '$1'."
+                return 1
+                ;;
+        esac
+    done
+}
+
 release_current_version() {
+    RELEASE_BUMP_SPEC=""
+    RELEASE_SHOW_HELP="false"
+    parse_release_args "$@" || return 1
+    if [ "$RELEASE_SHOW_HELP" = "true" ]; then
+        return 0
+    fi
+
+    if [ -n "$RELEASE_BUMP_SPEC" ]; then
+        release_bump_version "$RELEASE_BUMP_SPEC" || return 1
+    fi
+
     ensure_command gh "Install GitHub CLI and run 'gh auth login'." || return 1
     if ! gh auth status >/dev/null 2>&1; then
         echo "GitHub CLI is not authenticated. Run 'gh auth login' and retry."
@@ -660,78 +879,7 @@ bump_version() {
         esac
     done
 
-    local pyproject_tmp
-    local init_tmp
-    local bridge_downloader_tmp
-    local bridge_gradle_tmp
-    local pyproject_backup
-    local init_backup
-    local bridge_downloader_backup
-    local bridge_gradle_backup
-    pyproject_tmp="$(mktemp)"
-    init_tmp="$(mktemp)"
-    bridge_downloader_tmp="$(mktemp)"
-    bridge_gradle_tmp="$(mktemp)"
-    pyproject_backup="$(mktemp)"
-    init_backup="$(mktemp)"
-    bridge_downloader_backup="$(mktemp)"
-    bridge_gradle_backup="$(mktemp)"
-
-    cp pyproject.toml "$pyproject_backup"
-    cp src/android_emu_agent/__init__.py "$init_backup"
-    cp src/android_emu_agent/debugger/bridge_downloader.py "$bridge_downloader_backup"
-    cp jdi-bridge/build.gradle.kts "$bridge_gradle_backup"
-
-    if ! render_pyproject_with_version "$new_version" "$pyproject_tmp"; then
-        rm -f "$pyproject_tmp" "$init_tmp" "$bridge_downloader_tmp" "$bridge_gradle_tmp" \
-            "$pyproject_backup" "$init_backup" "$bridge_downloader_backup" "$bridge_gradle_backup"
-        echo "Failed to prepare updated pyproject.toml."
-        return 1
-    fi
-
-    if ! render_init_with_version "$new_version" "$init_tmp"; then
-        rm -f "$pyproject_tmp" "$init_tmp" "$bridge_downloader_tmp" "$bridge_gradle_tmp" \
-            "$pyproject_backup" "$init_backup" "$bridge_downloader_backup" "$bridge_gradle_backup"
-        echo "Failed to prepare updated __init__.py."
-        return 1
-    fi
-
-    if ! render_bridge_downloader_with_version "$new_version" "$bridge_downloader_tmp"; then
-        rm -f "$pyproject_tmp" "$init_tmp" "$bridge_downloader_tmp" "$bridge_gradle_tmp" \
-            "$pyproject_backup" "$init_backup" "$bridge_downloader_backup" "$bridge_gradle_backup"
-        echo "Failed to prepare updated bridge_downloader.py."
-        return 1
-    fi
-
-    if ! render_bridge_gradle_with_version "$new_version" "$bridge_gradle_tmp"; then
-        rm -f "$pyproject_tmp" "$init_tmp" "$bridge_downloader_tmp" "$bridge_gradle_tmp" \
-            "$pyproject_backup" "$init_backup" "$bridge_downloader_backup" "$bridge_gradle_backup"
-        echo "Failed to prepare updated jdi-bridge/build.gradle.kts."
-        return 1
-    fi
-
-    if ! mv "$pyproject_tmp" pyproject.toml \
-        || ! mv "$init_tmp" src/android_emu_agent/__init__.py \
-        || ! mv "$bridge_downloader_tmp" src/android_emu_agent/debugger/bridge_downloader.py \
-        || ! mv "$bridge_gradle_tmp" jdi-bridge/build.gradle.kts; then
-        cp "$pyproject_backup" pyproject.toml
-        cp "$init_backup" src/android_emu_agent/__init__.py
-        cp "$bridge_downloader_backup" src/android_emu_agent/debugger/bridge_downloader.py
-        cp "$bridge_gradle_backup" jdi-bridge/build.gradle.kts
-        rm -f "$pyproject_tmp" "$init_tmp" "$bridge_downloader_tmp" "$bridge_gradle_tmp" \
-            "$pyproject_backup" "$init_backup" "$bridge_downloader_backup" "$bridge_gradle_backup"
-        echo "Failed to write version updates. Original files restored."
-        return 1
-    fi
-
-    rm -f "$pyproject_backup" "$init_backup" "$bridge_downloader_backup" "$bridge_gradle_backup"
-
-    echo "Version bumped: $current_version -> $new_version"
-    echo "Updated files:"
-    echo "  pyproject.toml"
-    echo "  src/android_emu_agent/__init__.py"
-    echo "  src/android_emu_agent/debugger/bridge_downloader.py"
-    echo "  jdi-bridge/build.gradle.kts"
+    apply_version_bump "$current_version" "$new_version" || return 1
 
     if ! maybe_update_uv_lock; then
         return 1
@@ -742,24 +890,7 @@ bump_version() {
     read -r -p "Commit and tag as $tag? [y/N]: " tag_confirm
     case "$tag_confirm" in
         y|Y|yes|YES)
-            git add pyproject.toml src/android_emu_agent/__init__.py
-            git add src/android_emu_agent/debugger/bridge_downloader.py
-            git add jdi-bridge/build.gradle.kts
-            if [ -f uv.lock ]; then
-                git add uv.lock
-            fi
-            if git commit -m "chore: bump version to $new_version"; then
-                echo "Committed version bump."
-            else
-                echo "Failed to commit version bump."
-                return 1
-            fi
-            if git tag "$tag"; then
-                echo "Created git tag: $tag"
-            else
-                echo "Failed to create git tag $tag."
-                return 1
-            fi
+            commit_and_tag_version_bump "$new_version" || return 1
             echo "Next: run './scripts/dev.sh release' to push, upload, and verify bridge assets."
             ;;
         *)
@@ -895,7 +1026,7 @@ case "${1:-help}" in
         ;;
 
     release)
-        release_current_version
+        release_current_version "${@:2}"
         ;;
 
     verify-release)
@@ -1009,7 +1140,7 @@ case "${1:-help}" in
         echo "  daemon           Start the daemon server"
         echo "  bump-version     Interactively bump package version (patch/minor/major/custom),"
         echo "                   optionally refresh uv.lock, and optionally create a git tag"
-        echo "  release          Build artifacts, push branch+tag, publish GitHub release and PyPI"
+        echo "  release [--bump] Build artifacts, push branch+tag, publish GitHub release and PyPI"
         echo "  verify-release   Verify the GitHub release has bridge JAR and checksum assets"
         echo "  publish-pypi     Rebuild checked Python dist artifacts and upload with Twine"
         echo "  docs             Build documentation (mkdocs)"

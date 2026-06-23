@@ -51,6 +51,7 @@ uv run pyright             # Type check with pyright
 ./scripts/dev.sh daemon           # Start the daemon server
 ./scripts/dev.sh bump-version     # Interactively bump version, refresh lock, optionally tag
 ./scripts/dev.sh release          # Build artifacts, publish GitHub release and PyPI
+./scripts/dev.sh release --bump   # Patch bump, tag, then publish GitHub release and PyPI
 ./scripts/dev.sh verify-release   # Verify release bridge JAR/checksum assets exist
 ./scripts/dev.sh publish-pypi     # Rebuild checked Python dist and upload with Twine
 ./scripts/dev.sh docs             # Build documentation (mkdocs)

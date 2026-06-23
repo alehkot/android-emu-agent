@@ -73,6 +73,7 @@ Release workflow helper:
 
 - `./scripts/dev.sh bump-version`
 - `./scripts/dev.sh release` (build artifacts, push branch+tag, publish GitHub and PyPI)
+- `./scripts/dev.sh release --bump[=patch|minor|major|VERSION]` (bump, tag, and release)
 - `./scripts/dev.sh verify-release` (confirm the GitHub release has bridge JAR/checksum assets)
 - `./scripts/dev.sh publish-pypi` (rebuild checked Python dist artifacts and upload them with Twine)
 
