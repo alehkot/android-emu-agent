@@ -208,6 +208,234 @@ maybe_update_uv_lock() {
     return 1
 }
 
+ensure_command() {
+    local command_name="$1"
+    local install_hint="$2"
+
+    if command -v "$command_name" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    echo "Missing required command: $command_name. $install_hint"
+    return 1
+}
+
+ensure_clean_worktree() {
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+        echo "Working tree has uncommitted changes. Commit or stash them first."
+        return 1
+    fi
+}
+
+ensure_version_consistency() {
+    local version="$1"
+    local init_version
+    local downloader_version
+    local gradle_version
+    local lock_version=""
+
+    init_version="$(awk '
+        /^[[:space:]]*__version__[[:space:]]*=/ {
+            line = $0
+            sub(/^[^"]*"/, "", line)
+            sub(/".*$/, "", line)
+            print line
+            exit 0
+        }
+    ' src/android_emu_agent/__init__.py)"
+    downloader_version="$(awk '
+        /^[[:space:]]*_DEFAULT_BRIDGE_VERSION[[:space:]]*=/ {
+            line = $0
+            sub(/^[^"]*"/, "", line)
+            sub(/".*$/, "", line)
+            print line
+            exit 0
+        }
+    ' src/android_emu_agent/debugger/bridge_downloader.py)"
+    gradle_version="$(awk '
+        /^[[:space:]]*version[[:space:]]*=/ {
+            line = $0
+            sub(/^[^"]*"/, "", line)
+            sub(/".*$/, "", line)
+            print line
+            exit 0
+        }
+    ' jdi-bridge/build.gradle.kts)"
+
+    if [ -f uv.lock ]; then
+        lock_version="$(awk '
+            /^[[:space:]]*name[[:space:]]*=[[:space:]]*"android-emu-agent"[[:space:]]*$/ {
+                in_package = 1
+                next
+            }
+            in_package && /^[[:space:]]*version[[:space:]]*=/ {
+                line = $0
+                sub(/^[^"]*"/, "", line)
+                sub(/".*$/, "", line)
+                print line
+                exit 0
+            }
+        ' uv.lock)"
+    fi
+
+    if [ "$init_version" != "$version" ]; then
+        echo "Version mismatch: src/android_emu_agent/__init__.py has $init_version, expected $version."
+        return 1
+    fi
+
+    if [ "$downloader_version" != "$version" ]; then
+        echo "Version mismatch: bridge_downloader.py has $downloader_version, expected $version."
+        return 1
+    fi
+
+    if [ "$gradle_version" != "$version" ]; then
+        echo "Version mismatch: jdi-bridge/build.gradle.kts has $gradle_version, expected $version."
+        return 1
+    fi
+
+    if [ -f uv.lock ] && [ "$lock_version" != "$version" ]; then
+        echo "Version mismatch: uv.lock has $lock_version, expected $version."
+        return 1
+    fi
+}
+
+ensure_release_tag_at_head() {
+    local tag="$1"
+
+    if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+        if [ "$(git rev-list -n 1 "$tag")" != "$(git rev-parse HEAD)" ]; then
+            echo "Tag $tag exists but does not point at HEAD. Move it manually or check out the tagged commit."
+            return 1
+        fi
+        return 0
+    fi
+
+    local tag_confirm
+    read -r -p "Create local tag $tag at HEAD? [y/N]: " tag_confirm
+    case "$tag_confirm" in
+        y|Y|yes|YES)
+            git tag "$tag"
+            echo "Created local tag: $tag"
+            ;;
+        *)
+            echo "Release requires tag $tag."
+            return 1
+            ;;
+    esac
+}
+
+build_bridge_release_artifacts() {
+    local version="$1"
+    local jar_path="$PROJECT_DIR/jdi-bridge/build/libs/jdi-bridge-$version-all.jar"
+    local checksum_path="$jar_path.sha256"
+
+    echo "Building JDI Bridge release artifact..."
+    "$PROJECT_DIR/jdi-bridge/gradlew" -p "$PROJECT_DIR/jdi-bridge" shadowJar
+
+    if [ ! -f "$jar_path" ]; then
+        echo "Expected bridge JAR was not built: $jar_path"
+        return 1
+    fi
+
+    shasum -a 256 "$jar_path" | awk '{ print $1 }' > "$checksum_path"
+    echo "Prepared release assets:"
+    echo "  $jar_path"
+    echo "  $checksum_path"
+}
+
+verify_github_release_assets() {
+    local tag="$1"
+    local version="$2"
+    local jar_name="jdi-bridge-$version-all.jar"
+    local checksum_name="$jar_name.sha256"
+
+    if ! gh release view "$tag" >/dev/null 2>&1; then
+        echo "GitHub release $tag was not found."
+        return 1
+    fi
+
+    if ! gh release view "$tag" --json assets --jq '.assets[].name' | grep -Fxq "$jar_name"; then
+        echo "GitHub release $tag is missing asset: $jar_name"
+        return 1
+    fi
+
+    if ! gh release view "$tag" --json assets --jq '.assets[].name' | grep -Fxq "$checksum_name"; then
+        echo "GitHub release $tag is missing asset: $checksum_name"
+        return 1
+    fi
+
+    echo "Verified GitHub release assets for $tag."
+}
+
+release_current_version() {
+    ensure_command gh "Install GitHub CLI and run 'gh auth login'." || return 1
+    if ! gh auth status >/dev/null 2>&1; then
+        echo "GitHub CLI is not authenticated. Run 'gh auth login' and retry."
+        return 1
+    fi
+    ensure_clean_worktree || return 1
+
+    local version
+    version="$(read_project_version)"
+    if [ -z "$version" ]; then
+        echo "Unable to read version from pyproject.toml [project].version."
+        return 1
+    fi
+
+    ensure_version_consistency "$version" || return 1
+
+    local branch
+    branch="$(git branch --show-current)"
+    if [ -z "$branch" ]; then
+        echo "Release requires a named branch; current checkout is detached."
+        return 1
+    fi
+
+    local tag="v$version"
+    local jar_path="$PROJECT_DIR/jdi-bridge/build/libs/jdi-bridge-$version-all.jar"
+    local checksum_path="$jar_path.sha256"
+
+    ensure_release_tag_at_head "$tag" || return 1
+    build_bridge_release_artifacts "$version" || return 1
+
+    local push_confirm
+    read -r -p "Push $branch and $tag to origin? [y/N]: " push_confirm
+    case "$push_confirm" in
+        y|Y|yes|YES)
+            git push origin "$branch" "$tag"
+            ;;
+        *)
+            echo "Skipped push. Release assets cannot be uploaded until $branch and $tag are on origin."
+            return 1
+            ;;
+    esac
+
+    if gh release view "$tag" >/dev/null 2>&1; then
+        gh release upload "$tag" "$jar_path" "$checksum_path" --clobber
+    else
+        gh release create "$tag" "$jar_path" "$checksum_path" \
+            --title "$tag" \
+            --notes "Release $tag"
+    fi
+
+    verify_github_release_assets "$tag" "$version"
+    echo "Release $tag is published with bridge artifacts."
+}
+
+verify_current_release() {
+    ensure_command gh "Install GitHub CLI and run 'gh auth login'." || return 1
+
+    local version
+    version="$(read_project_version)"
+    if [ -z "$version" ]; then
+        echo "Unable to read version from pyproject.toml [project].version."
+        return 1
+    fi
+
+    ensure_version_consistency "$version" || return 1
+    verify_github_release_assets "v$version" "$version"
+}
+
 bump_version() {
     if ! git diff --quiet || ! git diff --cached --quiet; then
         echo "Working tree has uncommitted changes. Please commit or stash them first."
@@ -420,9 +648,11 @@ bump_version() {
                 echo "Failed to create git tag $tag."
                 return 1
             fi
+            echo "Next: run './scripts/dev.sh release' to push, upload, and verify bridge assets."
             ;;
         *)
             echo "Skipped commit and tag creation."
+            echo "After committing and tagging, run './scripts/dev.sh release'."
             ;;
     esac
 }
@@ -552,6 +782,14 @@ case "${1:-help}" in
         bump_version
         ;;
 
+    release)
+        release_current_version
+        ;;
+
+    verify-release)
+        verify_current_release
+        ;;
+
     skills)
         ensure_supported_os
         target="${2:-all}"
@@ -655,6 +893,8 @@ case "${1:-help}" in
         echo "  daemon           Start the daemon server"
         echo "  bump-version     Interactively bump package version (patch/minor/major/custom),"
         echo "                   optionally refresh uv.lock, and optionally create a git tag"
+        echo "  release          Build bridge assets, push branch+tag, upload GitHub release assets"
+        echo "  verify-release   Verify the GitHub release has bridge JAR and checksum assets"
         echo "  docs             Build documentation (mkdocs)"
         echo "  docs-serve       Serve documentation locally"
         echo "  docs-gen         Regenerate CLI reference from Typer app"

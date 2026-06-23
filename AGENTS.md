@@ -72,6 +72,8 @@ Docs/skills:
 Release workflow helper:
 
 - `./scripts/dev.sh bump-version`
+- `./scripts/dev.sh release` (build bridge assets, push branch+tag, upload GitHub release assets)
+- `./scripts/dev.sh verify-release` (confirm the GitHub release has bridge JAR/checksum assets)
 
 ## 4. Coding Standards
 

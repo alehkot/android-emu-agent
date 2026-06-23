@@ -50,6 +50,8 @@ uv run pyright             # Type check with pyright
 ./scripts/dev.sh typecheck        # Run type checkers (mypy + pyright)
 ./scripts/dev.sh daemon           # Start the daemon server
 ./scripts/dev.sh bump-version     # Interactively bump version, refresh lock, optionally tag
+./scripts/dev.sh release          # Build bridge assets, push branch+tag, upload release assets
+./scripts/dev.sh verify-release   # Verify release bridge JAR/checksum assets exist
 ./scripts/dev.sh docs             # Build documentation (mkdocs)
 ./scripts/dev.sh docs-serve       # Serve documentation locally
 ./scripts/dev.sh docs-gen         # Regenerate CLI reference from Typer app
