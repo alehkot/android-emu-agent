@@ -1,0 +1,9 @@
+# Open a checkout entry point and verify that the payment screen appears.
+name "checkout smoke"
+description "Tap a checkout entry point and verify payment UI state."
+
+tap text:"Checkout" || id:com.example:id/checkout
+verify exists text:"Payment" timeout_ms=5000
+
+wait idle timeout_ms=3000
+expect activity CheckoutActivity

@@ -18,6 +18,7 @@ behavioral protocols (write-action confirmation, inquiry vs. action), see
 - Example 5: Handle App Crash and Recover
 - Example 6: Complete E2E Test Flow
 - Example 7: Action Failure Recovery Escalation
+- Example 8: Run a Checked-in `.aea` Task Script
 
 ## Example 0: Boot an AVD and Restore a Known State
 
@@ -292,3 +293,35 @@ uv run android-emu-agent wait idle s-abc123
 uv run android-emu-agent ui snapshot s-abc123
 # context.activity = ".OrderConfirmationActivity"
 ```
+
+## Example 8: Run a Checked-in `.aea` Task Script
+
+Goal: Validate a human-editable task script, then run it against an active session.
+
+The formal `.aea` syntax is documented in `docs/aea-spec.md`. The repository keeps example scripts
+under `examples/tasks/`. Start with `examples/tasks/idle-snapshot.aea` when you want a minimal
+script that can run against any active session:
+
+```text
+name "idle snapshot"
+description "Wait for the current UI to settle and capture a compact snapshot."
+
+wait idle timeout_ms=5000
+snapshot mode=compact
+```
+
+Validate the script before running:
+
+```bash
+uv run android-emu-agent task validate examples/tasks/idle-snapshot.aea
+```
+
+Run it with an existing session:
+
+```bash
+uv run android-emu-agent task run examples/tasks/idle-snapshot.aea --session s-abc123 --json
+```
+
+For app-specific examples, inspect `examples/tasks/checkout-smoke.aea` and
+`examples/tasks/login-flow.aea`, then replace package names, selectors, credentials, and activity
+names with values from the target app.

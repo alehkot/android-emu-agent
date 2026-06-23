@@ -114,6 +114,15 @@ verify exists text:"Email"
 expect activity MainActivity
 ```
 
+The formal parser contract is documented in `docs/aea-spec.md`.
+
+Checked-in examples live under `examples/tasks/`. Validate before running:
+
+```bash
+uv run android-emu-agent task validate examples/tasks/checkout-smoke.aea
+uv run android-emu-agent task run examples/tasks/checkout-smoke.aea --session s-abc123 --json
+```
+
 ### UI
 
 - `ui snapshot <session_id>` Get actionable UI elements.

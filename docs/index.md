@@ -7,8 +7,8 @@ artifacts, native performance captures, file transfer, JVM debugging, and replay
 from one CLI. It also exposes shell-backed system surfaces for notification shade, Quick Settings,
 and runtime permission setup.
 
-[Explore the CLI reference](reference.md) |
-[View source](https://github.com/alehkot/android-emu-agent)
+[Explore the CLI reference](reference.md) | [See task script examples](tasks.md) |
+[Read the `.aea` spec](aea-spec.md) | [View source](https://github.com/alehkot/android-emu-agent)
 
 ```console
 $ uv run android-emu-agent session start --device emulator-5554
@@ -57,7 +57,9 @@ generation: 43
 `emulator` `reliability` `file` `debug`
 
 Every command keeps human output concise and supports stable JSON where machine consumers need it.
-The generated [CLI reference](reference.md) is the source of truth for flags and payloads.
+The generated [CLI reference](reference.md) is the source of truth for flags and payloads. For
+repeated flows, see the [task script examples](tasks.md) and the
+[`.aea` task script specification](aea-spec.md).
 
 ## Architecture at a glance
 

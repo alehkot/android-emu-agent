@@ -1,0 +1,15 @@
+# Example login smoke. Replace package, selectors, credentials, and activity names.
+name "login flow smoke"
+description "Launch an app, fill a login form, and verify the home activity."
+
+launch com.example.app
+wait idle timeout_ms=10000
+
+tap text:"Sign in" || id:com.example:id/sign_in
+verify exists text:"Email" timeout_ms=5000
+
+set-text id:com.example:id/email "agent@example.com"
+set-text id:com.example:id/password "test-password"
+tap text:"Continue" || id:com.example:id/continue
+
+expect activity HomeActivity

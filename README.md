@@ -29,7 +29,8 @@ The CLI is a thin client. A long-running daemon handles all device I/O. All comm
 - **Diagnostics** — JSON responses and headers include `diagnostic_id` for request-level tracing
 - **Trace archives** — record daemon exchanges into replayable `.aea-trace.zip` evidence bundles
 - **Task harness** — run JSON task specs or human-editable `.aea` scripts with step-level and final
-  verifiers
+  verifiers; see `examples/tasks/`, the [task script guide](docs/tasks.md), and the
+  [`.aea` spec](docs/aea-spec.md)
 - **Expectations** — assertion-style commands for UI state, activity, and foreground app checks
 - **Visual grounding** — optional screenshot-to-ref metadata for human or vision-model evidence
 - **System surfaces** — open notifications/Quick Settings and list, grant, or revoke app permissions
@@ -387,6 +388,15 @@ expect activity CheckoutActivity
 uv run android-emu-agent task validate ./checkout-smoke.aea
 uv run android-emu-agent task run ./checkout-smoke.aea --json
 ```
+
+Checked-in `.aea` examples live under `examples/tasks/`:
+
+```bash
+uv run android-emu-agent task validate examples/tasks/checkout-smoke.aea
+uv run android-emu-agent task run examples/tasks/checkout-smoke.aea --session s-abc123 --json
+```
+
+The formal accepted syntax is documented in the [`.aea` spec](docs/aea-spec.md).
 
 App debug helpers
 

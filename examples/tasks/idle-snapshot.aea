@@ -1,0 +1,6 @@
+# Minimal task that can run against any active session.
+name "idle snapshot"
+description "Wait for the current UI to settle and capture a compact snapshot."
+
+wait idle timeout_ms=5000
+snapshot mode=compact
