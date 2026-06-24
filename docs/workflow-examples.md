@@ -1,50 +1,311 @@
 # Workflow Examples
 
-These examples fill in multi-command workflows that are easy to miss when reading individual CLI
-commands. They assume an active session named `s-abc123` and a target app package `com.example.app`.
+These examples cover the workflows readers are most likely to need first: connect to a device, open
+an app, inspect the screen, act, wait, verify, recover from common UI issues, and collect evidence.
 
-## Visual Grounding
+Assumptions:
 
-Use visual grounding when a compact text snapshot is not enough and a human or vision model needs to
-connect refs to screenshot coordinates. Grounding uses the latest snapshot; it does not run OCR or
-image matching.
+- You are in the repository root.
+- Android Emu Agent is installed with `uv sync --all-extras`.
+- The daemon can reach an emulator or device.
+- `com.example.app` is the target package.
+- `./artifacts/` is local scratch space and is ignored by git.
+
+Replace placeholders such as `<session-id>`, `<device-serial>`, and `<apk-path>` before running a
+command.
+
+## Connect to a Device and Start a Session
+
+Use this flow at the start of an automation run.
+
+1. Confirm that the Android SDK can see a target.
+
+   ```bash
+   adb devices
+   uv run android-emu-agent device list
+   ```
+
+2. Optional: boot an emulator if no target is running.
+
+   ```bash
+   uv run android-emu-agent emulator list-avds
+   uv run android-emu-agent emulator start <avd-name> --wait-boot
+   ```
+
+3. Start the daemon and check its status.
+
+   ```bash
+   uv run android-emu-agent daemon start
+   uv run android-emu-agent daemon status --json
+   ```
+
+4. Start a session.
+
+   ```bash
+   uv run android-emu-agent session start --device <device-serial> --json
+   ```
+
+Verify that the response includes `status: done` and `session_id`.
+
+## Install or Reset an App Before Testing
+
+Use this flow when a run must start from a known app state.
+
+1. Install or replace the APK.
+
+   ```bash
+   uv run android-emu-agent app install <apk-path> --session <session-id> --grant-permissions --json
+   ```
+
+2. Optional: clear app data.
+
+   ```bash
+   uv run android-emu-agent app reset <session-id> com.example.app
+   ```
+
+3. Launch the app.
+
+   ```bash
+   uv run android-emu-agent app launch <session-id> com.example.app
+   uv run android-emu-agent wait idle <session-id> --timeout-ms 5000
+   ```
+
+4. Verify the foreground app.
+
+   ```bash
+   uv run android-emu-agent expect current-app <session-id> --package com.example.app
+   ```
+
+If installation fails, check that the target allows APK installs and that `<apk-path>` points to a
+local APK file.
+
+## Inspect a Screen and Tap a Control
+
+Use this flow for the normal observe, act, verify loop.
+
+1. Capture a compact text snapshot.
+
+   ```bash
+   uv run android-emu-agent ui snapshot <session-id> --format text
+   ```
+
+2. Tap a ref from the snapshot.
+
+   ```bash
+   uv run android-emu-agent action tap <session-id> ^a1
+   ```
+
+3. Verify the new screen.
+
+   ```bash
+   uv run android-emu-agent ui snapshot <session-id> --format text
+   ```
+
+If the target should be reusable across app versions, prefer a semantic selector:
 
 ```bash
-# 1. Capture a fresh actionable snapshot.
-uv run android-emu-agent ui snapshot s-abc123 --format text
-
-# 2. If the element is not in compact mode, widen the snapshot once.
-uv run android-emu-agent ui snapshot s-abc123 --full
-
-# 3. Create screenshot-to-ref metadata for the refs you care about.
-uv run android-emu-agent ui ground s-abc123 --ref ^a1 --ref ^a4 --pull --output ./artifacts/grounding.json --json
-
-# 4. Pull a companion screenshot if you want a local image beside the metadata.
-uv run android-emu-agent ui screenshot s-abc123 --pull --output ./artifacts/screen.png --json
+uv run android-emu-agent action tap <session-id> 'text:"Sign in" || id:com.example:id/sign_in'
 ```
 
-The grounding JSON includes `coordinate_space`, `screenshot_path`, each selected `ref`, `bounds`,
-and `center`. Use those fields to explain where `^a1` or `^a4` appears in the screenshot.
+## Fill a Form
 
-## Trace Archive for a Flaky Flow
+Use refs from a fresh snapshot for text fields. This avoids typing into the wrong field after the UI
+changes.
 
-Use traces when a flow fails intermittently and you need replayable evidence of daemon exchanges.
-Replay is a dry-run plan, so it is safe to inspect before rerunning anything on a device.
+1. Launch the screen and wait for it to settle.
+
+   ```bash
+   uv run android-emu-agent app launch <session-id> com.example.app
+   uv run android-emu-agent wait idle <session-id> --timeout-ms 5000
+   uv run android-emu-agent ui snapshot <session-id> --format text
+   ```
+
+2. Set text on the email and password fields.
+
+   ```bash
+   uv run android-emu-agent action set-text <session-id> ^a2 "agent@example.com"
+   uv run android-emu-agent action set-text <session-id> ^a3 "test-password"
+   ```
+
+3. Submit and verify the next state.
+
+   ```bash
+   uv run android-emu-agent action tap <session-id> ^a4
+   uv run android-emu-agent expect exists <session-id> --text "Welcome" --timeout-ms 10000
+   ```
+
+If the keyboard blocks the submit button, dismiss it before tapping:
 
 ```bash
-# 1. Start recording before the repro steps.
-uv run android-emu-agent trace start s-abc123 --label checkout-flake
+uv run android-emu-agent action back <session-id>
+uv run android-emu-agent wait idle <session-id> --timeout-ms 3000
+```
 
-# 2. Run the smallest flow that reproduces the issue.
-uv run android-emu-agent ui snapshot s-abc123 --format text
-uv run android-emu-agent action tap s-abc123 'text:"Checkout" || id:com.example:id/checkout'
-uv run android-emu-agent wait exists s-abc123 --text "Payment" --timeout-ms 5000
-uv run android-emu-agent expect activity s-abc123 CheckoutActivity --timeout-ms 5000
+## Wait for Navigation or Loading State
 
-# 3. Stop recording into a named archive.
-uv run android-emu-agent trace stop s-abc123 --output ./artifacts/checkout-flake.aea-trace.zip
+Use waits instead of fixed sleeps. Wait commands return structured timeout errors when the expected
+state does not appear.
 
-# 4. Inspect the dry-run replay plan and export a bug-report-friendly Markdown summary.
+```bash
+uv run android-emu-agent action tap <session-id> 'text:"Checkout" || id:com.example:id/checkout'
+uv run android-emu-agent wait gone <session-id> --text "Loading" --timeout-ms 10000
+uv run android-emu-agent wait exists <session-id> --text "Payment" --timeout-ms 10000
+uv run android-emu-agent expect activity <session-id> CheckoutActivity --timeout-ms 5000
+```
+
+If the wait times out, capture a fresh snapshot and check whether the app navigated to a different
+state than expected.
+
+## Recover When an Element Is Missing
+
+Use this flow after `ERR_NOT_FOUND`, `ERR_STALE_REF`, or a snapshot that does not show the target.
+
+1. Wait for the UI to settle.
+
+   ```bash
+   uv run android-emu-agent wait idle <session-id> --timeout-ms 3000
+   ```
+
+2. Capture a full snapshot once.
+
+   ```bash
+   uv run android-emu-agent ui snapshot <session-id> --full --format text
+   ```
+
+3. Inspect selector capability support.
+
+   ```bash
+   uv run android-emu-agent device capabilities --session <session-id> --json
+   ```
+
+4. Retry with a semantic selector.
+
+   ```bash
+   uv run android-emu-agent action tap <session-id> 'text-contains:"Continue" enabled:true clickable:true'
+   ```
+
+5. If no selector is reliable, capture a screenshot before using coordinates.
+
+   ```bash
+   uv run android-emu-agent ui screenshot <session-id> --pull --output ./artifacts/missing-target.png
+   uv run android-emu-agent action tap <session-id> coords:540,1820
+   ```
+
+Use coordinates as the last resort because they are sensitive to device size, orientation, font
+scale, and layout changes.
+
+## Handle Permission and System Setup
+
+Use this flow when an app needs notification, camera, location, or other runtime permission setup
+before a test.
+
+1. List requested and granted permissions.
+
+   ```bash
+   uv run android-emu-agent system permissions list com.example.app --session <session-id> --json
+   ```
+
+2. Grant a runtime permission.
+
+   ```bash
+   uv run android-emu-agent system permissions grant com.example.app android.permission.POST_NOTIFICATIONS --session <session-id> --json
+   ```
+
+3. Optional: open Android system surfaces for manual or agent inspection.
+
+   ```bash
+   uv run android-emu-agent system notifications open --session <session-id>
+   uv run android-emu-agent system quick-settings open --session <session-id>
+   ```
+
+Permission changes still follow Android runtime permission rules. If a permission cannot be granted,
+check the app manifest, Android version, and device policy.
+
+## Run a Reusable Task Script
+
+Use a `.aea` script when a flow should be checked in, reviewed, and repeated.
+
+1. Validate the script without touching a device.
+
+   ```bash
+   uv run android-emu-agent task validate examples/tasks/checkout-smoke.aea
+   ```
+
+2. Run it against the active session.
+
+   ```bash
+   uv run android-emu-agent task run examples/tasks/checkout-smoke.aea --session <session-id> --json
+   ```
+
+3. If it fails, inspect the failure payload and preserve evidence.
+
+   ```bash
+   uv run android-emu-agent artifact save-snapshot <session-id> --json
+   uv run android-emu-agent artifact screenshot <session-id> --pull --output ./artifacts/task-failure.png --json
+   ```
+
+For writing task scripts, use the [task script guide](tasks.md). For exact grammar, use the
+[`.aea` specification](aea-spec.md).
+
+## Collect Evidence After a Failed Flow
+
+Use this sequence after a failed action, failed expectation, crash, or confusing UI state. It
+collects bounded evidence without changing app state further.
+
+1. Save the latest structured UI state.
+
+   ```bash
+   uv run android-emu-agent artifact save-snapshot <session-id> --json
+   ```
+
+2. Capture a screenshot.
+
+   ```bash
+   uv run android-emu-agent artifact screenshot <session-id> --pull --output ./artifacts/failure-screen.png --json
+   ```
+
+3. Pull focused logs from the last few minutes.
+
+   ```bash
+   uv run android-emu-agent artifact logs \
+     --session <session-id> \
+     --app com.example.app \
+     --type errors \
+     --since "10m ago" \
+     --json
+   ```
+
+4. Add current app and task context.
+
+   ```bash
+   uv run android-emu-agent app current --session <session-id> --json
+   uv run android-emu-agent app task-stack --session <session-id> --json
+   ```
+
+5. Create one bundle with available evidence.
+
+   ```bash
+   uv run android-emu-agent artifact bundle <session-id> --json
+   ```
+
+If the failure looks like a crash or ANR, add reliability data:
+
+```bash
+uv run android-emu-agent reliability profile com.example.app --session <session-id> --json
+uv run android-emu-agent reliability exit-info com.example.app --session <session-id> --json
+```
+
+## Record a Trace for a Flaky Flow
+
+Use traces when a flow fails intermittently and you need replayable daemon request/response
+evidence. Replay is a dry-run plan, so inspecting a trace does not mutate a device.
+
+```bash
+uv run android-emu-agent trace start <session-id> --label checkout-flake
+uv run android-emu-agent ui snapshot <session-id> --format text
+uv run android-emu-agent action tap <session-id> 'text:"Checkout" || id:com.example:id/checkout'
+uv run android-emu-agent wait exists <session-id> --text "Payment" --timeout-ms 5000
+uv run android-emu-agent trace stop <session-id> --output ./artifacts/checkout-flake.aea-trace.zip
 uv run android-emu-agent trace replay ./artifacts/checkout-flake.aea-trace.zip --until-failure
 uv run android-emu-agent trace export ./artifacts/checkout-flake.aea-trace.zip --output ./artifacts/checkout-flake.md
 ```
@@ -52,99 +313,62 @@ uv run android-emu-agent trace export ./artifacts/checkout-flake.aea-trace.zip -
 Attach the `.aea-trace.zip`, exported Markdown, and any screenshots or logs collected during the
 same run.
 
-## Capability-Guided Selector Planning
+## Use Visual Grounding for Screenshot Review
 
-Use `device capabilities` before writing reusable automations. It tells an agent which selector
-forms, subsystem features, and device-only operations are available on the target.
+Use visual grounding when text output is not enough and a human or vision model needs screenshot
+coordinates for selected refs. Grounding uses the latest snapshot; it does not run OCR or image
+matching.
 
 ```bash
-# 1. Inspect capabilities for the active session.
-uv run android-emu-agent device capabilities --session s-abc123 --json
-
-# 2. Prefer semantic selectors when available.
-uv run android-emu-agent action tap s-abc123 'text:"Sign in" || id:com.example:id/sign_in'
-
-# 3. Add state filters when the screen has multiple matching controls.
-uv run android-emu-agent action tap s-abc123 'text:"Continue" enabled:true clickable:true'
-
-# 4. Fall back to coordinates only when the capability report and screenshots make that safe.
-uv run android-emu-agent ui screenshot s-abc123 --pull --output ./artifacts/continue.png
-uv run android-emu-agent action tap s-abc123 coords:540,1820
+uv run android-emu-agent ui snapshot <session-id> --format text
+uv run android-emu-agent ui ground <session-id> --ref ^a1 --ref ^a4 --pull --output ./artifacts/grounding.json --json
+uv run android-emu-agent ui screenshot <session-id> --pull --output ./artifacts/screen.png --json
 ```
 
-Useful fields in the JSON response:
+Verify that `grounding.json` includes `coordinate_space`, `screenshot_path`, `ref`, `bounds`, and
+`center` fields for the selected refs.
 
-- `selectors.target_syntax`: supported selector syntax, including refs, text, IDs, fallback
-  selectors, state filters, and coordinates.
-- `selectors.ref_healing`: whether stale refs can be rebound against newer snapshots.
-- `automation.*`: higher-level features such as task harnesses, traces, visual grounding, and native
-  performance artifacts.
-- `device_features.root_required_available`: whether root-only file/reliability operations are
-  available.
+## Preflight an Intent or Deep Link
 
-## Intent and Deep-Link Preflight
-
-Use `resolve-intent` to inspect the target before launching an implicit intent or deep link. This is
-safer when a device may have multiple handlers.
+Use `resolve-intent` before launching an implicit intent or deep link on a device that may have
+multiple handlers.
 
 ```bash
-# 1. Resolve without launching.
 uv run android-emu-agent app resolve-intent \
-  --session s-abc123 \
+  --session <session-id> \
   --action android.intent.action.VIEW \
   --data "https://example.com/deep" \
   --json
 
-# 2. Launch the same URI as a deep link when the resolved target is correct.
-uv run android-emu-agent app deeplink s-abc123 "https://example.com/deep"
-uv run android-emu-agent wait activity s-abc123 DeepLinkActivity --timeout-ms 10000
+uv run android-emu-agent app deeplink <session-id> "https://example.com/deep"
+uv run android-emu-agent wait activity <session-id> DeepLinkActivity --timeout-ms 10000
+```
 
-# 3. Use an explicit package/component when the preflight shows ambiguity.
-uv run android-emu-agent app intent s-abc123 \
+If the preflight is ambiguous, launch with an explicit package or component:
+
+```bash
+uv run android-emu-agent app intent <session-id> \
   --action android.intent.action.VIEW \
   --data "https://example.com/deep" \
   --package com.example.app
-
-# 4. If debugging startup code, launch the intent paused for JDWP attach.
-uv run android-emu-agent app intent s-abc123 \
-  --action android.intent.action.VIEW \
-  --data "https://example.com/deep" \
-  --package com.example.app \
-  --wait-debugger
-uv run android-emu-agent debug attach --session s-abc123 --package com.example.app --keep-suspended
 ```
 
-For explicit screens, use `--component com.example.app/.DeepLinkActivity` when you know the activity
-name and want to avoid resolver choice entirely.
+Use `--component com.example.app/.DeepLinkActivity` when you know the exact activity and want to
+avoid resolver choice entirely.
 
-## Evidence Bundle After a Failed Flow
+## Attach a Debugger at Startup
 
-Use this sequence after a failed action, failed expectation, crash, or confusing UI state. It
-collects bounded evidence without changing app state further.
+Use this flow when UI-level signals are not enough and the target app is debuggable.
 
 ```bash
-# 1. Preserve the latest structured UI state.
-uv run android-emu-agent artifact save-snapshot s-abc123 --json
-
-# 2. Capture a screenshot for visual context.
-uv run android-emu-agent artifact screenshot s-abc123 --pull --output ./artifacts/failure-screen.png --json
-
-# 3. Pull focused logs from the last few minutes.
-uv run android-emu-agent artifact logs \
-  --session s-abc123 \
-  --app com.example.app \
-  --type errors \
-  --since "10m ago" \
-  --json
-
-# 4. Add current app/task context.
-uv run android-emu-agent app current --session s-abc123 --json
-uv run android-emu-agent app task-stack --session s-abc123 --json
-
-# 5. Create one zip with snapshot, screenshot, and logs.
-uv run android-emu-agent artifact bundle s-abc123 --json
+uv run android-emu-agent app launch <session-id> com.example.app --wait-debugger
+uv run android-emu-agent debug attach --session <session-id> --package com.example.app --keep-suspended
+uv run android-emu-agent debug break set com.example.app.MainActivity 42 --session <session-id>
+uv run android-emu-agent debug resume --session <session-id>
+uv run android-emu-agent debug events --session <session-id>
+uv run android-emu-agent debug observe --session <session-id> --json
+uv run android-emu-agent debug detach --session <session-id>
 ```
 
-If the failure looks like a crash or ANR, follow with `reliability profile`,
-`reliability exit-info`, and the triage flow in
-`skills/android-emu-agent/references/reliability.md`.
+Debugger commands require JDK 17+ and a debuggable app. Use `--process` on `debug attach` when the
+package has multiple debuggable processes.

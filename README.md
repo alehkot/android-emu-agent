@@ -1,93 +1,55 @@
 # Android Emu Agent
 
-CLI + daemon for LLM-driven Android UI control — ships with **ready-to-use coding agent skills**.
+Android Emu Agent is a daemon-backed CLI for Android UI automation and debugging. It is designed for
+coding agents and developer tools that need to observe a screen, act on it, verify the result, and
+collect evidence from emulators or rooted devices.
 
 [Documentation](https://alehkot.github.io/android-emu-agent/) |
 [CLI reference](https://alehkot.github.io/android-emu-agent/reference/) |
 [Source](https://github.com/alehkot/android-emu-agent)
 
-Useful local docs:
+Start here:
 
 - [Workflow examples](docs/workflow-examples.md)
-- [Task script examples](docs/tasks.md)
+- [Task script guide](docs/tasks.md)
 - [`.aea` task script specification](docs/aea-spec.md)
+- [Generated CLI reference](docs/reference.md)
 
-## Overview
+## What It Does
 
-Android Emu Agent automates Android apps using a fast observe-act-verify loop:
+Android Emu Agent keeps device I/O in a long-running daemon and exposes a thin `android-emu-agent`
+CLI. The core loop is:
 
-1. Observe: capture a compact actionable UI snapshot
-2. Act: issue commands using ephemeral element refs like `^a1`
-3. Verify: re-snapshot when needed
+1. Observe the current Android screen with a compact UI snapshot.
+2. Act on snapshot refs such as `^a1` or selector strings such as `text:"Sign in"`.
+3. Verify the next state with waits, expectations, screenshots, logs, traces, or debugger context.
 
-The CLI is a thin client. A long-running daemon handles all device I/O. All commands support
-`--json` for machine-readable output, making the tool ideal for agent consumption.
+Use it for:
 
-**Highlights:**
-
-- **Daemon-first architecture** — persistent process handles device I/O over Unix socket
-- **Framework-aware snapshots** — actionable output works across classic XML Views and modern UI
-  frameworks such as Compose and Litho
-- **Ref healing** — deterministic `^a1`-style handles with selector-chain rebinding when a newer
-  snapshot still contains the same target
-- **Richer selectors** — exact, contains, regex, fallback, state-filter, resource ID, content-desc,
-  class, and coordinate selectors with capability introspection
-- **Diagnostics** — JSON responses and headers include `diagnostic_id` for request-level tracing
-- **Trace archives** — record daemon exchanges into replayable `.aea-trace.zip` evidence bundles
-- **Task harness** — run JSON task specs or human-editable `.aea` scripts with step-level and final
-  verifiers; see `examples/tasks/`, the [task script guide](docs/tasks.md), and the
-  [`.aea` spec](docs/aea-spec.md)
-- **Expectations** — assertion-style commands for UI state, activity, and foreground app checks
-- **Visual grounding** — optional screenshot-to-ref metadata for human or vision-model evidence
-- **System surfaces** — open notifications/Quick Settings and list, grant, or revoke app permissions
-  through validated shell-backed commands
-- **Debugger fusion** — combine current app state, latest UI refs, debugger status, events, logpoint
-  hits, and stack in one bounded observation
-- **Performance profile** — aggregate process, memory, rendering, background, exit, and event
-  signals into one app health snapshot
-- **Native performance artifacts** — capture bounded Perfetto traces, simpleperf CPU profiles, and
-  screen recordings as local evidence
-- **Agent skills included** — structured reference docs, workflow templates, and safety guardrails
-- **Machine-readable output** — every command supports `--json` for agent pipelines
-
-## Inspiration
-
-Inspired by [agent-browser](https://github.com/vercel-labs/agent-browser), a fast headless browser
-automation CLI for AI agents.
+- UI snapshots across classic XML Views, Compose, Litho, and mixed screens.
+- Precise actions through refs, selector strings, state filters, and coordinates.
+- Assertion-style checks for text, element existence, activity, idle state, and foreground app.
+- Reusable JSON task specs and human-editable `.aea` task scripts.
+- Trace archives, screenshot grounding, logs, reliability profiles, and performance captures.
+- Android system setup such as notifications, Quick Settings, and runtime permissions.
+- JVM debugger flows through the Kotlin JDI Bridge when the app is debuggable.
 
 ## Requirements
 
-- Python 3.11+
-- `uv` package manager
-- Android SDK with `adb`, `emulator`, and ideally `avdmanager` on `PATH`
-- Android emulator or rooted device (primary target)
-- JDK 17+ (only for debugger commands; set `JAVA_HOME` or have `java` on PATH)
+| Requirement                  | Needed for                                        |
+| ---------------------------- | ------------------------------------------------- |
+| Python 3.11+                 | Running the Python CLI and daemon                 |
+| `uv`                         | Installing and running the project in this repo   |
+| Android SDK `platform-tools` | `adb` device discovery and most device operations |
+| Android SDK `emulator`       | Starting and stopping Android Virtual Devices     |
+| Android SDK `cmdline-tools`  | `avdmanager` and `sdkmanager` workflows           |
+| Emulator or rooted device    | Primary automation and diagnostics target         |
+| JDK 17+                      | Debugger bridge commands only                     |
 
-## Install
+If you only control an already-running device, `adb` is enough. If you want this tool to start AVDs,
+ensure `emulator` is also on `PATH`.
 
-```bash
-# Clone the repository
-git clone https://github.com/alehkot/android-emu-agent.git
-cd android-emu-agent
-
-# Install dependencies
-uv sync
-```
-
-Inside this repo, prefer `uv run android-emu-agent <command>`.
-
-## Android SDK CLI Prerequisites
-
-For emulator lifecycle commands, the daemon expects Android SDK command-line tools to be available.
-It checks `PATH` first and then common SDK roots derived from `ANDROID_SDK_ROOT` / `ANDROID_HOME`.
-
-Recommended `PATH` entries:
-
-- `platform-tools` for `adb`
-- `emulator` for `emulator`
-- `cmdline-tools/latest/bin` for `avdmanager` and `sdkmanager`
-
-Example macOS setup:
+Recommended macOS Android SDK setup:
 
 ```bash
 export ANDROID_SDK_ROOT="$HOME/Library/Android/sdk"
@@ -98,546 +60,189 @@ emulator -list-avds
 avdmanager list avd
 ```
 
-If you only plan to control an already-running device, `adb` is enough. If you want
-`android-emu-agent` to boot or manage emulator instances, make `emulator` available too.
-
-## Quick Start (2 minutes)
+## Install
 
 ```bash
-# 0. Optional: boot an AVD from the CLI
-uv run android-emu-agent emulator list-avds
-uv run android-emu-agent emulator start Pixel_8_API_34 --wait-boot
-
-# 1. Start the daemon (optional, CLI will auto-start by default)
-uv run android-emu-agent daemon start
-
-# 2. List connected devices
-uv run android-emu-agent device list
-
-# 3. Start a session (prints the session id)
-uv run android-emu-agent session start --device emulator-5554
-
-# 4. Take a compact snapshot and read refs
-uv run android-emu-agent ui snapshot s-abc123 --format text
-
-# 5. Tap an element using a ref
-uv run android-emu-agent action tap s-abc123 ^a1
-
-# 6. Stop the session
-uv run android-emu-agent session stop s-abc123
+git clone https://github.com/alehkot/android-emu-agent.git
+cd android-emu-agent
+uv sync --all-extras
 ```
 
-Most commands accept `--json` for machine-readable output.
-
-Example `--json` output for `session start`:
-
-```json
-{
-  "status": "done",
-  "session_id": "s-abc123",
-  "device_serial": "emulator-5554",
-  "generation": 0
-}
-```
-
-## Agent Skills
-
-This repo ships a first-class `android-emu-agent` skill in `skills/android-emu-agent/` for coding
-agents that support skills (Claude Code, Codex, and similar environments).
-
-The skill provides:
-
-- **Structured reference docs** — command reference, troubleshooting, error codes
-- **Workflow templates** — screen inspection, login flows, navigation patterns, form filling
-- **Recovery protocols** — handling stale refs, dialog blockers, idle waits
-- **Reliability guidance** — crash/ANR triage, performance artifacts, debugger handoff
-- **Safety guardrails** — read-only inquiry handling, root checks, emulator-only safeguards
-
-Use it when an agent needs to inspect an Android screen, interact with an app, run emulator/device
-UI automation, diagnose missing or stale elements, collect screenshots/logs/traces, investigate
-crashes or performance regressions, push/pull device files, or use the debugger bridge.
-
-### Install via dev script (recommended)
+Inside the repo, run commands as:
 
 ```bash
-./scripts/dev.sh skills          # Symlink to all supported agents
-./scripts/dev.sh skills claude   # Claude Code only
-./scripts/dev.sh skills codex    # Codex only
-./scripts/dev.sh skills vscode   # VS Code project-local .agents/skills
-./scripts/dev.sh skills-validate # Validate bundled skill structure and references
+uv run android-emu-agent <command>
 ```
 
-### Manual install
+## Quick Start
 
-**VS Code / project-local Agent Skills:**
+Use this flow to verify that the CLI, daemon, and target device are working.
 
-```bash
-mkdir -p .agents/skills
-ln -sfn "$(pwd)/skills/android-emu-agent" .agents/skills/android-emu-agent
-```
+1. Optional: list and boot an emulator.
 
-**Claude Code:**
+   ```bash
+   uv run android-emu-agent emulator list-avds
+   uv run android-emu-agent emulator start <avd-name> --wait-boot
+   ```
 
-```bash
-mkdir -p ~/.claude/skills
-ln -sfn "$(pwd)/skills/android-emu-agent" ~/.claude/skills/android-emu-agent
-```
+2. Start the daemon. The CLI can auto-start it, but starting it explicitly makes setup easier to
+   debug.
 
-**Codex:**
+   ```bash
+   uv run android-emu-agent daemon start
+   uv run android-emu-agent daemon status --json
+   ```
 
-```bash
-export CODEX_HOME="$HOME/.codex"
-mkdir -p "$CODEX_HOME/skills"
-ln -sfn "$(pwd)/skills/android-emu-agent" "$CODEX_HOME/skills/android-emu-agent"
-```
+3. Confirm that a device is visible.
 
-If symlinks are not an option, copy the directory instead.
+   ```bash
+   uv run android-emu-agent device list
+   ```
 
-### Using the Skill
+4. Start a session and copy the returned `session_id`.
 
-After installation, the agent should be primed to start a session with your connected device before
-you ask for specific actions. Begin with a direct initialization request, for example:
+   ```bash
+   uv run android-emu-agent session start --device emulator-5554 --json
+   ```
 
-`I want to interact with my connected Android emulator.`
+5. Capture an actionable snapshot.
 
-Once the agent has initialized the session, you can proceed with normal requests (snapshots,
-tap/type actions, app launches, waits, etc.).
+   ```bash
+   uv run android-emu-agent ui snapshot <session-id> --format text
+   ```
 
-Prerequisites you may need (if the agent reports it cannot connect):
+6. Tap an element by ref, then verify the screen again.
 
-1. If no emulator is running yet, list and boot one: `uv run android-emu-agent emulator list-avds`
-   `uv run android-emu-agent emulator start <avd_name> --wait-boot`
-2. Start the daemon: `uv run android-emu-agent daemon start`
-3. Confirm a device is visible: `uv run android-emu-agent device list`
-4. If needed, start a session explicitly:
-   `uv run android-emu-agent session start --device emulator-5554`
+   ```bash
+   uv run android-emu-agent action tap <session-id> ^a1
+   uv run android-emu-agent ui snapshot <session-id> --format text
+   ```
+
+7. Stop the session when you are done.
+
+   ```bash
+   uv run android-emu-agent session stop <session-id>
+   ```
+
+Most commands support `--json` for machine-readable output. JSON responses include a `diagnostic_id`
+that also appears as the daemon `x-diagnostic-id` response header.
 
 ## Core Concepts
 
-Sessions
+### Daemon and Sessions
 
-- Sessions tie actions to a specific device. Most commands accept a session id.
-- `session start` returns a session id. `session stop` releases it.
+The daemon owns device connections and session state. The CLI sends requests over the Unix socket at
+`/tmp/android-emu-agent.sock`.
 
-Snapshots and refs
+Important paths:
 
-- `ui snapshot` returns actionable `^refs` that are generation-scoped and optimized for agent use.
-- Compact snapshots are designed to work well with classic XML layouts and modern frameworks such as
-  Compose and Litho.
-- If a ref is stale, the daemon may heal it against the latest snapshot and return a warning. You
-  should still take a fresh snapshot before the next action.
+| Path                                               | Purpose                           |
+| -------------------------------------------------- | --------------------------------- |
+| `/tmp/android-emu-agent.sock`                      | Daemon socket                     |
+| `~/.android-emu-agent/daemon.log`                  | Daemon log                        |
+| `~/.android-emu-agent/daemon.pid`                  | Daemon PID file                   |
+| `~/.android-emu-agent/diagnostics/requests.ndjson` | Request diagnostics               |
+| `~/.android-emu-agent/artifacts`                   | Default artifact output root      |
+| `~/.android-emu-agent/traces`                      | Default trace archive output root |
 
-Selectors
+### Snapshots, Refs, and Selectors
 
-- `action tap` accepts an `^ref` or a selector.
-- `long-tap`, `set-text`, and `clear` require an `^ref`.
+`ui snapshot` returns generation-scoped refs such as `^a1`. Use refs for the next action whenever
+possible. If a ref becomes stale, the daemon may heal it against the latest snapshot and return a
+warning; take a fresh snapshot before continuing.
 
-Selector examples:
+Common target forms:
 
 ```text
 ^a1
 text:"Sign in"
+text-contains:"Continue"
 id:com.example:id/login_btn
 desc:"Open navigation"
-coords:120,450
+coords:540,1200
+text:"Sign in" || id:com.example:id/login_btn
+text:"Continue" enabled:true clickable:true
 ```
 
-## Snapshot Format
-
-Compact snapshot output includes context and actionable UI elements only:
-
-```json
-{
-  "schema_version": 1,
-  "session_id": "s-abc123",
-  "generation": 42,
-  "context": {
-    "package": "com.example.app",
-    "activity": ".MainActivity",
-    "orientation": "PORTRAIT",
-    "ime_visible": false
-  },
-  "elements": [
-    {
-      "ref": "^a1",
-      "role": "button",
-      "label": "Sign in",
-      "resource_id": "com.example:id/login_btn",
-      "bounds": [100, 200, 300, 250],
-      "state": { "clickable": true, "enabled": true }
-    }
-  ]
-}
-```
-
-Compact mode may proxy descendant text onto an unlabeled clickable container when that makes the
-target easier to identify. Use `--full` for the unpruned hierarchy view, or `--raw` for the raw XML
-tree.
-
-## Daemon and State
-
-- Socket: `/tmp/android-emu-agent.sock`
-- Logs: `~/.android-emu-agent/daemon.log`
-- PID file: `~/.android-emu-agent/daemon.pid`
-- Request diagnostics: `~/.android-emu-agent/diagnostics/requests.ndjson`
-
-The CLI auto-starts the daemon on first request. Use these to debug:
+Run this command when an automation planner needs to know which selector forms and device features
+are available:
 
 ```bash
-uv run android-emu-agent daemon status --json
-uv run android-emu-agent daemon stop
-uv run android-emu-agent daemon start
+uv run android-emu-agent device capabilities --session <session-id> --json
+```
+
+### Tasks and Evidence
+
+Use `.aea` task scripts or JSON task specs for repeatable flows. Validate task files before running
+them:
+
+```bash
+uv run android-emu-agent task validate examples/tasks/checkout-smoke.aea
+uv run android-emu-agent task run examples/tasks/checkout-smoke.aea --session <session-id> --json
+```
+
+Use traces and artifact bundles when a failure needs evidence:
+
+```bash
+uv run android-emu-agent trace start <session-id> --label checkout-repro
+uv run android-emu-agent trace stop <session-id> --output ./artifacts/checkout-repro.aea-trace.zip
+uv run android-emu-agent trace replay ./artifacts/checkout-repro.aea-trace.zip --until-failure
+uv run android-emu-agent artifact bundle <session-id> --json
 ```
 
 ## Common Workflows
 
-For fuller multi-command sequences covering visual grounding, trace archives, capability-guided
-selectors, intent preflight, and evidence bundles, see
-[`docs/workflow-examples.md`](docs/workflow-examples.md).
+| Goal                                                    | Start here                                               |
+| ------------------------------------------------------- | -------------------------------------------------------- |
+| Inspect and act on a screen                             | [Workflow examples](docs/workflow-examples.md)           |
+| Write a reusable `.aea` flow                            | [Task script guide](docs/tasks.md)                       |
+| Look up exact `.aea` grammar                            | [`.aea` specification](docs/aea-spec.md)                 |
+| Look up a command option                                | [Generated CLI reference](docs/reference.md)             |
+| Diagnose stale refs, missing elements, or blocked input | `skills/android-emu-agent/references/troubleshooting.md` |
+| Use debugger breakpoints, stack, inspect, or logpoints  | `skills/android-emu-agent/references/debugging.md`       |
 
-Login flow
+## Agent Skill
 
-```bash
-uv run android-emu-agent app launch s-abc123 com.example.app
-uv run android-emu-agent wait idle s-abc123 --timeout-ms 5000
-uv run android-emu-agent ui snapshot s-abc123 --format text
-uv run android-emu-agent action set-text s-abc123 ^a3 "user@example.com"
-uv run android-emu-agent action set-text s-abc123 ^a4 "hunter2"
-uv run android-emu-agent action tap s-abc123 ^a5
-```
+This repo includes an `android-emu-agent` skill under `skills/android-emu-agent/` for agents that
+support skill directories. The skill contains command lookup material, workflow templates, recovery
+protocols, and safety guidance.
 
-When elements are missing
-
-```bash
-uv run android-emu-agent ui snapshot s-abc123 --full
-uv run android-emu-agent wait idle s-abc123 --timeout-ms 3000
-uv run android-emu-agent ui snapshot s-abc123
-```
-
-Inspect capabilities and use richer selectors
+Install or refresh skill symlinks:
 
 ```bash
-uv run android-emu-agent device capabilities --session s-abc123 --json
-uv run android-emu-agent action tap s-abc123 'text-contains:"Continue"'
-uv run android-emu-agent wait exists s-abc123 --id-matches '.*checkout.*'
-uv run android-emu-agent expect exists s-abc123 --class android.widget.Button --text-contains Pay
+./scripts/dev.sh skills          # all supported local agent targets
+./scripts/dev.sh skills codex    # Codex only
+./scripts/dev.sh skills claude   # Claude Code only
+./scripts/dev.sh skills vscode   # VS Code .agents/skills only
+./scripts/dev.sh skills-validate
 ```
 
-Assert expected state
-
-```bash
-uv run android-emu-agent expect text s-abc123 "Welcome" --timeout-ms 5000
-uv run android-emu-agent expect exists s-abc123 --text "Checkout" --timeout-ms 5000
-uv run android-emu-agent expect current-app s-abc123 --package com.example.app --activity CheckoutActivity
-```
-
-Visual debug
-
-```bash
-uv run android-emu-agent ui screenshot --device emulator-5554 --pull --output ./screen.png
-uv run android-emu-agent ui ground s-abc123 --ref ^a1 --pull --output ./grounding.json
-uv run android-emu-agent artifact bundle s-abc123
-uv run android-emu-agent artifact logs --session s-abc123 --app com.example.app --type errors --since "10m ago"
-```
-
-System surfaces and permissions
-
-```bash
-uv run android-emu-agent system notifications open --session s-abc123
-uv run android-emu-agent system quick-settings open --session s-abc123
-uv run android-emu-agent system permissions list com.example.app --session s-abc123
-uv run android-emu-agent system permissions grant com.example.app android.permission.POST_NOTIFICATIONS --session s-abc123
-uv run android-emu-agent system permissions revoke com.example.app android.permission.POST_NOTIFICATIONS --session s-abc123
-```
-
-Trace an agent run
-
-```bash
-uv run android-emu-agent trace start s-abc123 --label checkout-repro
-uv run android-emu-agent action tap s-abc123 ^a1
-uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent trace stop s-abc123 --output ./artifacts/checkout-repro.aea-trace.zip
-uv run android-emu-agent trace replay ./artifacts/checkout-repro.aea-trace.zip --until-failure
-uv run android-emu-agent trace export ./artifacts/checkout-repro.aea-trace.zip --output ./artifacts/checkout-repro.md
-```
-
-Run a task harness spec
-
-```json
-{
-  "name": "checkout smoke",
-  "session_id": "s-abc123",
-  "steps": [
-    {
-      "name": "open checkout",
-      "action": "tap",
-      "ref": "text:\"Checkout\"",
-      "verify": [{ "type": "exists", "text": "Payment" }]
-    }
-  ],
-  "verifiers": [{ "type": "activity", "activity": "CheckoutActivity" }]
-}
-```
-
-```bash
-uv run android-emu-agent task validate ./checkout-task.json
-uv run android-emu-agent task run ./checkout-task.json --json
-```
-
-Or use a human-editable `.aea` task script:
+After installation, prime the agent with a concrete target request, for example:
 
 ```text
-name "checkout smoke"
-session s-abc123
-tap text:"Checkout" || id:com.example:id/checkout
-verify exists text:"Payment"
-expect activity CheckoutActivity
+I want to interact with my connected Android emulator.
 ```
 
-```bash
-uv run android-emu-agent task validate ./checkout-smoke.aea
-uv run android-emu-agent task run ./checkout-smoke.aea --json
-```
+If symlinks are not usable in your environment, copy `skills/android-emu-agent/` into the target
+agent skill directory instead.
 
-Checked-in `.aea` examples live under `examples/tasks/`:
+## Device Support and Safety
 
-```bash
-uv run android-emu-agent task validate examples/tasks/checkout-smoke.aea
-uv run android-emu-agent task run examples/tasks/checkout-smoke.aea --session s-abc123 --json
-```
+The primary target is an emulator or rooted device. Many UI operations also work on non-root devices
+when `adb` is connected and `uiautomator2` can attach.
 
-The formal accepted syntax is documented in the [`.aea` spec](docs/aea-spec.md).
+Usually safe on non-root devices:
 
-App debug helpers
+- UI snapshots, screenshots, and visual grounding.
+- Tap, long tap, set text, clear, swipe, scroll, back, home, and recents.
+- Wait and expect commands.
+- App install, uninstall, launch, force stop, reset, deep link, and intent commands.
+- Runtime permission list, grant, and revoke commands.
+- Shared-storage file push and pull.
+- Reliability profile, events, process, meminfo, gfxinfo, and native perf captures when supported by
+  the target.
 
-```bash
-uv run android-emu-agent app current --session s-abc123
-uv run android-emu-agent app task-stack --session s-abc123
-uv run android-emu-agent app resolve-intent --session s-abc123 --action android.intent.action.VIEW --data "https://example.com/deep"
-uv run android-emu-agent reliability profile com.example.app --session s-abc123 --json
-uv run android-emu-agent reliability process com.example.app --device emulator-5554
-uv run android-emu-agent reliability meminfo com.example.app --device emulator-5554
-uv run android-emu-agent reliability gfxinfo com.example.app --device emulator-5554
-uv run android-emu-agent reliability perfetto --session s-abc123 --duration 10
-uv run android-emu-agent reliability simpleperf com.example.app --session s-abc123 --duration 10
-uv run android-emu-agent reliability screenrecord --session s-abc123 --duration 10
-```
-
-Debugger (JDI Bridge)
-
-Attach a JDWP debugger to a running Android app's JVM. This requires JDK 17+ and a debuggable app
-(built with `android:debuggable=true` or running on a userdebug/eng device).
-
-```bash
-# Verify bridge startup and JSON-RPC health
-uv run android-emu-agent debug ping s-abc123
-
-# Launch the app in wait-for-debugger mode
-uv run android-emu-agent app launch s-abc123 com.example.app --wait-debugger
-
-# Attach the debugger (finds PID, sets up ADB forward, connects via JDI)
-uv run android-emu-agent debug attach --session s-abc123 --package com.example.app
-
-# Keep the VM suspended after attach (useful with app launch --wait-debugger)
-uv run android-emu-agent debug attach --session s-abc123 --package com.example.app --keep-suspended
-
-# If multiple debuggable processes exist, pick one explicitly
-uv run android-emu-agent debug attach --session s-abc123 --package com.example.app --process com.example.app:remote
-
-# Check debug session status (VM name, version, thread count)
-uv run android-emu-agent debug status --session s-abc123
-
-# Fused app/UI/debug context for agent planning
-uv run android-emu-agent debug observe --session s-abc123 --json
-
-# Set/list/remove breakpoints
-uv run android-emu-agent debug break set com.example.app.MainActivity 42 --session s-abc123
-uv run android-emu-agent debug break list --session s-abc123
-uv run android-emu-agent debug break remove 1 --session s-abc123
-
-# List threads (default skips daemon threads; --all includes them)
-uv run android-emu-agent debug threads --session s-abc123
-uv run android-emu-agent debug threads --session s-abc123 --all
-
-# Drain debugger event queue (breakpoint hits/resolutions, disconnect events)
-uv run android-emu-agent debug events --session s-abc123
-
-# Stack and variable inspection on suspended threads
-uv run android-emu-agent debug stack --session s-abc123 --thread main --max-frames 10
-uv run android-emu-agent debug inspect savedInstanceState --session s-abc123 --thread main --frame 0 --depth 1
-uv run android-emu-agent debug eval savedInstanceState.toString() --session s-abc123 --thread main --frame 0
-
-# Optional: load/clear ProGuard-R8 mapping for deobfuscated names in stack/inspect output
-uv run android-emu-agent debug mapping load ./mapping.txt --session s-abc123
-uv run android-emu-agent debug mapping clear --session s-abc123
-
-# Step execution (observe-act-verify): returns new location + locals atomically
-uv run android-emu-agent debug step-over --session s-abc123 --thread main
-uv run android-emu-agent debug step-into --session s-abc123 --thread main
-uv run android-emu-agent debug step-out --session s-abc123 --thread main
-
-# Resume one thread or all threads
-uv run android-emu-agent debug resume --session s-abc123 --thread main
-uv run android-emu-agent debug resume --session s-abc123
-
-# Detach when done (cleans up ADB forward and bridge process)
-uv run android-emu-agent debug detach --session s-abc123
-```
-
-Step commands default to a 10s timeout (`--timeout-seconds`) and return actionable timeout payloads
-when a step cannot complete. If the main thread has been suspended for too long, responses include
-an ANR warning so you can resume before Android's ANR threshold. When a mapping file is loaded,
-stack class/method names and inspect field names are deobfuscated. Mapping state is per attached
-bridge instance and clears on detach.
-
-`debug observe` is non-destructive by default: it peeks queued debugger events, reads buffered
-logpoint hits, summarizes the latest snapshot refs, and only drains events when `--drain-events` is
-set.
-
-Example debugger workflows
-
-Launch suspended, attach, set breakpoints, then resume
-
-```bash
-# Start app in wait-for-debugger mode (process is paused before app code runs)
-uv run android-emu-agent app launch s-abc123 com.example.app --wait-debugger
-
-# Attach and keep VM suspended (do not auto-resume on attach)
-uv run android-emu-agent debug attach --session s-abc123 --package com.example.app --keep-suspended
-
-# Set breakpoints while execution is still paused
-uv run android-emu-agent debug break set com.example.app.MainActivity 42 --session s-abc123
-uv run android-emu-agent debug break set com.example.checkout.CartViewModel 118 --session s-abc123 --condition "cart.total > 10000"
-
-# Optional: verify configured breakpoints before continuing
-uv run android-emu-agent debug break list --session s-abc123
-
-# Resume only after breakpoints are in place
-uv run android-emu-agent debug resume --session s-abc123
-```
-
-Conditional breakpoint for state-specific bugs
-
-```bash
-# Attach
-uv run android-emu-agent app launch s-abc123 com.example.app --wait-debugger
-uv run android-emu-agent debug attach --session s-abc123 --package com.example.app
-
-# Stop only when cart total crosses threshold
-uv run android-emu-agent debug break set com.example.checkout.CartViewModel 118 --session s-abc123 --condition "cart.total > 10000"
-uv run android-emu-agent debug resume --session s-abc123
-
-# Wait for hit, then inspect state
-uv run android-emu-agent debug events --session s-abc123
-uv run android-emu-agent debug stack --session s-abc123 --thread main --max-frames 15
-uv run android-emu-agent debug inspect cart.total --session s-abc123 --thread main --frame 0
-uv run android-emu-agent debug resume --session s-abc123
-```
-
-Condition syntax supports value paths, literals (`null`, booleans, numbers, strings), boolean
-operators (`!`, `&&`, `||`), comparisons (`==`, `!=`, `>`, `>=`, `<`, `<=`), and parentheses.
-Malformed condition syntax fails fast during `debug break set`. Runtime evaluation failures emit
-`breakpoint_condition_error` and auto-resume.
-
-Non-suspending logpoint trace
-
-```bash
-# Attach and set a logpoint (does not suspend thread)
-uv run android-emu-agent debug attach --session s-abc123 --package com.example.app
-uv run android-emu-agent debug break set com.example.login.LoginViewModel 87 --session s-abc123 --log-message "attempt={hitCount} user={username} locked={isLocked}" --capture-stack --stack-max-frames 8
-
-# Keep app running; hits are buffered with timestamps (and optional stack)
-uv run android-emu-agent debug resume --session s-abc123
-uv run android-emu-agent debug break hits --session s-abc123 --limit 100
-uv run android-emu-agent debug break hits --session s-abc123 --breakpoint-id 1
-
-# Clean up
-uv run android-emu-agent debug break list --session s-abc123
-uv run android-emu-agent debug break remove 1 --session s-abc123
-```
-
-Buffered logpoint example use cases
-
-```bash
-# 1) High-frequency callback tracing without pausing app execution
-uv run android-emu-agent debug break set com.example.sync.SyncWorker 214 --session s-abc123 --log-message "sync run={hitCount} state={state}" --capture-stack --stack-max-frames 6
-uv run android-emu-agent debug resume --session s-abc123
-uv run android-emu-agent debug break hits --session s-abc123 --breakpoint-id 1 --limit 50
-
-# 2) Investigate only hits after a known incident timestamp (epoch ms)
-uv run android-emu-agent debug break hits --session s-abc123 --since-timestamp-ms 1735689600000 --limit 200
-
-# 3) Compare two non-suspending logpoints independently
-uv run android-emu-agent debug break set com.example.login.LoginViewModel 87 --session s-abc123 --log-message "attempt={hitCount} user={username}"
-uv run android-emu-agent debug break set com.example.session.SessionStore 55 --session s-abc123 --log-message "refresh={hitCount} token={tokenState}"
-uv run android-emu-agent debug break hits --session s-abc123 --breakpoint-id 1 --limit 100
-uv run android-emu-agent debug break hits --session s-abc123 --breakpoint-id 2 --limit 100
-```
-
-Crash triage with exception breakpoints
-
-```bash
-# Attach and break on uncaught exceptions
-uv run android-emu-agent app launch s-abc123 com.example.app --wait-debugger
-uv run android-emu-agent debug attach --session s-abc123 --package com.example.app
-uv run android-emu-agent debug break-exception set --session s-abc123 --class '*' --no-caught --uncaught
-
-# Reproduce crash path, then inspect exception event
-uv run android-emu-agent debug resume --session s-abc123
-uv run android-emu-agent debug events --session s-abc123
-uv run android-emu-agent debug stack --session s-abc123 --thread main --max-frames 20
-
-# Optional: narrow to one exception class after first capture
-uv run android-emu-agent debug break-exception remove 1 --session s-abc123
-uv run android-emu-agent debug break-exception set --session s-abc123 --class java.lang.NullPointerException --caught --uncaught
-```
-
-Under the hood, the daemon spawns a **JDI Bridge** sidecar (a Kotlin/JVM subprocess in
-`jdi-bridge/`) that speaks JSON-RPC over stdin/stdout. The bridge connects to the target app via
-JDWP and monitors for VM disconnect events. Build the bridge JAR with:
-
-```bash
-cd jdi-bridge && ./gradlew shadowJar
-```
-
-Emulator lifecycle and snapshots
-
-```bash
-uv run android-emu-agent emulator list-avds
-uv run android-emu-agent emulator start Pixel_8_API_34 --snapshot clean --no-snapshot-save
-uv run android-emu-agent emulator stop emulator-5554
-uv run android-emu-agent emulator snapshot save emulator-5554 clean
-uv run android-emu-agent emulator snapshot restore emulator-5554 clean
-```
-
-These commands require an emulator serial (`emulator-5554`). If you pass a non-emulator serial, you
-will see `ERR_NOT_EMULATOR`. Snapshot restore restarts the emulator by default so the loaded
-snapshot becomes the active runtime state again. Use `--no-restart` if you explicitly want the old
-live-load behavior. Create AVD definitions ahead of time with Android Studio or `avdmanager`.
-
-## Real Devices (Non-Root)
-
-The project targets emulators and rooted devices, but many commands do not enforce root and can work
-on real devices as long as `adb` is connected and uiautomator2 can attach (ATX server on port 7912).
-In practice, these are usually safe on non-root devices:
-
-- UI snapshots, screenshots, and optional visual grounding
-- Actions (tap, set-text, swipe, scroll, back/home/recents)
-- Wait commands
-- Expect commands
-- Device capabilities
-- System surfaces (`notifications`, `quick-settings`) and runtime permission list/grant/revoke
-- App list/install/uninstall/launch/intent/force-stop/reset/deeplink
-- Reliability profile, native perf artifacts, events, process, meminfo, gfxinfo, and background
-  diagnostics
-- File `push` and `pull` to shared storage
-
-Emulator-only commands are `emulator snapshot save|restore`. Root-required commands are listed
-below.
-
-## Root-Required Operations
-
-The following require a rooted device or emulator with root access:
+Root or emulator access is required for:
 
 - `reliability oom-adj`
 - `reliability pull anr`
@@ -648,21 +253,36 @@ The following require a rooted device or emulator with root access:
 - `file app push`
 - `file app pull`
 
-If root is missing, you will see `ERR_PERMISSION`.
+Emulator snapshot save and restore commands require an emulator serial such as `emulator-5554`. A
+non-emulator serial returns `ERR_NOT_EMULATOR`.
 
-## Artifacts
+## Debugger Bridge
 
-Artifacts are written to `~/.android-emu-agent/artifacts` by default.
+Debugger commands attach a JDI Bridge sidecar to a debuggable Android app. They require JDK 17+ and
+an app built with `android:debuggable=true`, or a userdebug/eng target that allows debugging.
 
-- Reliability outputs: `~/.android-emu-agent/artifacts/reliability`
-- File transfers: `~/.android-emu-agent/artifacts/files`
-- Visual grounding: `~/.android-emu-agent/artifacts/visual`
-- Trace archives: `~/.android-emu-agent/traces`
-- Local repo artifact scratch space: `./artifacts/` (ignored by git)
+Minimal debugger flow:
+
+```bash
+uv run android-emu-agent debug ping <session-id>
+uv run android-emu-agent app launch <session-id> com.example.app --wait-debugger
+uv run android-emu-agent debug attach --session <session-id> --package com.example.app --keep-suspended
+uv run android-emu-agent debug break set com.example.app.MainActivity 42 --session <session-id>
+uv run android-emu-agent debug resume --session <session-id>
+uv run android-emu-agent debug events --session <session-id>
+uv run android-emu-agent debug detach --session <session-id>
+```
+
+Build and test the bridge during development:
+
+```bash
+./scripts/dev.sh build-bridge
+./scripts/dev.sh test-bridge
+```
 
 ## Troubleshooting
 
-Quick checks
+Start with these checks:
 
 ```bash
 uv run android-emu-agent device list
@@ -670,145 +290,74 @@ adb devices
 uv run android-emu-agent daemon status --json
 ```
 
-Common errors
+Common errors:
 
-| Error Code                    | Meaning                  | Fix                                             |
-| ----------------------------- | ------------------------ | ----------------------------------------------- |
-| `ERR_STALE_REF`               | Ref from an old snapshot | Re-snapshot; if auto-healed, use warning as cue |
-| `ERR_NOT_FOUND`               | Element not found        | Verify screen, use `--full` or a selector       |
-| `ERR_BLOCKED_INPUT`           | Dialog/IME blocking      | `wait idle` or `back`                           |
-| `ERR_TIMEOUT`                 | Wait condition not met   | Increase `--timeout-ms` or check condition      |
-| `ERR_DEVICE_OFFLINE`          | Device disconnected      | Reconnect and re-run `device list`              |
-| `ERR_SESSION_EXPIRED`         | Session is gone          | Start a new session                             |
-| `ERR_PERMISSION`              | Root required            | Use a rooted device/emulator                    |
-| `ERR_ADB_NOT_FOUND`           | `adb` not on PATH        | Install Android SDK and ensure `adb` is on PATH |
-| `ERR_SDK_TOOL_NOT_FOUND`      | SDK CLI tool missing     | Add `emulator` / `avdmanager` to PATH           |
-| `ERR_ADB_COMMAND`             | ADB command failed       | Check device connectivity and retry             |
-| `ERR_ALREADY_ATTACHED`        | Debug session exists     | Detach first with `debug detach`                |
-| `ERR_DEBUG_NOT_ATTACHED`      | No debug session         | Attach first with `debug attach`                |
-| `ERR_JDK_NOT_FOUND`           | Java not found           | Install JDK 17+ or set `JAVA_HOME`              |
-| `ERR_VM_DISCONNECTED`         | Target VM exited         | Re-launch the app and re-attach                 |
-| `ERR_TRACE_ACTIVE`            | Trace already active     | Stop the active trace before starting another   |
-| `ERR_TRACE_NOT_ACTIVE`        | No active trace          | Start a trace before stopping it                |
-| `ERR_TRACE_INVALID`           | Bad trace archive        | Use a `.aea-trace.zip` produced by `trace stop` |
-| `ERR_TASK_INVALID`            | Bad task spec            | Fix JSON and run `task validate`                |
-| `ERR_TASK_UNSUPPORTED_STEP`   | Unsupported task op      | Use supported action/wait/app/ui operations     |
-| `ERR_EXPECTATION_FAILED`      | Assertion failed         | Check state, selector, or timeout               |
-| `ERR_EXPECTATION_REQUIRED`    | Missing expected state   | Provide `--package` or `--activity`             |
-| `ERR_SNAPSHOT_REQUIRED`       | Missing UI snapshot      | Run `ui snapshot` before visual grounding       |
-| `ERR_VISUAL_REF_NOT_FOUND`    | Ref missing in snapshot  | Use refs from latest snapshot generation        |
-| `ERR_VISUAL_SNAPSHOT_INVALID` | Bad snapshot metadata    | Re-run `ui snapshot` before grounding           |
-| `ERR_INVALID_PERMISSION`      | Bad permission name      | Use a fully-qualified Android permission name   |
-| `ERR_SYSTEM_COMMAND_FAILED`   | System shell failed      | Check device state and Android service support  |
+| Error code                | Meaning                               | Next action                                                  |
+| ------------------------- | ------------------------------------- | ------------------------------------------------------------ |
+| `ERR_STALE_REF`           | Ref came from an old snapshot         | Re-snapshot and retry with a current ref or selector         |
+| `ERR_NOT_FOUND`           | Target element was not found          | Verify the screen, use `--full`, or use another selector     |
+| `ERR_BLOCKED_INPUT`       | Dialog, IME, or overlay blocked input | Dismiss the blocker or wait for idle                         |
+| `ERR_TIMEOUT`             | Wait or expectation did not complete  | Check the condition or increase `--timeout-ms`               |
+| `ERR_SESSION_EXPIRED`     | Session no longer exists              | Start a new session                                          |
+| `ERR_DEVICE_OFFLINE`      | Device disconnected                   | Reconnect and rerun `device list`                            |
+| `ERR_PERMISSION`          | Operation requires root               | Use a rooted target or skip the root-only command            |
+| `ERR_ADB_NOT_FOUND`       | `adb` is not on `PATH`                | Install Android SDK platform-tools and update `PATH`         |
+| `ERR_SDK_TOOL_NOT_FOUND`  | Android SDK CLI tool is missing       | Add `emulator` or `avdmanager` to `PATH`                     |
+| `ERR_JDK_NOT_FOUND`       | Java runtime is missing               | Install JDK 17+ or set `JAVA_HOME`                           |
+| `ERR_TASK_INVALID`        | JSON task spec is invalid             | Fix the task and rerun `task validate`                       |
+| `ERR_TASK_SCRIPT_INVALID` | `.aea` script syntax is invalid       | Fix the line reported by the error and rerun `task validate` |
+| `ERR_EXPECTATION_FAILED`  | Expected state was not observed       | Inspect actual state, selector, and timeout                  |
 
-For deeper guidance, see `skills/android-emu-agent/references/troubleshooting.md`.
+For deeper recovery guidance, see `skills/android-emu-agent/references/troubleshooting.md`.
 
-Every JSON response also includes a `diagnostic_id`, and the same ID is returned as the
-`x-diagnostic-id` header for correlation with daemon request logs.
+## Documentation
 
-## CLI Reference
-
-Full auto-generated CLI reference is available at [`docs/reference.md`](docs/reference.md).
-
-To regenerate or browse the docs locally:
+`docs/reference.md` is generated from the live Typer CLI. Regenerate it instead of hand-editing
+command tables:
 
 ```bash
-./scripts/dev.sh docs-gen      # Regenerate docs/reference.md from CLI
-./scripts/dev.sh docs          # Build to site/
-./scripts/dev.sh docs-serve    # Serve at http://127.0.0.1:8000
+./scripts/dev.sh docs-gen
+./scripts/dev.sh docs
+./scripts/dev.sh docs-serve
 ```
 
-A concise command list also lives at `skills/android-emu-agent/references/command-reference.md`.
-
-If you prefer an interactive guide:
-
-```bash
-uv run android-emu-agent --help
-uv run android-emu-agent <group> --help
-```
+The docs site navigation is defined in `mkdocs.yml`.
 
 ## Architecture
 
 ```text
-┌─────────────────┐     Unix Socket      ┌──────────────────────────────────┐
-│                 │  ◄────────────────►  │            Daemon                │
-│   CLI Client    │                      │  ┌────────────────────────────┐  │
-│                 │                      │  │     Device Manager         │  │
-└─────────────────┘                      │  │  (adbutils, uiautomator2)  │  │
-                                         │  └────────────────────────────┘  │
-                                         │  ┌────────────────────────────┐  │
-                                         │  │    Session Manager         │  │
-                                         │  │  (refs, state, SQLite)     │  │
-                                         │  └────────────────────────────┘  │
-                                         │  ┌────────────────────────────┐  │
-                                         │  │    UI Snapshotter          │  │
-                                         │  │  (lxml, filtering)         │  │
-                                         │  └────────────────────────────┘  │
-                                         │  ┌────────────────────────────┐  │
-                                         │  │    Debug Manager           │  │
-                                         │  │  (JDI Bridge, JDWP)       │──┼──► JDI Bridge
-                                         │  └────────────────────────────┘  │    (Kotlin subprocess)
-                                         └──────────────────────────────────┘
-                                                         │
-                                                         ▼
-                                         ┌──────────────────────────────────┐
-                                         │     Android Device/Emulator      │
-                                         │  (ATX Server on port 7912)       │
-                                         └──────────────────────────────────┘
+CLI client
+  -> FastAPI daemon over /tmp/android-emu-agent.sock
+    -> session manager, UI snapshotter, actions, waits, expectations, tasks, traces, artifacts
+    -> adbutils and uiautomator2 for device I/O
+    -> Kotlin JDI Bridge subprocess for debugger flows
+      -> Android emulator or device
 ```
 
-## Development Scripts
+## Development
 
-The `./scripts/dev.sh` helper centralizes common development tasks. Make it executable with
-`chmod +x scripts/dev.sh` if needed.
+The `./scripts/dev.sh` helper is the canonical entry point for local development.
 
-| Command                             | Description                                              |
-| ----------------------------------- | -------------------------------------------------------- |
-| `./scripts/dev.sh setup`            | Install dependencies                                     |
-| `./scripts/dev.sh check`            | Run all checks (lint + typecheck + unit tests + docs)    |
-| `./scripts/dev.sh test`             | Run all tests                                            |
-| `./scripts/dev.sh test-unit`        | Run unit tests only                                      |
-| `./scripts/dev.sh test-integration` | Run integration tests (requires emulator)                |
-| `./scripts/dev.sh build-bridge`     | Build the JDI Bridge fat JAR (jdi-bridge/)               |
-| `./scripts/dev.sh test-bridge`      | Run JDI Bridge Kotlin tests                              |
-| `./scripts/dev.sh lint`             | Run linter                                               |
-| `./scripts/dev.sh format`           | Format code                                              |
-| `./scripts/dev.sh format-md`        | Format Markdown                                          |
-| `./scripts/dev.sh lint-md`          | Lint Markdown                                            |
-| `./scripts/dev.sh md`               | Format + lint Markdown                                   |
-| `./scripts/dev.sh hooks`            | Install git hooks                                        |
-| `./scripts/dev.sh typecheck`        | Run type checkers (mypy + pyright)                       |
-| `./scripts/dev.sh daemon`           | Start the daemon server                                  |
-| `./scripts/dev.sh bump-version`     | Interactively bump version, refresh lock, optionally tag |
-| `./scripts/dev.sh release`          | Build artifacts and publish GitHub release assets        |
-| `./scripts/dev.sh release --bump`   | Patch bump, tag, and publish GitHub release assets       |
-| `./scripts/dev.sh verify-release`   | Verify release bridge JAR/checksum assets exist          |
-| `./scripts/dev.sh publish-pypi`     | Rebuild checked Python dist and upload with Twine        |
-| `./scripts/dev.sh docs`             | Build documentation (mkdocs)                             |
-| `./scripts/dev.sh docs-serve`       | Serve documentation locally                              |
-| `./scripts/dev.sh docs-gen`         | Regenerate CLI reference from Typer app                  |
-| `./scripts/dev.sh skills [target]`  | Symlink skills into agent directories                    |
-| `./scripts/dev.sh skills-validate`  | Validate bundled skill structure and references          |
-| `./scripts/dev.sh skills-codex`     | Symlink skills into Codex agent directory                |
-| `./scripts/dev.sh skills-vscode`    | Symlink skills into VS Code `.agents/skills`             |
-| `./scripts/dev.sh skills-claude`    | Symlink skills into Claude agent directory               |
+| Command                             | Purpose                                                              |
+| ----------------------------------- | -------------------------------------------------------------------- |
+| `./scripts/dev.sh setup`            | Install dependencies                                                 |
+| `./scripts/dev.sh check`            | Run lint, type checks, unit tests, docs checks, and skill validation |
+| `./scripts/dev.sh test-unit`        | Run unit tests                                                       |
+| `./scripts/dev.sh test-integration` | Run emulator/device-dependent tests                                  |
+| `./scripts/dev.sh build-bridge`     | Build the JDI Bridge fat JAR                                         |
+| `./scripts/dev.sh test-bridge`      | Run Kotlin bridge tests                                              |
+| `./scripts/dev.sh docs-gen`         | Regenerate `docs/reference.md`                                       |
+| `./scripts/dev.sh docs`             | Build the MkDocs site into `site/`                                   |
+| `./scripts/dev.sh md`               | Format and lint Markdown                                             |
+| `./scripts/dev.sh skills-validate`  | Validate bundled agent skill metadata and references                 |
 
-### Raw `uv run` commands
+Useful raw commands:
 
 ```bash
-# Install with dev dependencies
-uv sync --all-extras
-
-# Run tests
+uv run android-emu-agent --help
+uv run android-emu-agent <group> --help
 uv run pytest tests/unit -v
-
-# Run linter
 uv run ruff check .
-
-# Format code
-uv run ruff format .
-
-# Type check
 uv run mypy src/
 ```
 

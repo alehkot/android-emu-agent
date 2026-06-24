@@ -1,82 +1,74 @@
-# Drive Android apps through a tight observe, act, verify loop
+# Drive Android Apps from an Observe, Act, Verify Loop
 
-Android Emu Agent gives LLMs and developer tools a practical control plane for emulators and rooted
-devices: compact UI snapshots, stable action refs, richer selectors with capability introspection,
-explicit expectations, JSON task specs, human-editable `.aea` task scripts, app diagnostics,
-artifacts, native performance captures, file transfer, JVM debugging, and replayable trace archives
-from one CLI. It also exposes shell-backed system surfaces for notification shade, Quick Settings,
-and runtime permission setup.
+Android Emu Agent gives agents and developer tools one control plane for Android UI automation:
+compact snapshots, precise actions, explicit verification, and evidence collection through a
+daemon-backed CLI.
 
-[Explore the CLI reference](reference.md) | [See workflow examples](workflow-examples.md) |
-[See task script examples](tasks.md) | [Read the `.aea` spec](aea-spec.md) |
-[View source](https://github.com/alehkot/android-emu-agent)
+Use this site to learn the workflow first, then use the generated command reference for exact flags.
 
-```console
-$ uv run android-emu-agent session start --device emulator-5554
-status: done
-session_id: s-abc123
+## Start by Goal
 
-$ uv run android-emu-agent ui snapshot s-abc123 --format text
-context: com.example.app/.MainActivity
-^a1 button "Sign in"
-^a2 input  "Email"
-^a3 input  "Password"
+| Goal                               | Page                                                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Run a first UI automation loop     | [Connect to a Device and Start a Session](workflow-examples.md#connect-to-a-device-and-start-a-session) |
+| Follow multi-command procedures    | [Workflow examples](workflow-examples.md)                                                               |
+| Write reusable app flows           | [Task script guide](tasks.md)                                                                           |
+| Look up `.aea` parser rules        | [`.aea` task script specification](aea-spec.md)                                                         |
+| Look up command syntax and options | [Generated CLI reference](reference.md)                                                                 |
 
-$ uv run android-emu-agent action tap s-abc123 ^a1
-status: done
-generation: 43
-```
+## Core Workflow
 
-## Core capabilities
+1. Start or connect to an emulator or rooted device.
+2. Start a session for that target.
+3. Capture a compact snapshot and choose a `^ref` or selector.
+4. Run one action.
+5. Verify the result with a fresh snapshot, wait, expectation, artifact, trace, or debugger read.
 
-| Capability                  | What it gives you                                                                                                                                  |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Compact UI snapshots**    | Actionable snapshots across XML Views, Compose, Litho, and mixed Android screens.                                                                  |
-| **Generation-scoped refs**  | Short handles like `^a1` for precise taps and text entry, with ref healing when the target can be rebound.                                         |
-| **Selector introspection**  | Exact, contains, regex, fallback, state-filter, class, resource ID, content-desc, coordinate, and ref selector support is discoverable per target. |
-| **Daemon-first I/O**        | A FastAPI daemon over a Unix socket keeps device sessions warm while the CLI stays thin and scriptable.                                            |
-| **Debugger bridge**         | Java 17+ JDI support plus fused app/UI/debug observations for agent planning.                                                                      |
-| **Forensics and artifacts** | App health profiles, native perf captures, screenshots, logs, process data, memory reports, and gfxinfo for evidence.                              |
-| **Trace archives**          | `.aea-trace.zip` archives capture daemon exchanges for dry replay and Markdown reports.                                                            |
-| **Task harness**            | JSON task specs and `.aea` scripts run ordered steps with step-level and final verifiers.                                                          |
-| **Expectations**            | Assertion commands turn expected UI/app state into pass/fail JSON.                                                                                 |
-| **Visual grounding**        | Optional screenshot-to-ref metadata ties bounds to image artifacts without requiring vision.                                                       |
-| **System surfaces**         | Notification shade, Quick Settings, and runtime permission controls for setup and inspection.                                                      |
-| **Agent skills included**   | Ready-to-install skill docs with command references, recovery protocols, workflow examples, and safety guardrails.                                 |
-
-## Built for repeated agent work
-
-1. **Start a session.** Bind commands to a specific emulator or rooted device.
-2. **Observe the screen.** Capture compact text or JSON snapshots with actionable refs.
-3. **Act precisely.** Tap, type, clear, wait, launch apps, resolve intents, and inspect task state.
-4. **Verify with evidence.** Re-snapshot, collect artifacts, read logs, and escalate into debugger
-   or forensics flows.
-
-## Command surface
-
-`daemon` `device` `expect` `session` `system` `task` `trace` `ui` `action` `wait` `app` `artifact`
-`emulator` `reliability` `file` `debug`
-
-Every command keeps human output concise and supports stable JSON where machine consumers need it.
-The generated [CLI reference](reference.md) is the source of truth for flags and payloads. For
-multi-command flows, see the [workflow examples](workflow-examples.md), the
-[task script examples](tasks.md), and the [`.aea` task script specification](aea-spec.md).
-
-## Architecture at a glance
-
-| Layer            | Role                                                                         |
-| ---------------- | ---------------------------------------------------------------------------- |
-| **CLI**          | Typer commands, concise human output, and `--json` for pipelines.            |
-| **Daemon**       | FastAPI over `/tmp/android-emu-agent.sock` with persistent device sessions.  |
-| **Device I/O**   | `adbutils`, `uiautomator2`, screenshots, file transfer, logs, and app state. |
-| **Debug bridge** | Kotlin JDI Bridge for debugger flows against debuggable Android apps.        |
-
-## Quick start
+Example:
 
 ```bash
-uv sync
-uv run android-emu-agent emulator list-avds
-uv run android-emu-agent daemon start
-uv run android-emu-agent session start --device emulator-5554
-uv run android-emu-agent ui snapshot s-abc123 --format text
+uv run android-emu-agent session start --device emulator-5554 --json
+uv run android-emu-agent ui snapshot <session-id> --format text
+uv run android-emu-agent action tap <session-id> ^a1
+uv run android-emu-agent expect exists <session-id> --text "Welcome" --timeout-ms 5000
 ```
+
+## Main Capabilities
+
+| Capability                     | Use it when                                                                            |
+| ------------------------------ | -------------------------------------------------------------------------------------- |
+| Compact UI snapshots           | You need actionable refs for the current screen.                                       |
+| Rich selectors                 | A stable ref is not available or a reusable flow should survive UI generation changes. |
+| Waits and expectations         | You need explicit pass/fail checks instead of sleeping.                                |
+| Task harness                   | A flow should be reviewable, repeatable, and validated before it touches a device.     |
+| Trace archives                 | A flaky run needs replayable daemon request/response evidence.                         |
+| Visual grounding               | A human or vision model needs screenshot coordinates for selected refs.                |
+| Artifacts and reliability data | A failure needs screenshots, logs, process state, memory, gfxinfo, or native traces.   |
+| System surfaces                | Setup requires notifications, Quick Settings, or runtime permission changes.           |
+| Debugger bridge                | UI signals are not enough and the target app is debuggable.                            |
+
+## Architecture
+
+```text
+CLI client
+  -> FastAPI daemon over /tmp/android-emu-agent.sock
+    -> sessions, snapshots, actions, waits, expectations, tasks, traces, artifacts
+    -> adbutils and uiautomator2
+    -> Kotlin JDI Bridge for debugger flows
+      -> Android emulator or device
+```
+
+The CLI stays scriptable and concise. The daemon keeps device sessions warm, owns request
+diagnostics, and returns structured JSON for agent pipelines.
+
+## Where Exact Syntax Lives
+
+`reference.md` is generated from the live Typer CLI and is the command source of truth. Regenerate
+it from the repo root with:
+
+```bash
+./scripts/dev.sh docs-gen
+```
+
+Do not hand-edit generated command tables. Use the task guide, workflow examples, and `.aea`
+specification for reader-facing explanations and procedures.
