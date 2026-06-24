@@ -1,38 +1,59 @@
 # Android Emu Agent
 
-Android Emu Agent is a daemon-backed CLI for Android UI automation and debugging. It is designed for
-coding agents and developer tools that need to observe a screen, act on it, verify the result, and
-collect evidence from emulators or rooted devices.
+Android Emu Agent turns an Android emulator or device into a reliable control plane for coding
+agents.
+
+It gives agents what raw `adb`, brittle coordinate taps, and one-off test scripts do not: a current
+screen model, generation-scoped action targets, explicit verification, reusable flows, and evidence
+when something fails.
 
 [Documentation](https://alehkot.github.io/android-emu-agent/) |
 [CLI reference](https://alehkot.github.io/android-emu-agent/reference/) |
 [Source](https://github.com/alehkot/android-emu-agent)
 
-Start here:
+## 10-Second Pitch
 
-- [Workflow examples](docs/workflow-examples.md)
-- [Task script guide](docs/tasks.md)
-- [`.aea` task script specification](docs/aea-spec.md)
-- [Generated CLI reference](docs/reference.md)
+If a coding agent needs to use Android like a developer would, Android Emu Agent provides the loop:
 
-## What It Does
+```text
+observe the screen -> act on a known target -> verify the result -> keep evidence
+```
 
-Android Emu Agent keeps device I/O in a long-running daemon and exposes a thin `android-emu-agent`
-CLI. The core loop is:
+| Need                                  | What Android Emu Agent gives you                                      |
+| ------------------------------------- | --------------------------------------------------------------------- |
+| Understand the current screen         | Compact UI snapshots with actionable refs such as `^a1`               |
+| Tap, type, swipe, and navigate safely | Refs, semantic selectors, fallback selectors, and capability reports  |
+| Avoid blind sleeps                    | Waits and expectations with structured pass/fail results              |
+| Repeat an app flow                    | JSON task specs and human-editable `.aea` scripts                     |
+| Debug failures instead of guessing    | Screenshots, logs, trace archives, artifact bundles, reliability data |
+| Go below the UI when needed           | Kotlin JDI Bridge flows for debuggable apps                           |
+| Fit into an agent toolchain           | Thin CLI, daemon-backed sessions, JSON output, bundled agent skills   |
 
-1. Observe the current Android screen with a compact UI snapshot.
-2. Act on snapshot refs such as `^a1` or selector strings such as `text:"Sign in"`.
-3. Verify the next state with waits, expectations, screenshots, logs, traces, or debugger context.
+## First Useful Loop
 
-Use it for:
+After install, run this once you have an emulator or device visible to `adb`:
 
-- UI snapshots across classic XML Views, Compose, Litho, and mixed screens.
-- Precise actions through refs, selector strings, state filters, and coordinates.
-- Assertion-style checks for text, element existence, activity, idle state, and foreground app.
-- Reusable JSON task specs and human-editable `.aea` task scripts.
-- Trace archives, screenshot grounding, logs, reliability profiles, and performance captures.
-- Android system setup such as notifications, Quick Settings, and runtime permissions.
-- JVM debugger flows through the Kotlin JDI Bridge when the app is debuggable.
+```bash
+uv run android-emu-agent daemon start
+uv run android-emu-agent session start --device emulator-5554 --json
+uv run android-emu-agent ui snapshot <session-id> --format text
+uv run android-emu-agent action tap <session-id> ^a1
+uv run android-emu-agent expect exists <session-id> --text "Welcome" --timeout-ms 5000
+```
+
+The important part is the contract: every action starts from observed state and ends with an
+explicit check, not an assumption.
+
+## Start by Goal
+
+| Goal                                                    | Start here                                           |
+| ------------------------------------------------------- | ---------------------------------------------------- |
+| See complete workflow examples                          | [Workflow examples](docs/workflow-examples.md)       |
+| Write a reusable Android flow                           | [Task script guide](docs/tasks.md)                   |
+| Look up `.aea` syntax                                   | [`.aea` task script specification](docs/aea-spec.md) |
+| Find exact CLI flags                                    | [Generated CLI reference](docs/reference.md)         |
+| Install the bundled agent skill                         | [Agent Skill](#agent-skill)                          |
+| Understand daemon sessions, refs, selectors, and traces | [Core Concepts](#core-concepts)                      |
 
 ## Requirements
 
