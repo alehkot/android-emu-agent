@@ -11,7 +11,7 @@ when something fails.
 [CLI reference](https://alehkot.github.io/android-emu-agent/reference/) |
 [Source](https://github.com/alehkot/android-emu-agent)
 
-## 10-Second Pitch
+## What You Get
 
 If a coding agent needs to use Android like a developer would, Android Emu Agent provides the loop:
 
