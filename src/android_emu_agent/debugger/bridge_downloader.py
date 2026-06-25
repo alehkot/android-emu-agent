@@ -11,7 +11,7 @@ from urllib.error import HTTPError, URLError
 from android_emu_agent.errors import bridge_download_failed_error
 
 _DEFAULT_BRIDGE_REPO = "alehkot/android-emu-agent"
-_DEFAULT_BRIDGE_VERSION = "0.1.14"
+_DEFAULT_BRIDGE_VERSION = "0.1.15"
 _DEFAULT_TIMEOUT_SECS = 20
 
 
