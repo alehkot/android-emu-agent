@@ -46,14 +46,14 @@ explicit check, not an assumption.
 
 ## Start by Goal
 
-| Goal                                                    | Start here                                           |
-| ------------------------------------------------------- | ---------------------------------------------------- |
-| See complete workflow examples                          | [Workflow examples](docs/workflow-examples.md)       |
-| Write a reusable Android flow                           | [Task script guide](docs/tasks.md)                   |
-| Look up `.aea` syntax                                   | [`.aea` task script specification](docs/aea-spec.md) |
-| Find exact CLI flags                                    | [Generated CLI reference](docs/reference.md)         |
-| Install the bundled agent skill                         | [Agent Skill](#agent-skill)                          |
-| Understand daemon sessions, refs, selectors, and traces | [Core Concepts](#core-concepts)                      |
+| Goal                                                    | Start here                                                                                |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| See complete workflow examples                          | [Workflow examples](https://alehkot.github.io/android-emu-agent/workflow-examples/)       |
+| Write a reusable Android flow                           | [Task script guide](https://alehkot.github.io/android-emu-agent/tasks/)                   |
+| Look up `.aea` syntax                                   | [`.aea` task script specification](https://alehkot.github.io/android-emu-agent/aea-spec/) |
+| Find exact CLI flags                                    | [Generated CLI reference](https://alehkot.github.io/android-emu-agent/reference/)         |
+| Install the bundled agent skill                         | [Agent Skill](#agent-skill)                                                               |
+| Understand daemon sessions, refs, selectors, and traces | [Core Concepts](#core-concepts)                                                           |
 
 ## Requirements
 
@@ -213,14 +213,14 @@ uv run android-emu-agent artifact bundle <session-id> --json
 
 ## Common Workflows
 
-| Goal                                                    | Start here                                               |
-| ------------------------------------------------------- | -------------------------------------------------------- |
-| Inspect and act on a screen                             | [Workflow examples](docs/workflow-examples.md)           |
-| Write a reusable `.aea` flow                            | [Task script guide](docs/tasks.md)                       |
-| Look up exact `.aea` grammar                            | [`.aea` specification](docs/aea-spec.md)                 |
-| Look up a command option                                | [Generated CLI reference](docs/reference.md)             |
-| Diagnose stale refs, missing elements, or blocked input | `skills/android-emu-agent/references/troubleshooting.md` |
-| Use debugger breakpoints, stack, inspect, or logpoints  | `skills/android-emu-agent/references/debugging.md`       |
+| Goal                                                    | Start here                                                                          |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Inspect and act on a screen                             | [Workflow examples](https://alehkot.github.io/android-emu-agent/workflow-examples/) |
+| Write a reusable `.aea` flow                            | [Task script guide](https://alehkot.github.io/android-emu-agent/tasks/)             |
+| Look up exact `.aea` grammar                            | [`.aea` specification](https://alehkot.github.io/android-emu-agent/aea-spec/)       |
+| Look up a command option                                | [Generated CLI reference](https://alehkot.github.io/android-emu-agent/reference/)   |
+| Diagnose stale refs, missing elements, or blocked input | `skills/android-emu-agent/references/troubleshooting.md`                            |
+| Use debugger breakpoints, stack, inspect, or logpoints  | `skills/android-emu-agent/references/debugging.md`                                  |
 
 ## Agent Skill
 
