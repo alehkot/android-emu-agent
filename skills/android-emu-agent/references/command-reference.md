@@ -337,7 +337,7 @@ provides them.
   `[--pull] [--output <path>]` Save screenshot (optionally copy to local path).
 - `artifact logs <session_id>` Capture logcat.
 - `artifact logs --session <session_id> [--package <pkg>|--app <pkg>] [--type <kind>|--level <lvl>]`
-  `[--since <t>] [--follow]` Capture filtered logcat.
+  `[--since <t>]` Capture filtered logcat.
 - `artifact bundle <session_id>` Save debug bundle.
 
 When `--pull` is set, screenshots are copied to `--output` or the current working directory.
@@ -348,6 +348,9 @@ Use `--since` to limit logcat by line count, native logcat timestamp, ISO 8601, 
 - `artifact logs <session_id> --since "2026-02-22T20:24:23Z"` ISO 8601 timestamp.
 - `artifact logs <session_id> --since "10m ago"` Relative timestamp.
 - `artifact logs <session_id> --since 100` Show last 100 lines.
+
+Artifact log capture is bounded and does not stream. Use `adb -s <emulator-serial> logcat` for a
+live stream; the retained `--follow` compatibility flag returns `ERR_LOG_FOLLOW_UNSUPPORTED`.
 
 Use `--type` for friendly log filters (`errors`, `warnings`, `info`, etc.) while `--level` remains a
 compatible alias.

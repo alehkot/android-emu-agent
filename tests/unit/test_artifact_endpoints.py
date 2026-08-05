@@ -174,3 +174,20 @@ def test_artifact_logs_surfaces_manager_errors() -> None:
     data = resp.json()
     assert data["status"] == "error"
     assert data["error"]["code"] == "ERR_INVALID_LOGCAT_SINCE"
+
+
+def test_artifact_logs_rejects_non_streaming_follow_mode() -> None:
+    """Follow mode should fail quickly instead of hanging the buffered HTTP request."""
+    with _client_with_core() as (client, artifact_manager):
+        resp = client.post(
+            "/artifacts/logs",
+            json={
+                "session_id": "s-abc123",
+                "follow": True,
+            },
+        )
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["error"]["code"] == "ERR_LOG_FOLLOW_UNSUPPORTED"
+    assert artifact_manager.calls == []

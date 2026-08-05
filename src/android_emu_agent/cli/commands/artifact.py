@@ -72,7 +72,11 @@ def artifact_logs(
         "--since",
         help="Since filter: line count, logcat timestamp, ISO 8601, or relative (e.g. '10m ago')",
     ),
-    follow: bool = typer.Option(False, "--follow", help="Follow logs (live stream)"),
+    follow: bool = typer.Option(
+        False,
+        "--follow",
+        help="Unsupported compatibility flag; use adb logcat for live streaming",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Pull logcat logs."""
@@ -84,7 +88,7 @@ def artifact_logs(
         typer.echo(f"Error: {exc}")
         raise typer.Exit(code=1) from None
 
-    client = DaemonClient(timeout=3600.0 if follow else 10.0)
+    client = DaemonClient()
     payload: dict[str, str | bool | None] = {
         "session_id": resolved_session,
         "package": package,

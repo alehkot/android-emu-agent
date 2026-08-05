@@ -2247,7 +2247,7 @@ android-emu-agent artifact logs [OPTIONS] [SESSION_ID]
 - `--type TEXT`: Log type (errors, warnings, info, debug, verbose, fatal, silent)
 - `--since TEXT`: Since filter: line count, logcat timestamp, ISO 8601, or relative (e.g. &#x27;10m
   ago&#x27;)
-- `--follow`: Follow logs (live stream)
+- `--follow`: Unsupported compatibility flag; use adb logcat for live streaming
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 

@@ -145,6 +145,19 @@ def console_auth_error(reason: str) -> AgentError:
     )
 
 
+def log_follow_unsupported_error() -> AgentError:
+    """Create error for the non-streaming artifact log follow mode."""
+    return AgentError(
+        code="ERR_LOG_FOLLOW_UNSUPPORTED",
+        message="Artifact log capture does not support live streaming",
+        context={"follow": True},
+        remediation=(
+            "Omit --follow for a bounded artifact, or run "
+            "'adb -s <emulator-serial> logcat' for a live stream."
+        ),
+    )
+
+
 def snapshot_failed_error(name: str, reason: str) -> AgentError:
     """Create error for snapshot operation failure."""
     return AgentError(

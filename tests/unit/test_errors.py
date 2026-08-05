@@ -115,6 +115,14 @@ class TestErrorConstructors:
         assert error.code == "ERR_CONSOLE_AUTH"
         assert error.context == {"reason": "token missing"}
 
+    def test_log_follow_unsupported_error(self) -> None:
+        """Should direct live-log users to the streaming ADB command."""
+        from android_emu_agent.errors import log_follow_unsupported_error
+
+        error = log_follow_unsupported_error()
+        assert error.code == "ERR_LOG_FOLLOW_UNSUPPORTED"
+        assert "adb" in error.remediation
+
     def test_invalid_package_error(self) -> None:
         """Should create invalid package error."""
         from android_emu_agent.errors import invalid_package_error

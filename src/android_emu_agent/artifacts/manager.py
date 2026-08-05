@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import structlog
 
-from android_emu_agent.errors import AgentError
+from android_emu_agent.errors import AgentError, log_follow_unsupported_error
 from android_emu_agent.utils.time_parser import parse_datetime
 
 if TYPE_CHECKING:
@@ -140,6 +140,9 @@ class ArtifactManager:
         filename: str | None = None,
     ) -> Path:
         """Pull logcat logs from device."""
+        if follow:
+            raise log_follow_unsupported_error()
+
         if filename is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"{session_id}_{timestamp}_logcat.txt"
@@ -147,13 +150,10 @@ class ArtifactManager:
         output_path = self.output_dir / filename
 
         def _pull() -> str:
-            cmd_parts = ["logcat"]
-            if not follow:
-                cmd_parts.append("-d")
-            resolved_since, since_is_datetime = resolve_logcat_since(since)
+            cmd_parts = ["logcat", "-d"]
+            resolved_since, _since_is_datetime = resolve_logcat_since(since)
             if resolved_since:
-                since_flag = "-T" if follow and since_is_datetime else "-t"
-                cmd_parts.extend([since_flag, resolved_since])
+                cmd_parts.extend(["-t", resolved_since])
 
             normalized_level = normalize_log_priority(level)
             if normalized_level:

@@ -122,6 +122,7 @@ from android_emu_agent.device.manager import Orientation
 from android_emu_agent.errors import (
     AgentError,
     device_offline_error,
+    log_follow_unsupported_error,
     not_found_error,
     session_expired_error,
     stale_ref_error,
@@ -1875,6 +1876,9 @@ async def pull_logs(req: ArtifactLogsRequest) -> EndpointResponse:
     session = await core.session_manager.get_session(req.session_id)
     if not session:
         return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    if req.follow:
+        return _error_response(log_follow_unsupported_error(), status_code=400)
 
     if req.package:
         try:

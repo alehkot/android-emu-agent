@@ -182,8 +182,8 @@ uv run android-emu-agent ui screenshot --device <serial> --pull
 
 # Recent logcat logs
 uv run android-emu-agent artifact logs <session_id>
-# Filtered logcat for one app (optionally follow)
-uv run android-emu-agent artifact logs --session <session_id> --app com.example.app --type errors --since "10m ago" --follow
+# Filtered bounded logcat for one app
+uv run android-emu-agent artifact logs --session <session_id> --app com.example.app --type errors --since "10m ago"
 
 # Full debug bundle
 uv run android-emu-agent artifact bundle <session_id>

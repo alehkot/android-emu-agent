@@ -48,7 +48,7 @@ def test_artifact_logs_builds_payload_with_filters() -> None:
     method, path, payload, timeout = calls[0]
     assert method == "POST"
     assert path == "/artifacts/logs"
-    assert timeout == 3600.0
+    assert timeout == 10.0
     assert payload == {
         "session_id": "s-abc123",
         "package": "com.example.app",

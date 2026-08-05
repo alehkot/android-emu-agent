@@ -71,18 +71,18 @@ class TestPullLogs:
             package="com.example.app",
             level=None,
             since=None,
-            follow=True,
+            follow=False,
         )
 
         output = path.read_text()
         assert "keep" in output
         assert "ignore" not in output
         second_call = mock_device.shell.call_args_list[1][0][0]
-        assert " -d " not in f" {second_call} "
+        assert " -d " in f" {second_call} "
 
     @pytest.mark.asyncio
-    async def test_pull_logs_uses_since_datetime_with_follow(self, tmp_path) -> None:
-        """Should use -T for follow mode when --since resolves to datetime."""
+    async def test_pull_logs_uses_since_datetime(self, tmp_path) -> None:
+        """Should use bounded -t capture when --since resolves to datetime."""
         from android_emu_agent.artifacts.manager import ArtifactManager
 
         manager = ArtifactManager(output_dir=tmp_path)
@@ -97,12 +97,26 @@ class TestPullLogs:
             package=None,
             level=None,
             since="10m ago",
-            follow=True,
+            follow=False,
         )
 
         command = mock_device.shell.call_args_list[0][0][0]
-        assert " -T " in f" {command} "
-        assert " -t " not in f" {command} "
+        assert " -t " in f" {command} "
+        assert " -T " not in f" {command} "
+
+    @pytest.mark.asyncio
+    async def test_pull_logs_rejects_follow_before_shelling(self, tmp_path) -> None:
+        """The buffered artifact API must not launch a non-terminating logcat command."""
+        from android_emu_agent.artifacts.manager import ArtifactManager
+
+        manager = ArtifactManager(output_dir=tmp_path)
+        mock_device = MagicMock()
+
+        with pytest.raises(AgentError) as exc_info:
+            await manager.pull_logs(mock_device, session_id="s-abc123", follow=True)
+
+        assert exc_info.value.code == "ERR_LOG_FOLLOW_UNSUPPORTED"
+        mock_device.shell.assert_not_called()
 
 
 def test_resolve_logcat_since_supports_short_relative_form() -> None:
