@@ -121,3 +121,16 @@ class TestBridgeClientLifecycle:
             "detail": "bridge stdout closed",
             "returncode": 17,
         }
+
+    @pytest.mark.asyncio
+    async def test_event_queue_keeps_newest_notifications(self) -> None:
+        """A notification storm should not block stdout processing or grow without bound."""
+        with patch("android_emu_agent.debugger.bridge_client._MAX_BRIDGE_EVENTS", 2):
+            client = BridgeClient(Path("/usr/bin/java"), Path("/tmp/fake.jar"))
+
+        client._queue_event({"sequence": 1})
+        client._queue_event({"sequence": 2})
+        client._queue_event({"sequence": 3})
+
+        assert await client.next_event() == {"sequence": 2}
+        assert await client.next_event() == {"sequence": 3}

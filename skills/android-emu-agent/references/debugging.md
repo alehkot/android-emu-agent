@@ -125,6 +125,7 @@ On hit, `debug events` returns `exception_hit` with throw/catch locations and st
 
 Debugger output is intentionally bounded:
 
+- `debug events` retains the newest 2,000 notifications per attached session.
 - `debug stack` defaults to 10 frames. Use `--max-frames` to inspect deeper stacks.
 - `debug inspect` defaults to depth 1. Use `--depth` (1..3) to expand nested objects.
 - `debug threads` defaults to a bounded list. Use `--all` for broader output.

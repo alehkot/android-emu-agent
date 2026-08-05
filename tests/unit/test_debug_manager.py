@@ -1046,6 +1046,15 @@ class TestMilestone2DebugMethods:
         ]
         assert len(manager._event_queues["s-test"]) == 3
 
+    def test_event_queue_keeps_newest_notifications(self) -> None:
+        manager = DebugManager()
+        with patch("android_emu_agent.debugger.manager._MAX_EVENT_HISTORY", 2):
+            manager._queue_event("s-test", {"sequence": 1}, event_type="breakpoint_hit")
+            manager._queue_event("s-test", {"sequence": 2}, event_type="breakpoint_hit")
+            manager._queue_event("s-test", {"sequence": 3}, event_type="breakpoint_hit")
+
+        assert [event["sequence"] for event in manager._event_queues["s-test"]] == [2, 3]
+
     @pytest.mark.asyncio
     async def test_monitor_events_queues_breakpoint_notifications(self) -> None:
         manager = DebugManager()

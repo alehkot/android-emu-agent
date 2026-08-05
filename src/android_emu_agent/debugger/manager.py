@@ -40,6 +40,7 @@ BRIDGE_STEP_TIMEOUT_GRACE_SECONDS = 5.0
 # Default relative path from project root when developing locally.
 _DEV_JAR_RELATIVE = Path("jdi-bridge/build/libs")
 _JAR_GLOB = "jdi-bridge-*-all.jar"
+_MAX_EVENT_HISTORY = 2000
 _MAX_LOGPOINT_HISTORY = 2000
 
 
@@ -987,6 +988,9 @@ class DebugManager:
         if not isinstance(event.get("timestamp_ms"), int):
             event["timestamp_ms"] = int(time.time() * 1000)
         queue.append(event)
+        overflow = len(queue) - _MAX_EVENT_HISTORY
+        if overflow > 0:
+            del queue[:overflow]
 
         if event_type == "logpoint_hit":
             self._record_logpoint_hit(session_id, event)

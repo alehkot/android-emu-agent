@@ -14,6 +14,8 @@ from android_emu_agent.errors import bridge_crashed_error
 
 logger = structlog.get_logger()
 
+_MAX_BRIDGE_EVENTS = 2000
+
 
 class BridgeClient:
     """Manages a single JDI Bridge subprocess and speaks JSON-RPC 2.0 over stdin/stdout."""
@@ -27,7 +29,7 @@ class BridgeClient:
         self._pending: dict[int, asyncio.Future[dict[str, Any]]] = {}
         self._stderr_task: asyncio.Task[None] | None = None
         self._stdout_task: asyncio.Task[None] | None = None
-        self._event_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        self._event_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=_MAX_BRIDGE_EVENTS)
         self._stopping = False
 
     @property
@@ -178,7 +180,7 @@ class BridgeClient:
                             future.set_result(data.get("result", {}))
                 else:
                     # Notification (no id or unknown id)
-                    await self._event_queue.put(data)
+                    self._queue_event(data)
 
         except asyncio.CancelledError:
             return
@@ -192,7 +194,7 @@ class BridgeClient:
             self._pending.clear()
             if not self._stopping:
                 returncode = self._process.returncode if self._process is not None else None
-                await self._event_queue.put(
+                self._queue_event(
                     {
                         "jsonrpc": "2.0",
                         "method": "event",
@@ -204,6 +206,14 @@ class BridgeClient:
                         },
                     }
                 )
+
+    def _queue_event(self, event: dict[str, Any]) -> None:
+        """Queue a bridge event without letting a producer storm block stdout reads."""
+        if self._event_queue.full():
+            with contextlib.suppress(asyncio.QueueEmpty):
+                self._event_queue.get_nowait()
+            logger.warning("bridge_event_dropped", reason="queue_full")
+        self._event_queue.put_nowait(event)
 
     async def _read_stderr_loop(self) -> None:
         """Read log lines from bridge stderr and forward to structlog."""
