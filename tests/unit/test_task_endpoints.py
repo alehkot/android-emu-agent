@@ -148,6 +148,29 @@ def test_task_script_run_endpoint_dispatches_compiled_script() -> None:
     assert data["passed"] is True
 
 
+def test_task_script_set_text_selector_executes() -> None:
+    """A documented set-text selector should execute instead of being treated as a ref."""
+    device = MagicMock()
+    element = MagicMock()
+    element.count = 1
+    device.return_value = element
+
+    with _client_with_core(device) as client:
+        response = client.post(
+            "/tasks/script/run",
+            json={
+                "session_id": "s-abc123",
+                "script": 'set-text id:com.example:id/email "agent@example.com"\n',
+                "source_name": "login.aea",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["passed"] is True
+    device.assert_called_once_with(resourceId="com.example:id/email")
+    element.set_text.assert_called_once_with("agent@example.com")
+
+
 def test_task_dispatcher_wraps_raw_snapshot_response() -> None:
     """Raw snapshot task steps should return JSON task evidence instead of failing to decode XML."""
     from android_emu_agent.daemon import server

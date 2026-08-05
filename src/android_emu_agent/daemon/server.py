@@ -1697,6 +1697,30 @@ async def _action_with_locator(
     if not device:
         return _error_response(device_offline_error(session.device_serial), status_code=404)
 
+    try:
+        selector = parse_selector(req.ref)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
+
+    if not isinstance(selector, RefSelector):
+        options = selector.options if isinstance(selector, FallbackSelector) else [selector]
+        try:
+            for option in options:
+                matched = await _selector_action_option(
+                    device,
+                    option,
+                    action,
+                    text=kwargs.get("text", ""),
+                )
+                if matched:
+                    payload = {"status": "done", "selector": req.ref}
+                    if isinstance(selector, FallbackSelector):
+                        payload["matched_selector"] = matched
+                    return payload
+        except AgentError as exc:
+            return _error_response(exc, status_code=409)
+        return _error_response(not_found_error(req.ref), status_code=404)
+
     locator, warning = await _resolve_ref_target(core, req.session_id, req.ref, session.generation)
     if not locator:
         return _error_response(not_found_error(req.ref), status_code=404)
@@ -1715,9 +1739,33 @@ async def _action_with_locator(
 
 async def _tap_selector_option(device: Any, selector: Selector) -> str | None:
     """Try tapping one parsed non-ref selector option."""
+    return await _selector_action_option(device, selector, ActionType.TAP)
+
+
+async def _selector_action_option(
+    device: Any,
+    selector: Selector,
+    action: ActionType,
+    *,
+    text: str = "",
+) -> str | None:
+    """Execute an action when one non-ref selector option identifies exactly one target."""
     if isinstance(selector, CoordsSelector):
-        await asyncio.to_thread(device.click, selector.x, selector.y)
-        return f"coords:{selector.x},{selector.y}"
+        matched = f"coords:{selector.x},{selector.y}"
+        if action == ActionType.TAP:
+            await asyncio.to_thread(device.click, selector.x, selector.y)
+        elif action == ActionType.LONG_TAP:
+            await asyncio.to_thread(device.long_click, selector.x, selector.y)
+        elif action == ActionType.SET_TEXT:
+            await asyncio.to_thread(device.click, selector.x, selector.y)
+            await asyncio.to_thread(device.send_keys, text)
+        elif action == ActionType.CLEAR:
+            await asyncio.to_thread(device.click, selector.x, selector.y)
+            await asyncio.to_thread(device.send_action, "selectAll")
+            await asyncio.to_thread(device.send_keys, "")
+        else:
+            return None
+        return matched
     if isinstance(selector, (RefSelector, FallbackSelector)):
         return None
     kwargs = selector.to_u2_kwargs()
@@ -1728,7 +1776,16 @@ async def _tap_selector_option(device: Any, selector: Selector) -> str | None:
     label = _selector_label(kwargs)
     if match_count > 1:
         raise ambiguous_selector_error(label, match_count)
-    await asyncio.to_thread(element.click)
+    if action == ActionType.TAP:
+        await asyncio.to_thread(element.click)
+    elif action == ActionType.LONG_TAP:
+        await asyncio.to_thread(element.long_click)
+    elif action == ActionType.SET_TEXT:
+        await asyncio.to_thread(element.set_text, text)
+    elif action == ActionType.CLEAR:
+        await asyncio.to_thread(element.clear_text)
+    else:
+        return None
     return label
 
 

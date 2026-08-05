@@ -213,6 +213,67 @@ def test_tap_fallback_does_not_skip_ambiguous_match() -> None:
     unique.click.assert_not_called()
 
 
+def test_set_text_accepts_unique_selector() -> None:
+    """Set-text should honor the selector targets documented for task scripts."""
+    device = MagicMock()
+    element = MagicMock()
+    element.count = 1
+    device.return_value = element
+
+    with _client_with_core(device) as (client, _ref_resolver):
+        resp = client.post(
+            "/actions/set_text",
+            json={
+                "session_id": "s-abc123",
+                "ref": "id:com.example:id/email",
+                "text": "agent@example.com",
+            },
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "done"
+    device.assert_called_once_with(resourceId="com.example:id/email")
+    element.set_text.assert_called_once_with("agent@example.com")
+
+
+def test_clear_tries_fallback_selectors_in_order() -> None:
+    """Clear should advance through selector fallbacks only when a target is absent."""
+    device = MagicMock()
+    missing = MagicMock()
+    missing.count = 0
+    found = MagicMock()
+    found.count = 1
+    device.side_effect = [missing, found]
+
+    with _client_with_core(device) as (client, _ref_resolver):
+        resp = client.post(
+            "/actions/clear",
+            json={
+                "session_id": "s-abc123",
+                "ref": 'text:"Missing" || id:com.example:id/search',
+            },
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["matched_selector"] == "resourceId:com.example:id/search"
+    found.clear_text.assert_called_once_with()
+
+
+def test_long_tap_accepts_coordinate_selector() -> None:
+    """Long-tap should execute non-ref coordinate targets consistently with tap."""
+    device = MagicMock()
+
+    with _client_with_core(device) as (client, _ref_resolver):
+        resp = client.post(
+            "/actions/long_tap",
+            json={"session_id": "s-abc123", "ref": "coords:120,340"},
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "done"
+    device.long_click.assert_called_once_with(120, 340)
+
+
 def test_swipe_rejects_ambiguous_container_selector() -> None:
     """Container bounds cannot come from an arbitrary first match."""
     device = MagicMock()

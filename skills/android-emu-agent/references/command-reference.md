@@ -438,7 +438,7 @@ evidence bundles.
 
 ## Target Selectors
 
-The `action tap` command accepts these selector formats:
+Element-targeted action commands accept these selector formats:
 
 - `^g1a1`: generation-qualified element ref from snapshot (preferred; `g1` is generation 1 and `a1`
   is element 1).
@@ -448,13 +448,14 @@ The `action tap` command accepts these selector formats:
 - `label:"Open menu"`: label alias for content description.
 - `text:"Sign in" enabled:true clickable:true`: add uiautomator2 state filters.
 - `text:"Sign in" || id:com.example:id/login`: try fallback selectors in order.
-- `coords:540,1200`: tap at absolute coordinates.
+- `coords:540,1200`: target absolute coordinates.
 
 Tap and swipe-container selectors must match exactly one node. If a selector is ambiguous, add
 compound id/class/text/state filters or use a fresh snapshot `^ref`; fallback selectors do not skip
 an ambiguous earlier alternative.
 
-`long-tap`, `set-text`, and `clear` require an `^ref`.
+`tap`, `long-tap`, `set-text`, and `clear` accept a preferred `^ref`, a direct selector, or ordered
+`||` fallbacks.
 
 ## Swipe and Scroll Directions
 

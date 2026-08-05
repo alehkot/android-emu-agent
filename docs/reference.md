@@ -1589,7 +1589,7 @@ android-emu-agent action tap [OPTIONS] SESSION_ID REF
 **Arguments**:
 
 - `SESSION_ID`: Session ID [required]
-- `REF`: Element ref (^g1a1) [required]
+- `REF`: Element ^ref or selector [required]
 
 **Options**:
 
@@ -1609,7 +1609,7 @@ android-emu-agent action long-tap [OPTIONS] SESSION_ID REF
 **Arguments**:
 
 - `SESSION_ID`: Session ID [required]
-- `REF`: Element ref (^g1a1) [required]
+- `REF`: Element ^ref or selector [required]
 
 **Options**:
 
@@ -1629,7 +1629,7 @@ android-emu-agent action set-text [OPTIONS] SESSION_ID REF TEXT
 **Arguments**:
 
 - `SESSION_ID`: Session ID [required]
-- `REF`: Element ref (^g1a1) [required]
+- `REF`: Element ^ref or selector [required]
 - `TEXT`: Text to set [required]
 
 **Options**:
@@ -1650,7 +1650,7 @@ android-emu-agent action clear [OPTIONS] SESSION_ID REF
 **Arguments**:
 
 - `SESSION_ID`: Session ID [required]
-- `REF`: Element ref (^g1a1) [required]
+- `REF`: Element ^ref or selector [required]
 
 **Options**:
 
