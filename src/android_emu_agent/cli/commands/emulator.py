@@ -53,7 +53,7 @@ def emulator_start(
     port: int | None = typer.Option(
         None,
         "--port",
-        help="Console port to use for the emulator instance",
+        help="Even console port from 5554 through 5584",
     ),
     wait_boot: bool = typer.Option(
         True,

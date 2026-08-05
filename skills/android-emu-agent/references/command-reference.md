@@ -356,6 +356,7 @@ compatible alias.
 
 - `emulator list-avds` List AVDs known to the Android emulator CLI.
 - `emulator start <avd_name>` Start an AVD and wait for boot by default.
+- `emulator start <avd_name> --port <port>` Use an even fixed console port from 5554 through 5584.
 - `emulator start <avd_name> --snapshot <name> --no-snapshot-save` Start from a named snapshot
   without saving Quick Boot state on exit.
 - `emulator start <avd_name> --cold-boot` Start without loading Quick Boot or snapshot state.

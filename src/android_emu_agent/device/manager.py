@@ -31,7 +31,11 @@ from android_emu_agent.errors import (
     snapshot_failed_error,
     timeout_error,
 )
-from android_emu_agent.validation import get_console_port, validate_snapshot_name
+from android_emu_agent.validation import (
+    get_console_port,
+    validate_emulator_port,
+    validate_snapshot_name,
+)
 
 
 class Orientation(Enum):
@@ -857,11 +861,14 @@ class DeviceManager:
         wait_boot: bool = True,
     ) -> dict[str, Any]:
         """Start an emulator instance from an AVD definition."""
+        if snapshot is not None:
+            validate_snapshot_name(snapshot)
+        if port is not None:
+            validate_emulator_port(port)
+
         available_avds = await self.emulator_list_avds()
         if avd_name not in available_avds:
             raise avd_not_found_error(avd_name)
-        if snapshot is not None:
-            validate_snapshot_name(snapshot)
 
         emulator_path = self._resolve_sdk_tool("emulator")
         existing_serials = await self._list_running_emulator_serials()

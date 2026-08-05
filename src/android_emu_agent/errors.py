@@ -207,6 +207,16 @@ def invalid_snapshot_name_error(name: str) -> AgentError:
     )
 
 
+def invalid_emulator_port_error(port: int) -> AgentError:
+    """Create error for an unsupported emulator console port."""
+    return AgentError(
+        code="ERR_INVALID_EMULATOR_PORT",
+        message=f"Invalid emulator console port: {port}",
+        context={"port": port},
+        remediation="Use an even console port from 5554 through 5584.",
+    )
+
+
 def daemon_identity_error(pid: int) -> AgentError:
     """Create error when a PID file cannot be tied to the live daemon socket."""
     return AgentError(

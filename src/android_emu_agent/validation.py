@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from android_emu_agent.errors import (
+    invalid_emulator_port_error,
     invalid_package_error,
     invalid_snapshot_name_error,
     invalid_uri_error,
@@ -15,6 +16,8 @@ from android_emu_agent.errors import (
 PACKAGE_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$")
 URI_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:[^\s]+$")
 SNAPSHOT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
+EMULATOR_CONSOLE_PORT_MIN = 5554
+EMULATOR_CONSOLE_PORT_MAX = 5584
 
 
 def validate_package(package: str) -> None:
@@ -47,6 +50,17 @@ def validate_snapshot_name(name: str) -> None:
     """Validate an emulator snapshot name before using the line-oriented console protocol."""
     if not SNAPSHOT_NAME_PATTERN.fullmatch(name):
         raise invalid_snapshot_name_error(name)
+
+
+def validate_emulator_port(port: int) -> None:
+    """Validate the Android emulator's supported fixed console port range."""
+    if (
+        isinstance(port, bool)
+        or port < EMULATOR_CONSOLE_PORT_MIN
+        or port > EMULATOR_CONSOLE_PORT_MAX
+        or port % 2 != 0
+    ):
+        raise invalid_emulator_port_error(port)
 
 
 def get_console_port(serial: str) -> int:

@@ -123,6 +123,23 @@ class TestValidateSnapshotName:
         assert exc_info.value.code == "ERR_INVALID_SNAPSHOT_NAME"
 
 
+class TestValidateEmulatorPort:
+    @pytest.mark.parametrize("port", [5554, 5556, 5584])
+    def test_valid_emulator_port(self, port: int) -> None:
+        from android_emu_agent.validation import validate_emulator_port
+
+        validate_emulator_port(port)
+
+    @pytest.mark.parametrize("port", [0, 5553, 5555, 5585])
+    def test_invalid_emulator_port(self, port: int) -> None:
+        from android_emu_agent.validation import validate_emulator_port
+
+        with pytest.raises(AgentError) as exc_info:
+            validate_emulator_port(port)
+
+        assert exc_info.value.code == "ERR_INVALID_EMULATOR_PORT"
+
+
 class TestGetConsolePort:
     """Tests for get_console_port."""
 

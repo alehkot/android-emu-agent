@@ -682,6 +682,24 @@ class TestEmulatorSnapshot:
         terminate.assert_awaited_once_with(process, "Pixel_8_API_34")
 
     @pytest.mark.asyncio
+    async def test_emulator_start_rejects_unsupported_fixed_port(self) -> None:
+        """Invalid ports should fail before querying AVDs or spawning a process."""
+        from android_emu_agent.device.manager import DeviceManager
+        from android_emu_agent.errors import AgentError
+
+        manager = DeviceManager()
+        with (
+            patch.object(manager, "emulator_list_avds", AsyncMock()) as list_avds,
+            patch.object(manager, "_spawn_emulator_process", AsyncMock()) as spawn,
+            pytest.raises(AgentError) as exc_info,
+        ):
+            await manager.emulator_start("Pixel_8_API_34", port=5555)
+
+        assert exc_info.value.code == "ERR_INVALID_EMULATOR_PORT"
+        list_avds.assert_not_awaited()
+        spawn.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_fixed_port_wait_ignores_other_new_emulators(self) -> None:
         """A concurrent emulator must not be mistaken for the requested fixed-port instance."""
         from android_emu_agent.device.manager import DeviceManager

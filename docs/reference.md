@@ -2328,7 +2328,7 @@ android-emu-agent emulator start [OPTIONS] AVD_NAME
 - `--no-snapshot-save`: Do not save Quick Boot state on exit
 - `--read-only`: Start the AVD in read-only mode
 - `--no-window`: Run the emulator headless
-- `--port INTEGER`: Console port to use for the emulator instance
+- `--port INTEGER`: Even console port from 5554 through 5584
 - `--wait-boot / --no-wait-boot`: Wait for boot before returning [default: wait-boot]
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
