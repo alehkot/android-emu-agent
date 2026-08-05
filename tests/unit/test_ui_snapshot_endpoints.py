@@ -137,6 +137,7 @@ async def test_structured_snapshot_commits_one_generation() -> None:
     assert response["elements"][0]["ref"] == "^g5a1"
     assert harness.session.generation == 5
     harness.database.save_refs.assert_awaited_once()
+    harness.database.cleanup_old_refs.assert_awaited_once_with("s-test", 5)
     harness.database.save_session.assert_awaited_once_with(
         "s-test",
         "emulator-5554",

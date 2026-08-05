@@ -1441,6 +1441,7 @@ async def ui_snapshot(req: SnapshotRequest) -> EndpointResponse:
 
             # Persist all fallible snapshot data before making the generation current.
             await core.database.save_refs(req.session_id, generation, ref_payloads)
+            await core.database.cleanup_old_refs(req.session_id, generation)
             committed_generation = await core.session_manager.increment_generation(req.session_id)
             if committed_generation != generation:
                 raise RuntimeError(

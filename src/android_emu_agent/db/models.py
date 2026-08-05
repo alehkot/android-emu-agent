@@ -242,21 +242,20 @@ class Database:
         rows = await cursor.fetchall()
         return [cast(dict[str, Any], json.loads(row[0])) for row in rows]
 
-    async def cleanup_old_refs(self, session_id: str, keep_generations: int = 3) -> None:
-        """Remove refs older than keep_generations."""
+    async def cleanup_old_refs(
+        self,
+        session_id: str,
+        current_generation: int,
+        keep_generations: int = 3,
+    ) -> None:
+        """Keep exactly ``keep_generations`` ending at the current generation."""
+        if keep_generations < 1:
+            raise ValueError("keep_generations must be at least 1")
         if not self._connection:
             return
+        cutoff = current_generation - keep_generations + 1
         async with self.transaction() as conn:
-            # Get current max generation
-            cursor = await conn.execute(
-                "SELECT MAX(generation) FROM ref_maps WHERE session_id = ?",
-                (session_id,),
+            await conn.execute(
+                "DELETE FROM ref_maps WHERE session_id = ? AND generation < ?",
+                (session_id, cutoff),
             )
-            row = await cursor.fetchone()
-            if row and row[0]:
-                max_gen = row[0]
-                cutoff = max_gen - keep_generations
-                await conn.execute(
-                    "DELETE FROM ref_maps WHERE session_id = ? AND generation < ?",
-                    (session_id, cutoff),
-                )
