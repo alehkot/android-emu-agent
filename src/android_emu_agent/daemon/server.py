@@ -1405,29 +1405,56 @@ async def ui_snapshot(req: SnapshotRequest) -> EndpointResponse:
     interactive_only = req.mode == "compact"
 
     try:
-        generation = await core.session_manager.increment_generation(req.session_id)
-        xml = await asyncio.to_thread(
-            device.dump_hierarchy,
-            compressed=use_compressed,
-            pretty=False,
-        )
-        xml_str = xml if isinstance(xml, str) else xml.decode()
-        xml_bytes = xml.encode() if isinstance(xml, str) else xml
-
-        # For raw mode, return XML directly without parsing
+        # Raw hierarchy capture does not issue refs, so it must not consume a generation.
         if req.mode == "raw":
+            xml = await asyncio.to_thread(
+                device.dump_hierarchy,
+                compressed=use_compressed,
+                pretty=False,
+            )
+            xml_str = xml if isinstance(xml, str) else xml.decode()
             return Response(content=xml_str, media_type="application/xml")
 
-        context = await core.context_resolver.resolve(adb_device)
-        device_info = await core.device_manager.describe_device(session.device_serial)
-        snapshot = core.snapshotter.parse_hierarchy(
-            xml_bytes,
-            session_id=req.session_id,
-            generation=generation,
-            device_info=device_info,
-            context_info=asdict(context),
-            interactive_only=interactive_only,
-        )
+        async with core.session_manager.snapshot_lock(req.session_id):
+            generation = session.generation + 1
+            xml = await asyncio.to_thread(
+                device.dump_hierarchy,
+                compressed=use_compressed,
+                pretty=False,
+            )
+            xml_bytes = xml.encode() if isinstance(xml, str) else xml
+
+            context = await core.context_resolver.resolve(adb_device)
+            device_info = await core.device_manager.describe_device(session.device_serial)
+            snapshot = core.snapshotter.parse_hierarchy(
+                xml_bytes,
+                session_id=req.session_id,
+                generation=generation,
+                device_info=device_info,
+                context_info=asdict(context),
+                interactive_only=interactive_only,
+            )
+
+            snapshot_dict = snapshot.to_dict()
+            ref_payloads = snapshot.ref_payloads()
+            snapshot_json = json.dumps(snapshot_dict, ensure_ascii=True)
+
+            # Persist all fallible snapshot data before making the generation current.
+            await core.database.save_refs(req.session_id, generation, ref_payloads)
+            committed_generation = await core.session_manager.increment_generation(req.session_id)
+            if committed_generation != generation:
+                raise RuntimeError(
+                    f"Snapshot generation changed from {generation} to {committed_generation}"
+                )
+
+            core.ref_resolver.store_refs(req.session_id, generation, ref_payloads)
+            await core.session_manager.update_snapshot(
+                req.session_id,
+                snapshot_dict,
+                snapshot_json,
+            )
+
+            return snapshot_dict
     except Exception as exc:
         logger.exception("snapshot_failed", session_id=req.session_id)
         return _error_response(
@@ -1439,16 +1466,6 @@ async def ui_snapshot(req: SnapshotRequest) -> EndpointResponse:
             ),
             status_code=500,
         )
-
-    snapshot_dict = snapshot.to_dict()
-    ref_payloads = snapshot.ref_payloads()
-    core.ref_resolver.store_refs(req.session_id, generation, ref_payloads)
-    await core.database.save_refs(req.session_id, generation, ref_payloads)
-
-    snapshot_json = json.dumps(snapshot_dict, ensure_ascii=True)
-    await core.session_manager.update_snapshot(req.session_id, snapshot_dict, snapshot_json)
-
-    return snapshot_dict
 
 
 @app.post("/ui/screenshot", response_model=None)

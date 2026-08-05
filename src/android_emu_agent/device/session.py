@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -34,6 +35,7 @@ class SessionManager:
 
     def __init__(self, database: Database) -> None:
         self._sessions: dict[str, Session] = {}
+        self._snapshot_locks: dict[str, asyncio.Lock] = {}
         self._db = database
 
     async def start(self) -> None:
@@ -49,6 +51,7 @@ class SessionManager:
                 generation=row.get("generation", 0),
             )
             self._sessions[session.session_id] = session
+            self._snapshot_locks[session.session_id] = asyncio.Lock()
         logger.info("session_manager_started")
 
     async def stop(self) -> None:
@@ -61,6 +64,7 @@ class SessionManager:
                 generation=session.generation,
             )
         self._sessions.clear()
+        self._snapshot_locks.clear()
         logger.info("session_manager_stopped")
 
     async def create_session(self, device_serial: str) -> Session:
@@ -68,6 +72,7 @@ class SessionManager:
         session_id = f"s-{uuid.uuid4().hex[:8]}"
         session = Session(session_id=session_id, device_serial=device_serial)
         self._sessions[session_id] = session
+        self._snapshot_locks[session_id] = asyncio.Lock()
         await self._db.save_session(session_id, device_serial, generation=session.generation)
         logger.info("session_created", session_id=session_id, device=device_serial)
         return session
@@ -84,6 +89,7 @@ class SessionManager:
         """Close and remove a session."""
         if session_id in self._sessions:
             del self._sessions[session_id]
+            self._snapshot_locks.pop(session_id, None)
             await self._db.delete_session(session_id)
             logger.info("session_closed", session_id=session_id)
             return True
@@ -93,14 +99,21 @@ class SessionManager:
         """Increment and return the new snapshot generation."""
         session = self._sessions.get(session_id)
         if session:
-            session.generation += 1
+            next_generation = session.generation + 1
             await self._db.save_session(
                 session.session_id,
                 session.device_serial,
-                generation=session.generation,
+                generation=next_generation,
             )
-            return session.generation
+            session.generation = next_generation
+            return next_generation
         raise ValueError(f"Session not found: {session_id}")
+
+    def snapshot_lock(self, session_id: str) -> asyncio.Lock:
+        """Return the lock that serializes ref-generating snapshots for a session."""
+        if session_id not in self._sessions:
+            raise ValueError(f"Session not found: {session_id}")
+        return self._snapshot_locks.setdefault(session_id, asyncio.Lock())
 
     async def update_snapshot(
         self,

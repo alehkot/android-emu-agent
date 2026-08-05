@@ -138,8 +138,8 @@ such as Compose and Litho. Use `--full` when the target element is not in the de
 snapshot (e.g., labels, images, non-clickable containers):
 
 - `ui snapshot <session_id> --full` Include all nodes (not just interactive).
-- `ui snapshot <session_id> --raw` Return raw XML hierarchy (for low-level debugging of the UI
-  tree).
+- `ui snapshot <session_id> --raw` Return raw XML hierarchy without issuing refs or advancing the
+  session generation (for low-level debugging of the UI tree).
 
 `ui ground` does not run vision, OCR, or image matching. It links existing snapshot refs to
 screenshot-space bounds so humans or external vision models can inspect evidence without making
