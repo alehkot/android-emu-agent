@@ -111,6 +111,25 @@ class TestFindJar:
             manager._find_jar()
         assert exc_info.value.code == "ERR_BRIDGE_NOT_RUNNING"
 
+    def test_find_jar_uses_matching_local_version(self, tmp_path: Path) -> None:
+        from android_emu_agent import __version__
+
+        jar_dir = tmp_path / "jdi-bridge" / "build" / "libs"
+        jar_dir.mkdir(parents=True)
+        expected = jar_dir / f"jdi-bridge-{__version__}-all.jar"
+        expected.touch()
+        (jar_dir / "jdi-bridge-99.0.0-all.jar").touch()
+
+        manager = DebugManager()
+        with (
+            patch("pathlib.Path.cwd", return_value=tmp_path),
+            patch.object(manager._downloader, "resolve") as resolve,
+        ):
+            result = manager._find_jar()
+
+        assert result == expected
+        resolve.assert_not_called()
+
     def test_find_jar_uses_downloader(self, tmp_path: Path) -> None:
         downloaded = tmp_path / "jdi-bridge-0.1.10-all.jar"
         downloaded.touch()

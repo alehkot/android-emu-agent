@@ -15,6 +15,7 @@ from typing import Any
 
 import structlog
 
+from android_emu_agent import __version__
 from android_emu_agent.debugger.bridge_client import BridgeClient
 from android_emu_agent.debugger.bridge_downloader import BridgeDownloader
 from android_emu_agent.errors import (
@@ -41,7 +42,7 @@ BRIDGE_STEP_TIMEOUT_GRACE_SECONDS = 5.0
 
 # Default relative path from project root when developing locally.
 _DEV_JAR_RELATIVE = Path("jdi-bridge/build/libs")
-_JAR_GLOB = "jdi-bridge-*-all.jar"
+_LOCAL_JAR_NAME = f"jdi-bridge-{__version__}-all.jar"
 _MAX_EVENT_HISTORY = 2000
 _MAX_LOGPOINT_HISTORY = 2000
 _JAVA_VERSION_PATTERN = re.compile(r'\bversion\s+"(?P<version>[^"]+)"')
@@ -154,11 +155,9 @@ class DebugManager:
 
         for base in (Path.cwd(), Path(__file__).parent.parent.parent.parent):
             jar_dir = base / _DEV_JAR_RELATIVE
-            if not jar_dir.is_dir():
-                continue
-            jars = sorted(jar_dir.glob(_JAR_GLOB), reverse=True)
-            if jars:
-                self._jar_path = jars[0]
+            candidate = jar_dir / _LOCAL_JAR_NAME
+            if candidate.is_file():
+                self._jar_path = candidate
                 logger.info("bridge_jar_found", path=str(self._jar_path))
                 return self._jar_path
 
