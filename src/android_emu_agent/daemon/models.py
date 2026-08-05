@@ -4,18 +4,25 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel as PydanticBaseModel
+from pydantic import ConfigDict, model_validator
 
 
-class SessionStartRequest(BaseModel):
+class RequestModel(PydanticBaseModel):
+    """Base model that rejects misspelled or unsupported request fields."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class SessionStartRequest(RequestModel):
     device_serial: str
 
 
-class SessionStopRequest(BaseModel):
+class SessionStopRequest(RequestModel):
     session_id: str
 
 
-class SnapshotRequest(BaseModel):
+class SnapshotRequest(RequestModel):
     session_id: str
     mode: Literal["compact", "full", "raw"] = "compact"
     full: bool = False  # Deprecated: kept for backward compatibility
@@ -32,173 +39,173 @@ class SnapshotRequest(BaseModel):
         return self
 
 
-class SessionRequest(BaseModel):
+class SessionRequest(RequestModel):
     session_id: str
 
 
-class VisualGroundingRequest(BaseModel):
+class VisualGroundingRequest(RequestModel):
     session_id: str
     refs: list[str] | None = None
     screenshot: bool = True
 
 
-class TraceStartRequest(BaseModel):
+class TraceStartRequest(RequestModel):
     session_id: str
     label: str | None = None
 
 
-class TraceStopRequest(BaseModel):
+class TraceStopRequest(RequestModel):
     session_id: str
     output_path: str | None = None
 
 
-class TraceReplayRequest(BaseModel):
+class TraceReplayRequest(RequestModel):
     path: str
     until_failure: bool = False
 
 
-class TraceExportRequest(BaseModel):
+class TraceExportRequest(RequestModel):
     path: str
     output_path: str | None = None
     format: str = "markdown"
 
 
-class TaskValidateRequest(BaseModel):
+class TaskValidateRequest(RequestModel):
     task: dict[str, Any]
 
 
-class TaskScriptValidateRequest(BaseModel):
+class TaskScriptValidateRequest(RequestModel):
     script: str
     source_name: str = "<script>"
 
 
-class TaskRunRequest(BaseModel):
+class TaskRunRequest(RequestModel):
     session_id: str
     task: dict[str, Any]
     stop_on_failure: bool = True
 
 
-class TaskScriptRunRequest(BaseModel):
+class TaskScriptRunRequest(RequestModel):
     session_id: str
     script: str
     source_name: str = "<script>"
     stop_on_failure: bool = True
 
 
-class ExpectIdleRequest(BaseModel):
+class ExpectIdleRequest(RequestModel):
     session_id: str
     timeout_ms: int | None = None
 
 
-class ExpectTextRequest(BaseModel):
+class ExpectTextRequest(RequestModel):
     session_id: str
     text: str
     timeout_ms: int | None = None
 
 
-class ExpectActivityRequest(BaseModel):
+class ExpectActivityRequest(RequestModel):
     session_id: str
     activity: str
     timeout_ms: int | None = None
 
 
-class ExpectSelectorRequest(BaseModel):
+class ExpectSelectorRequest(RequestModel):
     session_id: str
     ref: str | None = None
     selector: dict[str, str] | None = None
     timeout_ms: int | None = None
 
 
-class ExpectCurrentAppRequest(BaseModel):
+class ExpectCurrentAppRequest(RequestModel):
     session_id: str
     package: str | None = None
     activity: str | None = None
 
 
-class ActionRequest(BaseModel):
+class ActionRequest(RequestModel):
     session_id: str
     ref: str  # Can be ^ref, text:"...", id:..., desc:"...", or coords:x,y
 
 
-class SetTextRequest(BaseModel):
+class SetTextRequest(RequestModel):
     session_id: str
     ref: str
     text: str
 
 
-class WaitIdleRequest(BaseModel):
+class WaitIdleRequest(RequestModel):
     session_id: str
     timeout_ms: int | None = None
 
 
-class WaitActivityRequest(BaseModel):
+class WaitActivityRequest(RequestModel):
     session_id: str
     activity: str
     timeout_ms: int | None = None
 
 
-class WaitTextRequest(BaseModel):
+class WaitTextRequest(RequestModel):
     session_id: str
     text: str
     timeout_ms: int | None = None
 
 
-class WaitSelectorRequest(BaseModel):
+class WaitSelectorRequest(RequestModel):
     session_id: str
     ref: str | None = None
     selector: dict[str, str] | None = None
     timeout_ms: int | None = None
 
 
-class DeviceSettingRequest(BaseModel):
+class DeviceSettingRequest(RequestModel):
     serial: str
     state: str
 
 
-class AppResetRequest(BaseModel):
+class AppResetRequest(RequestModel):
     session_id: str
     package: str
 
 
-class RotationRequest(BaseModel):
+class RotationRequest(RequestModel):
     serial: str
     orientation: str  # portrait, landscape, reverse-portrait, reverse-landscape, auto
 
 
-class WifiRequest(BaseModel):
+class WifiRequest(RequestModel):
     serial: str
     enabled: bool
 
 
-class MobileRequest(BaseModel):
+class MobileRequest(RequestModel):
     serial: str
     enabled: bool
 
 
-class DozeRequest(BaseModel):
+class DozeRequest(RequestModel):
     serial: str
     enabled: bool
 
 
-class AppLaunchRequest(BaseModel):
+class AppLaunchRequest(RequestModel):
     session_id: str
     package: str
     activity: str | None = None
     wait_debugger: bool = False
 
 
-class AppForceStopRequest(BaseModel):
+class AppForceStopRequest(RequestModel):
     session_id: str
     package: str
 
 
-class AppDeeplinkRequest(BaseModel):
+class AppDeeplinkRequest(RequestModel):
     session_id: str
     uri: str
     wait_debugger: bool = False
 
 
-class AppIntentRequest(BaseModel):
+class AppIntentRequest(RequestModel):
     session_id: str
     action: str | None = None
     data_uri: str | None = None
@@ -213,7 +220,7 @@ class AppIntentRequest(BaseModel):
         return self
 
 
-class AppResolveIntentRequest(BaseModel):
+class AppResolveIntentRequest(RequestModel):
     session_id: str
     action: str | None = None
     data_uri: str | None = None
@@ -227,7 +234,7 @@ class AppResolveIntentRequest(BaseModel):
         return self
 
 
-class EmulatorSnapshotRequest(BaseModel):
+class EmulatorSnapshotRequest(RequestModel):
     serial: str
     name: str
 
@@ -236,7 +243,7 @@ class EmulatorSnapshotRestoreRequest(EmulatorSnapshotRequest):
     restart: bool = True
 
 
-class EmulatorStartRequest(BaseModel):
+class EmulatorStartRequest(RequestModel):
     avd_name: str
     snapshot: str | None = None
     wipe_data: bool = False
@@ -254,11 +261,11 @@ class EmulatorStartRequest(BaseModel):
         return self
 
 
-class EmulatorStopRequest(BaseModel):
+class EmulatorStopRequest(RequestModel):
     serial: str
 
 
-class ArtifactLogsRequest(BaseModel):
+class ArtifactLogsRequest(RequestModel):
     session_id: str
     package: str | None = None
     level: str | None = None
@@ -267,7 +274,7 @@ class ArtifactLogsRequest(BaseModel):
     follow: bool = False
 
 
-class SwipeRequest(BaseModel):
+class SwipeRequest(RequestModel):
     """Request for swipe action."""
 
     session_id: str
@@ -277,7 +284,7 @@ class SwipeRequest(BaseModel):
     duration_ms: int = 300
 
 
-class DeviceTargetRequest(BaseModel):
+class DeviceTargetRequest(RequestModel):
     session_id: str | None = None
     serial: str | None = None
 
@@ -428,22 +435,22 @@ class FileListRequest(DeviceTargetRequest):
     kind: Literal["file", "dir", "any"] = "any"
 
 
-class DebugPingRequest(BaseModel):
+class DebugPingRequest(RequestModel):
     session_id: str
 
 
-class DebugAttachRequest(BaseModel):
+class DebugAttachRequest(RequestModel):
     session_id: str
     package: str
     process: str | None = None
     keep_suspended: bool = False
 
 
-class DebugDetachRequest(BaseModel):
+class DebugDetachRequest(RequestModel):
     session_id: str
 
 
-class DebugObserveRequest(BaseModel):
+class DebugObserveRequest(RequestModel):
     session_id: str
     thread: str = "main"
     max_frames: int = 8
@@ -456,7 +463,7 @@ class DebugObserveRequest(BaseModel):
     ref_limit: int = 20
 
 
-class DebugBreakpointSetRequest(BaseModel):
+class DebugBreakpointSetRequest(RequestModel):
     session_id: str
     class_pattern: str
     line: int
@@ -466,29 +473,29 @@ class DebugBreakpointSetRequest(BaseModel):
     stack_max_frames: int = 8
 
 
-class DebugBreakpointRemoveRequest(BaseModel):
+class DebugBreakpointRemoveRequest(RequestModel):
     session_id: str
     breakpoint_id: int
 
 
-class DebugStepRequest(BaseModel):
+class DebugStepRequest(RequestModel):
     session_id: str
     thread: str = "main"
     timeout_seconds: float = 10.0
 
 
-class DebugResumeRequest(BaseModel):
+class DebugResumeRequest(RequestModel):
     session_id: str
     thread: str | None = None
 
 
-class DebugStackRequest(BaseModel):
+class DebugStackRequest(RequestModel):
     session_id: str
     thread: str = "main"
     max_frames: int = 10
 
 
-class DebugInspectRequest(BaseModel):
+class DebugInspectRequest(RequestModel):
     session_id: str
     variable_path: str
     thread: str = "main"
@@ -496,29 +503,29 @@ class DebugInspectRequest(BaseModel):
     depth: int = 1
 
 
-class DebugEvalRequest(BaseModel):
+class DebugEvalRequest(RequestModel):
     session_id: str
     expression: str
     thread: str = "main"
     frame: int = 0
 
 
-class DebugMappingLoadRequest(BaseModel):
+class DebugMappingLoadRequest(RequestModel):
     session_id: str
     path: str
 
 
-class DebugMappingClearRequest(BaseModel):
+class DebugMappingClearRequest(RequestModel):
     session_id: str
 
 
-class DebugExceptionBreakpointSetRequest(BaseModel):
+class DebugExceptionBreakpointSetRequest(RequestModel):
     session_id: str
     class_pattern: str = "*"
     caught: bool = True
     uncaught: bool = True
 
 
-class DebugExceptionBreakpointRemoveRequest(BaseModel):
+class DebugExceptionBreakpointRemoveRequest(RequestModel):
     session_id: str
     breakpoint_id: int

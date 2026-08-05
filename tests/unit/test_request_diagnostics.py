@@ -92,8 +92,8 @@ def test_error_response_logs_redacted_request_payload(tmp_path: Path) -> None:
     """Diagnostics should attach IDs to errors and redact sensitive request fields."""
     with _client_with_core(tmp_path) as (client, diagnostics):
         resp = client.post(
-            "/actions/back",
-            json={"session_id": "missing", "api_key": "top-secret"},
+            "/actions/set_text",
+            json={"session_id": "missing", "ref": "^g1a1", "text": "top-secret"},
         )
 
     assert resp.status_code == 404
@@ -104,7 +104,7 @@ def test_error_response_logs_redacted_request_payload(tmp_path: Path) -> None:
     events = _read_events(diagnostics.path)
     assert len(events) == 1
     assert events[0]["session_id"] == "missing"
-    assert events[0]["request"]["api_key"] == "***REDACTED***"
+    assert events[0]["request"]["text"] == "***REDACTED***"
     assert events[0]["error"]["code"] == "ERR_SESSION_EXPIRED"
 
 
