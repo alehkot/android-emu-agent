@@ -37,6 +37,7 @@ class SessionManager:
         self._sessions: dict[str, Session] = {}
         self._snapshot_locks: dict[str, asyncio.Lock] = {}
         self._db = database
+        self._lifecycle_lock = asyncio.Lock()
 
     async def start(self) -> None:
         """Start session manager and restore persisted sessions."""
@@ -69,11 +70,12 @@ class SessionManager:
 
     async def create_session(self, device_serial: str) -> Session:
         """Create a new session for a device."""
-        session_id = f"s-{uuid.uuid4().hex[:8]}"
-        session = Session(session_id=session_id, device_serial=device_serial)
-        self._sessions[session_id] = session
-        self._snapshot_locks[session_id] = asyncio.Lock()
-        await self._db.save_session(session_id, device_serial, generation=session.generation)
+        async with self._lifecycle_lock:
+            session_id = f"s-{uuid.uuid4().hex[:8]}"
+            session = Session(session_id=session_id, device_serial=device_serial)
+            await self._db.save_session(session_id, device_serial, generation=session.generation)
+            self._sessions[session_id] = session
+            self._snapshot_locks[session_id] = asyncio.Lock()
         logger.info("session_created", session_id=session_id, device=device_serial)
         return session
 
@@ -87,13 +89,16 @@ class SessionManager:
 
     async def close_session(self, session_id: str) -> bool:
         """Close and remove a session."""
-        if session_id in self._sessions:
-            del self._sessions[session_id]
-            self._snapshot_locks.pop(session_id, None)
-            await self._db.delete_session(session_id)
+        async with self._lifecycle_lock:
+            if session_id not in self._sessions:
+                return False
+            snapshot_lock = self._snapshot_locks.setdefault(session_id, asyncio.Lock())
+            async with snapshot_lock:
+                await self._db.delete_session(session_id)
+                del self._sessions[session_id]
+                self._snapshot_locks.pop(session_id, None)
             logger.info("session_closed", session_id=session_id)
             return True
-        return False
 
     async def increment_generation(self, session_id: str) -> int:
         """Increment and return the new snapshot generation."""
