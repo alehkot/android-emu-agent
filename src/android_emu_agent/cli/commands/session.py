@@ -37,7 +37,7 @@ def session_stop(
     session_id: str = typer.Argument(..., help="Session ID"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Stop a session."""
+    """Stop a session and release its trace and debugger resources."""
     client = DaemonClient()
     resp = client.request("POST", "/sessions/stop", json_body={"session_id": session_id})
     client.close()

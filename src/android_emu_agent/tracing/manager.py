@@ -100,28 +100,50 @@ class TraceManager:
                     remediation="Start a trace with 'trace start' before stopping it.",
                 )
 
-            await self.record_event(
-                session_id,
-                {
-                    "kind": "trace_stopped",
-                },
-                locked=True,
-            )
-            stopped_at = self.timestamp()
-            await asyncio.to_thread(
-                self._write_manifest,
-                trace,
-                status="stopped",
-                stopped_at=stopped_at,
-            )
-            archive_path = self._archive_path(trace, output_path)
-            await asyncio.to_thread(self._zip_trace, trace.directory, archive_path)
-            del self._active[session_id]
-            return {
-                **self._trace_payload(trace, status="stopped"),
-                "path": str(archive_path),
-                "stopped_at": stopped_at,
-            }
+            return await self._stop_locked(trace, output_path)
+
+    async def stop_if_active(
+        self, session_id: str, output_path: str | None = None
+    ) -> dict[str, Any] | None:
+        """Stop and archive a trace when the session currently owns one."""
+        async with self._lock:
+            trace = self._active.get(session_id)
+            if trace is None:
+                return None
+            return await self._stop_locked(trace, output_path)
+
+    async def stop_all(self) -> list[dict[str, Any]]:
+        """Stop and archive every active trace during daemon shutdown."""
+        async with self._lock:
+            results: list[dict[str, Any]] = []
+            for trace in list(self._active.values()):
+                results.append(await self._stop_locked(trace, None))
+            return results
+
+    async def _stop_locked(self, trace: ActiveTrace, output_path: str | None) -> dict[str, Any]:
+        """Finalize one trace while the manager lock is held."""
+        await self.record_event(
+            trace.session_id,
+            {
+                "kind": "trace_stopped",
+            },
+            locked=True,
+        )
+        stopped_at = self.timestamp()
+        await asyncio.to_thread(
+            self._write_manifest,
+            trace,
+            status="stopped",
+            stopped_at=stopped_at,
+        )
+        archive_path = self._archive_path(trace, output_path)
+        await asyncio.to_thread(self._zip_trace, trace.directory, archive_path)
+        del self._active[trace.session_id]
+        return {
+            **self._trace_payload(trace, status="stopped"),
+            "path": str(archive_path),
+            "stopped_at": stopped_at,
+        }
 
     async def status(self, session_id: str | None = None) -> dict[str, Any]:
         """Return active trace status."""

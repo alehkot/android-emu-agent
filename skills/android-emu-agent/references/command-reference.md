@@ -72,7 +72,8 @@ runtime permission rules for the target app and device.
 ### Session
 
 - `session start -d <device_serial>` Create a new session.
-- `session stop <session_id>` End a session.
+- `session stop <session_id>` End a session, archive any active trace, detach its debugger, and
+  remove its ADB forward.
 - `session list` List active sessions.
 - `session info <session_id>` Session details.
 

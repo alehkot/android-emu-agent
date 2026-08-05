@@ -73,6 +73,7 @@ class DebugManager:
     def __init__(self) -> None:
         self._bridges: dict[str, BridgeClient] = {}
         self._debug_sessions: dict[str, DebugSessionState] = {}
+        self._adb_devices: dict[str, Any] = {}
         self._event_tasks: dict[str, asyncio.Task[None]] = {}
         self._event_queues: dict[str, list[dict[str, Any]]] = {}
         self._logpoint_histories: dict[str, list[dict[str, Any]]] = {}
@@ -174,15 +175,14 @@ class DebugManager:
 
     async def stop_all(self) -> None:
         """Stop all bridges and event monitors. Called on daemon shutdown."""
-        for session_id in list(self._event_tasks.keys()):
-            task = self._event_tasks.pop(session_id, None)
-            if task and not task.done():
-                task.cancel()
-        for session_id in list(self._bridges.keys()):
-            await self.stop_bridge(session_id)
-        self._debug_sessions.clear()
-        self._event_queues.clear()
-        self._logpoint_histories.clear()
+        session_ids = (
+            set(self._event_tasks)
+            | set(self._bridges)
+            | set(self._debug_sessions)
+            | set(self._adb_devices)
+        )
+        for session_id in session_ids:
+            await self.cleanup_session(session_id)
 
     async def ping(self, session_id: str) -> dict[str, Any]:
         """Start a bridge (if needed) and ping it."""
@@ -260,6 +260,7 @@ class DebugManager:
             vm_version=vm_version,
         )
         self._debug_sessions[session_id] = ds
+        self._adb_devices[session_id] = adb_device
         self._event_queues[session_id] = []
         self._logpoint_histories[session_id] = []
 
@@ -298,15 +299,30 @@ class DebugManager:
         if ds is None:
             raise debug_not_attached_error(session_id)
 
-        bridge = self._bridges.get(session_id)
-        if bridge and bridge.is_alive:
-            with contextlib.suppress(Exception):
-                await bridge.request("detach")
-
-        await self._cleanup_session(session_id, adb_device)
+        await self.cleanup_session(session_id, adb_device)
 
         logger.info("debug_detached", session_id=session_id)
         return {"status": "detached", "session_id": session_id}
+
+    async def cleanup_session(self, session_id: str, adb_device: Any | None = None) -> bool:
+        """Idempotently release all debugger resources owned by a session."""
+        had_resources = any(
+            session_id in resources
+            for resources in (
+                self._debug_sessions,
+                self._bridges,
+                self._adb_devices,
+                self._event_tasks,
+                self._event_queues,
+                self._logpoint_histories,
+            )
+        )
+        bridge = self._bridges.get(session_id)
+        if session_id in self._debug_sessions and bridge and bridge.is_alive:
+            with contextlib.suppress(Exception):
+                await bridge.request("detach")
+        await self._cleanup_session(session_id, adb_device)
+        return had_resources
 
     async def status(self, session_id: str) -> dict[str, Any]:
         """Get the debug session status."""
@@ -863,15 +879,20 @@ class DebugManager:
         with contextlib.suppress(Exception):
             await asyncio.to_thread(adb_device.forward_remove, f"tcp:{local_port}", False)
 
-    async def _cleanup_session(self, session_id: str, adb_device: Any) -> None:
+    async def _cleanup_session(self, session_id: str, adb_device: Any | None = None) -> None:
         """Clean up all resources for a debug session."""
         task = self._event_tasks.pop(session_id, None)
-        if task and not task.done():
-            task.cancel()
+        if task:
+            if not task.done():
+                task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await task
 
         ds = self._debug_sessions.pop(session_id, None)
-        if ds:
-            await self._remove_forward(ds.local_forward_port, adb_device)
+        stored_adb_device = self._adb_devices.pop(session_id, None)
+        cleanup_device = adb_device if adb_device is not None else stored_adb_device
+        if ds and cleanup_device is not None:
+            await self._remove_forward(ds.local_forward_port, cleanup_device)
         self._event_queues.pop(session_id, None)
         self._logpoint_histories.pop(session_id, None)
 

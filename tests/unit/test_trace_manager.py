@@ -115,3 +115,30 @@ async def test_trace_manager_does_not_archive_typed_input(tmp_path: Path) -> Non
     assert b"audit-secret" not in archive_path.read_bytes()
     exchange = manager.load_events(archive_path)[1]
     assert exchange["request"]["text"] == "***REDACTED***"
+
+
+@pytest.mark.asyncio
+async def test_stop_if_active_archives_trace_once(tmp_path: Path) -> None:
+    """Session cleanup should finalize an active trace without requiring a separate command."""
+    manager = TraceManager(tmp_path / "traces")
+    await manager.start("s-abc123")
+
+    stopped = await manager.stop_if_active("s-abc123")
+
+    assert stopped is not None
+    assert Path(stopped["path"]).exists()
+    assert await manager.stop_if_active("s-abc123") is None
+
+
+@pytest.mark.asyncio
+async def test_stop_all_archives_every_active_trace(tmp_path: Path) -> None:
+    """Daemon shutdown should preserve every in-progress trace as an archive."""
+    manager = TraceManager(tmp_path / "traces")
+    await manager.start("s-one")
+    await manager.start("s-two")
+
+    stopped = await manager.stop_all()
+
+    assert {result["session_id"] for result in stopped} == {"s-one", "s-two"}
+    assert all(Path(result["path"]).exists() for result in stopped)
+    assert (await manager.status())["traces"] == []

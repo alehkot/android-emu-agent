@@ -149,6 +149,9 @@ In the commands:
    uv run android-emu-agent session stop <session-id>
    ```
 
+   This archives an active trace and releases debugger and ADB-forward resources before deleting the
+   session.
+
 Most commands support `--json` for machine-readable output. JSON responses include a
 `diagnostic_id`. The daemon also returns this value in the `x-diagnostic-id` response header.
 

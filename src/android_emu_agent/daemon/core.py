@@ -66,7 +66,14 @@ class DaemonCore:
         """Gracefully shutdown all subsystems."""
         logger.info("daemon_core_stopping")
         self._running = False
-        await self.debug_manager.stop_all()
+        try:
+            await self.trace_manager.stop_all()
+        except Exception:
+            logger.exception("trace_shutdown_failed")
+        try:
+            await self.debug_manager.stop_all()
+        except Exception:
+            logger.exception("debug_shutdown_failed")
         await self.health_monitor.stop()
         await self.session_manager.stop()
         await self.device_manager.stop()

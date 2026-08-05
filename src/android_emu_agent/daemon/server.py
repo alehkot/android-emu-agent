@@ -917,11 +917,52 @@ async def session_start(req: SessionStartRequest) -> EndpointResponse:
 async def session_stop(req: SessionStopRequest) -> EndpointResponse:
     """Stop a session."""
     core: DaemonCore = app.state.core
+    session = await core.session_manager.get_session(req.session_id)
+    if not session:
+        return _error_response(session_expired_error(req.session_id), status_code=404)
+
+    cleanup_errors: list[dict[str, str]] = []
+    trace: dict[str, Any] | None = None
+    debugger_cleaned = False
+    try:
+        trace = await core.trace_manager.stop_if_active(req.session_id)
+    except Exception as exc:
+        logger.exception("session_trace_cleanup_failed", session_id=req.session_id)
+        cleanup_errors.append({"component": "trace", "reason": str(exc)})
+
+    try:
+        adb_device = await core.device_manager.get_adb_device(session.device_serial)
+    except Exception as exc:
+        logger.exception("session_adb_lookup_failed", session_id=req.session_id)
+        cleanup_errors.append({"component": "adb", "reason": str(exc)})
+        adb_device = None
+
+    try:
+        debugger_cleaned = await core.debug_manager.cleanup_session(req.session_id, adb_device)
+    except Exception as exc:
+        logger.exception("session_debug_cleanup_failed", session_id=req.session_id)
+        cleanup_errors.append({"component": "debugger", "reason": str(exc)})
+
+    if cleanup_errors:
+        return _error_response(
+            AgentError(
+                code="ERR_SESSION_CLEANUP_FAILED",
+                message=f"Failed to release all resources for session {req.session_id}",
+                context={"session_id": req.session_id, "failures": cleanup_errors},
+                remediation="Retry session stop; if it still fails, stop the trace and debugger explicitly.",
+            ),
+            status_code=500,
+        )
+
     closed = await core.session_manager.close_session(req.session_id)
     if not closed:
         return _error_response(session_expired_error(req.session_id), status_code=404)
     core.ref_resolver.clear_session(req.session_id)
-    return {"status": "done"}
+    return {
+        "status": "done",
+        "debugger_cleaned": debugger_cleaned,
+        "trace": trace,
+    }
 
 
 @app.get("/sessions")

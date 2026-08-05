@@ -112,6 +112,34 @@ class TestDebugManagerLifecycle:
         manager = DebugManager()
         await manager.stop_all()
 
+    @pytest.mark.asyncio
+    async def test_stop_all_removes_forward_and_stops_bridge(self) -> None:
+        """Daemon shutdown should release device forwards as well as bridge processes."""
+        manager = DebugManager()
+        manager._debug_sessions["s-test"] = DebugSessionState(
+            session_id="s-test",
+            package="com.example.app",
+            process_name="com.example.app",
+            pid=123,
+            jdwp_port=123,
+            local_forward_port=54321,
+            device_serial="emulator-5554",
+        )
+        adb_device = MagicMock()
+        manager._adb_devices["s-test"] = adb_device
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        manager._bridges["s-test"] = bridge
+
+        await manager.stop_all()
+
+        bridge.request.assert_awaited_once_with("detach")
+        bridge.stop.assert_awaited_once_with()
+        adb_device.forward_remove.assert_called_once_with("tcp:54321", False)
+        assert manager._debug_sessions == {}
+        assert manager._adb_devices == {}
+        assert manager._bridges == {}
+
 
 class TestAttach:
     """Tests for debug attach flow."""
@@ -297,6 +325,36 @@ class TestDetach:
         with pytest.raises(AgentError) as exc_info:
             await manager.detach("s-nonexistent", mock_adb)
         assert exc_info.value.code == "ERR_DEBUG_NOT_ATTACHED"
+
+    @pytest.mark.asyncio
+    async def test_cleanup_session_awaits_event_task_and_is_idempotent(self) -> None:
+        """Session cleanup should await monitor cancellation and tolerate repeated calls."""
+        manager = DebugManager()
+        manager._debug_sessions["s-test"] = DebugSessionState(
+            session_id="s-test",
+            package="com.example.app",
+            process_name="com.example.app",
+            pid=123,
+            jdwp_port=123,
+            local_forward_port=54321,
+            device_serial="emulator-5554",
+        )
+        adb_device = MagicMock()
+        manager._adb_devices["s-test"] = adb_device
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        manager._bridges["s-test"] = bridge
+
+        async def wait_forever() -> None:
+            await asyncio.Event().wait()
+
+        event_task = asyncio.create_task(wait_forever())
+        manager._event_tasks["s-test"] = event_task
+        await asyncio.sleep(0)
+
+        assert await manager.cleanup_session("s-test") is True
+        assert event_task.cancelled()
+        assert await manager.cleanup_session("s-test") is False
 
 
 class TestStatus:

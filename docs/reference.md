@@ -1013,7 +1013,7 @@ android-emu-agent session [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 - `start`: Start a new session on a device.
-- `stop`: Stop a session.
+- `stop`: Stop a session and release its trace and...
 - `info`: Show session info.
 - `list`: List active sessions.
 
@@ -1035,7 +1035,7 @@ android-emu-agent session start [OPTIONS]
 
 ### `android-emu-agent session stop`
 
-Stop a session.
+Stop a session and release its trace and debugger resources.
 
 **Usage**:
 
