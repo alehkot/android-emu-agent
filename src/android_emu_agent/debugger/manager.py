@@ -189,7 +189,8 @@ class DebugManager:
 
             if verify:
                 try:
-                    result = await client.ping()
+                    raw_result = await client.ping()
+                    result = self._ensure_bridge_result(raw_result, method="ping")
                     logger.info("bridge_ping_ok", session_id=session_id, result=result)
                 except Exception as exc:
                     await client.stop()
@@ -228,7 +229,8 @@ class DebugManager:
         """Start a bridge (if needed), ping it, and release transient bridges."""
         client = await self.start_bridge(session_id, verify=False)
         try:
-            return await client.ping()
+            result = await client.ping()
+            return self._ensure_bridge_result(result, method="ping")
         finally:
             if session_id not in self._debug_sessions:
                 await self.stop_bridge(session_id)
@@ -1197,4 +1199,4 @@ class DebugManager:
                 )
             )
 
-        raise bridge_not_running_error(f"{method} RPC error: {message}")
+        raise _attach_context(bridge_not_running_error(f"{method} RPC error: {message}"))

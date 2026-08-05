@@ -225,6 +225,30 @@ class TestDebugManagerLifecycle:
         client.start.assert_awaited_once_with()
 
     @pytest.mark.asyncio
+    async def test_start_bridge_rejects_ping_error_envelope(self, tmp_path: Path) -> None:
+        """Bridge startup verification must not accept a JSON-RPC error as a successful ping."""
+        manager = DebugManager()
+        client = MagicMock()
+        client.start = AsyncMock()
+        client.ping = AsyncMock(
+            return_value={"error": {"code": -32603, "message": "bridge initialization failed"}}
+        )
+        client.stop = AsyncMock()
+
+        with (
+            patch.object(manager, "_find_java", return_value=tmp_path / "java"),
+            patch.object(manager, "_find_jar", return_value=tmp_path / "bridge.jar"),
+            patch("android_emu_agent.debugger.manager.BridgeClient", return_value=client),
+            pytest.raises(AgentError) as exc_info,
+        ):
+            await manager.start_bridge("s-test")
+
+        assert exc_info.value.code == "ERR_BRIDGE_NOT_RUNNING"
+        assert exc_info.value.context["method"] == "ping"
+        client.stop.assert_awaited_once_with()
+        assert "s-test" not in manager._bridges
+
+    @pytest.mark.asyncio
     async def test_stop_all_removes_forward_and_stops_bridge(self) -> None:
         """Daemon shutdown should release device forwards as well as bridge processes."""
         manager = DebugManager()
@@ -289,6 +313,24 @@ class TestDebugManagerLifecycle:
         start_bridge.assert_awaited_once_with("s-test", verify=False)
         bridge.stop.assert_not_awaited()
         assert manager._bridges["s-test"] is bridge
+
+    @pytest.mark.asyncio
+    async def test_ping_rejects_rpc_error_envelope_and_stops_transient_bridge(self) -> None:
+        """Public ping should surface bridge errors and still release its transient process."""
+        manager = DebugManager()
+        bridge = AsyncMock()
+        bridge.ping = AsyncMock(return_value={"error": {"code": -32603, "message": "ping failed"}})
+        manager._bridges["s-test"] = bridge
+
+        with (
+            patch.object(manager, "start_bridge", AsyncMock(return_value=bridge)),
+            pytest.raises(AgentError) as exc_info,
+        ):
+            await manager.ping("s-test")
+
+        assert exc_info.value.code == "ERR_BRIDGE_NOT_RUNNING"
+        bridge.stop.assert_awaited_once_with()
+        assert "s-test" not in manager._bridges
 
 
 class TestAttach:
