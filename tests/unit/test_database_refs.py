@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -81,3 +82,73 @@ async def test_cleanup_rejects_invalid_retention_count(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="at least 1"):
         await database.cleanup_old_refs("s-1", current_generation=1, keep_generations=0)
+
+
+@pytest.mark.asyncio
+async def test_reads_wait_for_transaction_rollback(tmp_path: Path) -> None:
+    """A concurrent read must not observe another coroutine's uncommitted row."""
+    database = Database(tmp_path / "state" / "state.db")
+    await database.connect()
+    inserted = asyncio.Event()
+    release_rollback = asyncio.Event()
+
+    async def _write_then_rollback() -> None:
+        with pytest.raises(RuntimeError, match="rollback requested"):
+            async with database.transaction() as connection:
+                await connection.execute(
+                    """
+                    INSERT INTO sessions
+                        (session_id, device_serial, created_at, last_activity, generation, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    ("s-uncommitted", "emulator-5554", "now", "now", 0, "{}"),
+                )
+                inserted.set()
+                await release_rollback.wait()
+                raise RuntimeError("rollback requested")
+
+    try:
+        writer = asyncio.create_task(_write_then_rollback())
+        await inserted.wait()
+        reader = asyncio.create_task(database.get_session("s-uncommitted"))
+        await asyncio.sleep(0)
+
+        assert reader.done() is False
+        release_rollback.set()
+        await writer
+        assert await reader is None
+    finally:
+        release_rollback.set()
+        await database.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_cancelled_transaction_rolls_back_before_releasing_lock(tmp_path: Path) -> None:
+    """Cancellation must not leave writes for a later transaction to commit accidentally."""
+    database = Database(tmp_path / "state" / "state.db")
+    await database.connect()
+    inserted = asyncio.Event()
+
+    async def _cancelled_writer() -> None:
+        async with database.transaction() as connection:
+            await connection.execute(
+                """
+                INSERT INTO sessions
+                    (session_id, device_serial, created_at, last_activity, generation, metadata)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                ("s-cancelled", "emulator-5554", "now", "now", 0, "{}"),
+            )
+            inserted.set()
+            await asyncio.Event().wait()
+
+    try:
+        writer = asyncio.create_task(_cancelled_writer())
+        await inserted.wait()
+        writer.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await writer
+
+        assert await database.get_session("s-cancelled") is None
+    finally:
+        await database.disconnect()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -54,33 +55,37 @@ class Database:
         ensure_private_directory(self.db_path.parent)
         ensure_private_file(self.db_path)
         self._connection: aiosqlite.Connection | None = None
+        self._connection_lock = asyncio.Lock()
 
     async def connect(self) -> None:
         """Connect to database and initialize schema."""
-        self._connection = await aiosqlite.connect(self.db_path)
-        ensure_private_file(self.db_path)
-        await self._connection.executescript(SCHEMA)
-        await self._connection.commit()
+        async with self._connection_lock:
+            self._connection = await aiosqlite.connect(self.db_path)
+            ensure_private_file(self.db_path)
+            await self._connection.executescript(SCHEMA)
+            await self._connection.commit()
         logger.info("database_connected", path=str(self.db_path))
 
     async def disconnect(self) -> None:
         """Close database connection."""
-        if self._connection:
-            await self._connection.close()
-            self._connection = None
-            logger.info("database_disconnected")
+        async with self._connection_lock:
+            if self._connection:
+                await self._connection.close()
+                self._connection = None
+                logger.info("database_disconnected")
 
     @asynccontextmanager
     async def transaction(self) -> AsyncGenerator[aiosqlite.Connection, None]:
         """Context manager for database transactions."""
-        if not self._connection:
-            raise RuntimeError("Database not connected")
-        try:
-            yield self._connection
-            await self._connection.commit()
-        except Exception:
-            await self._connection.rollback()
-            raise
+        async with self._connection_lock:
+            if not self._connection:
+                raise RuntimeError("Database not connected")
+            try:
+                yield self._connection
+                await self._connection.commit()
+            except BaseException:
+                await self._connection.rollback()
+                raise
 
     # Session operations
 
@@ -108,13 +113,14 @@ class Database:
 
     async def get_session(self, session_id: str) -> dict[str, Any] | None:
         """Get session by ID."""
-        if not self._connection:
-            return None
-        cursor = await self._connection.execute(
-            "SELECT * FROM sessions WHERE session_id = ?",
-            (session_id,),
-        )
-        row = await cursor.fetchone()
+        async with self._connection_lock:
+            if not self._connection:
+                return None
+            cursor = await self._connection.execute(
+                "SELECT * FROM sessions WHERE session_id = ?",
+                (session_id,),
+            )
+            row = await cursor.fetchone()
         if row:
             return {
                 "session_id": row[0],
@@ -128,12 +134,13 @@ class Database:
 
     async def list_sessions(self) -> list[dict[str, Any]]:
         """List all sessions."""
-        if not self._connection:
-            return []
-        cursor = await self._connection.execute(
-            "SELECT * FROM sessions ORDER BY last_activity DESC"
-        )
-        rows = await cursor.fetchall()
+        async with self._connection_lock:
+            if not self._connection:
+                return []
+            cursor = await self._connection.execute(
+                "SELECT * FROM sessions ORDER BY last_activity DESC"
+            )
+            rows = await cursor.fetchall()
         return [
             {
                 "session_id": row[0],
@@ -179,13 +186,14 @@ class Database:
         ref: str,
     ) -> dict[str, Any] | None:
         """Get a specific ref from a generation."""
-        if not self._connection:
-            return None
-        cursor = await self._connection.execute(
-            "SELECT locator_bundle FROM ref_maps WHERE session_id = ? AND generation = ? AND ref = ?",
-            (session_id, generation, ref),
-        )
-        row = await cursor.fetchone()
+        async with self._connection_lock:
+            if not self._connection:
+                return None
+            cursor = await self._connection.execute(
+                "SELECT locator_bundle FROM ref_maps WHERE session_id = ? AND generation = ? AND ref = ?",
+                (session_id, generation, ref),
+            )
+            row = await cursor.fetchone()
         if row:
             return cast(dict[str, Any], json.loads(row[0]))
         return None
@@ -196,19 +204,20 @@ class Database:
         ref: str,
     ) -> tuple[int, dict[str, Any]] | None:
         """Get a ref only when its token identifies one stored generation."""
-        if not self._connection:
-            return None
-        cursor = await self._connection.execute(
-            """
-            SELECT generation, locator_bundle
-            FROM ref_maps
-            WHERE session_id = ? AND ref = ?
-            ORDER BY generation DESC
-            LIMIT 2
-            """,
-            (session_id, ref),
-        )
-        rows = list(await cursor.fetchall())
+        async with self._connection_lock:
+            if not self._connection:
+                return None
+            cursor = await self._connection.execute(
+                """
+                SELECT generation, locator_bundle
+                FROM ref_maps
+                WHERE session_id = ? AND ref = ?
+                ORDER BY generation DESC
+                LIMIT 2
+                """,
+                (session_id, ref),
+            )
+            rows = list(await cursor.fetchall())
         if not rows:
             return None
         if len(rows) > 1:
@@ -228,18 +237,19 @@ class Database:
         generation: int,
     ) -> list[dict[str, Any]]:
         """Get all ref payloads for a specific generation."""
-        if not self._connection:
-            return []
-        cursor = await self._connection.execute(
-            """
-            SELECT locator_bundle
-            FROM ref_maps
-            WHERE session_id = ? AND generation = ?
-            ORDER BY id ASC
-            """,
-            (session_id, generation),
-        )
-        rows = await cursor.fetchall()
+        async with self._connection_lock:
+            if not self._connection:
+                return []
+            cursor = await self._connection.execute(
+                """
+                SELECT locator_bundle
+                FROM ref_maps
+                WHERE session_id = ? AND generation = ?
+                ORDER BY id ASC
+                """,
+                (session_id, generation),
+            )
+            rows = await cursor.fetchall()
         return [cast(dict[str, Any], json.loads(row[0])) for row in rows]
 
     async def cleanup_old_refs(
