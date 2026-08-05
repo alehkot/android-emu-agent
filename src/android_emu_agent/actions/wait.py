@@ -63,22 +63,28 @@ class WaitEngine:
         device: u2.Device,
         timeout: float | None = None,
     ) -> WaitResult:
-        """Wait for UI to become idle."""
+        """Wait for UI to become idle or for its hierarchy to stabilize."""
         timeout = timeout or self.default_timeout
-        start = time.time()
+        start = time.monotonic()
+        deadline = start + timeout
 
         try:
             wait_fn = getattr(device, "wait_idle", None)
-            if wait_fn is None:
-                wait_fn = getattr(device, "wait_activity", None)
-            if wait_fn is None:
-                await asyncio.sleep(timeout)
+            if callable(wait_fn):
+                result = await asyncio.wait_for(
+                    asyncio.to_thread(wait_fn, timeout=timeout),
+                    timeout=timeout,
+                )
+                success = result is not False
             else:
-                await asyncio.to_thread(wait_fn, timeout=timeout)
-            elapsed = (time.time() - start) * 1000
-            return WaitResult(success=True, elapsed_ms=elapsed)
+                success = await self._wait_for_stable_hierarchy(device, deadline)
+
+            elapsed = (time.monotonic() - start) * 1000
+            if success:
+                return WaitResult(success=True, elapsed_ms=elapsed)
+            return self._idle_timeout_result(timeout, elapsed)
         except Exception as e:
-            elapsed = (time.time() - start) * 1000
+            elapsed = (time.monotonic() - start) * 1000
             return WaitResult(
                 success=False,
                 elapsed_ms=elapsed,
@@ -89,6 +95,42 @@ class WaitEngine:
                     remediation="UI may still be loading; try again or check for dialogs",
                 ),
             )
+
+    async def _wait_for_stable_hierarchy(self, device: u2.Device, deadline: float) -> bool:
+        """Wait until two consecutive UI hierarchy dumps match."""
+        previous: str | None = None
+
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+
+            hierarchy = await asyncio.wait_for(
+                asyncio.to_thread(device.dump_hierarchy, compressed=True),
+                timeout=remaining,
+            )
+            if hierarchy == previous:
+                return True
+            previous = hierarchy
+
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            await asyncio.sleep(min(self.poll_interval, remaining))
+
+    @staticmethod
+    def _idle_timeout_result(timeout: float, elapsed_ms: float) -> WaitResult:
+        """Build the standard timeout result for an idle wait."""
+        return WaitResult(
+            success=False,
+            elapsed_ms=elapsed_ms,
+            error=AgentError(
+                code="ERR_TIMEOUT",
+                message="UI did not become idle before the timeout",
+                context={"timeout_ms": timeout * 1000},
+                remediation="UI may still be loading; try again or check for dialogs",
+            ),
+        )
 
     async def wait_activity(
         self,
