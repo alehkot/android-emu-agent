@@ -132,6 +132,19 @@ def console_connect_error(port: int) -> AgentError:
     )
 
 
+def console_auth_error(reason: str) -> AgentError:
+    """Create error for emulator console authentication failures."""
+    return AgentError(
+        code="ERR_CONSOLE_AUTH",
+        message="Emulator console authentication failed",
+        context={"reason": reason},
+        remediation=(
+            "Ensure ~/.emulator_console_auth_token exists, is readable, and contains one "
+            "non-whitespace token."
+        ),
+    )
+
+
 def snapshot_failed_error(name: str, reason: str) -> AgentError:
     """Create error for snapshot operation failure."""
     return AgentError(

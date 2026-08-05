@@ -22,6 +22,7 @@ from android_emu_agent.errors import (
     adb_command_error,
     adb_not_found_error,
     avd_not_found_error,
+    console_auth_error,
     console_connect_error,
     emulator_command_error,
     emulator_launch_failed_error,
@@ -60,6 +61,8 @@ EMULATOR_START_TIMEOUT_S = 180.0
 EMULATOR_STOP_TIMEOUT_S = 30.0
 EMULATOR_PROCESS_STOP_TIMEOUT_S = 5.0
 EMULATOR_CONSOLE_MAX_RESPONSE_BYTES = 64 * 1024
+EMULATOR_CONSOLE_AUTH_TOKEN_PATH = Path.home() / ".emulator_console_auth_token"
+EMULATOR_CONSOLE_AUTH_TOKEN_MAX_LENGTH = 1024
 
 
 @dataclass
@@ -1131,9 +1134,16 @@ class DeviceManager:
             raise console_connect_error(port) from e
 
         try:
-            _, banner_ok = await self._read_console_response(reader, timeout_s=5.0)
+            banner, banner_ok = await self._read_console_response(reader, timeout_s=5.0)
             if not banner_ok:
                 raise emulator_command_error("console", "emulator console rejected the connection")
+            if "authentication required" in banner.casefold():
+                token = await asyncio.to_thread(self._read_console_auth_token)
+                writer.write(f"auth {token}\n".encode())
+                await writer.drain()
+                auth_response, auth_ok = await self._read_console_response(reader, timeout_s=5.0)
+                if not auth_ok:
+                    raise console_auth_error(auth_response.strip() or "console rejected the token")
 
             # Send command
             writer.write(f"{command}\n".encode())
@@ -1148,6 +1158,21 @@ class DeviceManager:
         finally:
             writer.close()
             await writer.wait_closed()
+
+    def _read_console_auth_token(self) -> str:
+        """Read and validate the local emulator console token without exposing it."""
+        try:
+            token = EMULATOR_CONSOLE_AUTH_TOKEN_PATH.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise console_auth_error("authentication token file is not readable") from exc
+
+        if (
+            not token
+            or len(token) > EMULATOR_CONSOLE_AUTH_TOKEN_MAX_LENGTH
+            or any(character.isspace() for character in token)
+        ):
+            raise console_auth_error("authentication token file is empty or malformed")
+        return token
 
     async def _read_console_response(
         self,

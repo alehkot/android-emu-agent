@@ -824,6 +824,69 @@ class TestEmulatorSnapshot:
         assert reader.readline.await_count == 5
 
     @pytest.mark.asyncio
+    async def test_console_authenticates_when_required(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Authenticated consoles should receive the local token before the requested command."""
+        from android_emu_agent.device import manager as manager_module
+        from android_emu_agent.device.manager import DeviceManager
+
+        token_path = tmp_path / ".emulator_console_auth_token"
+        token_path.write_text("secret-token\n", encoding="utf-8")
+        monkeypatch.setattr(manager_module, "EMULATOR_CONSOLE_AUTH_TOKEN_PATH", token_path)
+        manager = DeviceManager()
+        reader = AsyncMock()
+        reader.readline.side_effect = [
+            b"Android Console: Authentication required\r\n",
+            b"OK\r\n",
+            b"Android Console: type 'help' for a list of commands\r\n",
+            b"OK\r\n",
+            b"OK\r\n",
+        ]
+        writer = MagicMock()
+        writer.drain = AsyncMock()
+        writer.wait_closed = AsyncMock()
+
+        with patch("asyncio.open_connection", AsyncMock(return_value=(reader, writer))):
+            await manager._send_console_command(5554, "avd snapshot save baseline")
+
+        assert [call.args[0] for call in writer.write.call_args_list] == [
+            b"auth secret-token\n",
+            b"avd snapshot save baseline\n",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_console_rejects_multiline_auth_token(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A malformed credential must not be written to the line-oriented console."""
+        from android_emu_agent.device import manager as manager_module
+        from android_emu_agent.device.manager import DeviceManager
+        from android_emu_agent.errors import AgentError
+
+        token_path = tmp_path / ".emulator_console_auth_token"
+        token_path.write_text("secret\navd kill\n", encoding="utf-8")
+        monkeypatch.setattr(manager_module, "EMULATOR_CONSOLE_AUTH_TOKEN_PATH", token_path)
+        manager = DeviceManager()
+        reader = AsyncMock()
+        reader.readline.side_effect = [
+            b"Android Console: Authentication required\r\n",
+            b"OK\r\n",
+        ]
+        writer = MagicMock()
+        writer.drain = AsyncMock()
+        writer.wait_closed = AsyncMock()
+
+        with (
+            patch("asyncio.open_connection", AsyncMock(return_value=(reader, writer))),
+            pytest.raises(AgentError) as exc_info,
+        ):
+            await manager._send_console_command(5554, "avd snapshot save baseline")
+
+        assert exc_info.value.code == "ERR_CONSOLE_AUTH"
+        writer.write.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_console_rejects_eof_before_terminal_status(self) -> None:
         """A partial response must fail instead of being accepted or silently truncated."""
         from android_emu_agent.device.manager import DeviceManager

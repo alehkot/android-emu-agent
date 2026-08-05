@@ -107,6 +107,14 @@ class TestErrorConstructors:
         assert error.code == "ERR_SNAPSHOT_FAILED"
         assert "baseline" in error.message
 
+    def test_console_auth_error(self) -> None:
+        """Should create an actionable console authentication error."""
+        from android_emu_agent.errors import console_auth_error
+
+        error = console_auth_error("token missing")
+        assert error.code == "ERR_CONSOLE_AUTH"
+        assert error.context == {"reason": "token missing"}
+
     def test_invalid_package_error(self) -> None:
         """Should create invalid package error."""
         from android_emu_agent.errors import invalid_package_error

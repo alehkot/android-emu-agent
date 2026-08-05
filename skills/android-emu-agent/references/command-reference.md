@@ -366,7 +366,8 @@ compatible alias.
   default. Use `--no-restart` for a live console load.
 
 Snapshot names accept 1-128 letters, digits, dots, underscores, or hyphens. Spaces and line breaks
-are rejected before the emulator console is contacted.
+are rejected before the emulator console is contacted. When the console requests authentication,
+snapshot commands use the token from `~/.emulator_console_auth_token` automatically.
 
 ### Reliability
 
