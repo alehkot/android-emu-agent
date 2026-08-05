@@ -1152,7 +1152,14 @@ class DeviceManager:
             response, command_ok = await self._read_console_response(reader, timeout_s=30.0)
             if not command_ok:
                 error_msg = response.strip() or "Unknown error"
-                raise snapshot_failed_error(command.split()[-1], error_msg)
+                snapshot_prefixes = ("avd snapshot save ", "avd snapshot load ")
+                snapshot_prefix = next(
+                    (prefix for prefix in snapshot_prefixes if command.startswith(prefix)),
+                    None,
+                )
+                if snapshot_prefix:
+                    raise snapshot_failed_error(command.removeprefix(snapshot_prefix), error_msg)
+                raise emulator_command_error(command, error_msg)
 
             return response
         finally:

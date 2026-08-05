@@ -824,6 +824,58 @@ class TestEmulatorSnapshot:
         assert reader.readline.await_count == 5
 
     @pytest.mark.asyncio
+    async def test_console_shapes_snapshot_failure_with_snapshot_name(self) -> None:
+        """Snapshot console failures should retain the snapshot-specific error contract."""
+        from android_emu_agent.device.manager import DeviceManager
+        from android_emu_agent.errors import AgentError
+
+        manager = DeviceManager()
+        reader = AsyncMock()
+        reader.readline.side_effect = [
+            b"Android Console\r\n",
+            b"OK\r\n",
+            b"KO: snapshot does not exist\r\n",
+        ]
+        writer = MagicMock()
+        writer.drain = AsyncMock()
+        writer.wait_closed = AsyncMock()
+
+        with (
+            patch("asyncio.open_connection", AsyncMock(return_value=(reader, writer))),
+            pytest.raises(AgentError) as exc_info,
+        ):
+            await manager._send_console_command(5554, "avd snapshot load baseline")
+
+        assert exc_info.value.code == "ERR_SNAPSHOT_FAILED"
+        assert exc_info.value.context["name"] == "baseline"
+
+    @pytest.mark.asyncio
+    async def test_console_shapes_non_snapshot_failure_as_emulator_command(self) -> None:
+        """AVD lifecycle failures must not masquerade as snapshot failures."""
+        from android_emu_agent.device.manager import DeviceManager
+        from android_emu_agent.errors import AgentError
+
+        manager = DeviceManager()
+        reader = AsyncMock()
+        reader.readline.side_effect = [
+            b"Android Console\r\n",
+            b"OK\r\n",
+            b"KO: emulator cannot stop\r\n",
+        ]
+        writer = MagicMock()
+        writer.drain = AsyncMock()
+        writer.wait_closed = AsyncMock()
+
+        with (
+            patch("asyncio.open_connection", AsyncMock(return_value=(reader, writer))),
+            pytest.raises(AgentError) as exc_info,
+        ):
+            await manager._send_console_command(5554, "avd stop")
+
+        assert exc_info.value.code == "ERR_EMULATOR_COMMAND"
+        assert exc_info.value.context["command"] == "avd stop"
+
+    @pytest.mark.asyncio
     async def test_console_authenticates_when_required(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
