@@ -260,7 +260,12 @@ Use Android Emu Agent to open Settings on emulator-5554 and verify that Wi-Fi is
 ```
 
 If your environment cannot use symbolic links, copy `skills/android-emu-agent/` into the agent's
-skill directory.
+skill directory. Python wheels also include the same files under
+`android_emu_agent/skills/android-emu-agent/`; locate that installed copy with:
+
+```bash
+python -c "from importlib.resources import files; print(files('android_emu_agent') / 'skills' / 'android-emu-agent')"
+```
 
 ## Check Device Support and Safety
 

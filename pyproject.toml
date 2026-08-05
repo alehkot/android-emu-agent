@@ -49,9 +49,13 @@ packages = ["src/android_emu_agent"]
 [tool.hatch.build.targets.wheel.force-include]
 "src/android_emu_agent/py.typed" = "android_emu_agent/py.typed"
 "src/android_emu_agent/artifacts/py.typed" = "android_emu_agent/artifacts/py.typed"
+"skills/android-emu-agent" = "android_emu_agent/skills/android-emu-agent"
 
 [tool.hatch.build.targets.sdist]
-include = ["README.md", "src"]
+include = ["/README.md", "/src", "/skills/android-emu-agent"]
+
+[tool.hatch.build.targets.sdist.force-include]
+"skills/android-emu-agent" = "skills/android-emu-agent"
 
 [tool.ruff]
 line-length = 100

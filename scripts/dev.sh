@@ -438,6 +438,9 @@ build_python_release_artifacts() {
         return 1
     fi
 
+    echo "Validating Python distribution contents..."
+    uv run python scripts/validate_distribution.py "$wheel_path" "$sdist_path"
+
     echo "Checking Python distributions with Twine..."
     uvx --from twine twine check "$wheel_path" "$sdist_path"
 
