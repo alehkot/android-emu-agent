@@ -39,8 +39,9 @@ class DummySessionManager:
 class DummyFileManager:
     def __init__(self, matches: list[dict[str, Any]]) -> None:
         self.matches = matches
-        self.find_calls: list[tuple[object, str, str, str, int]] = []
-        self.list_calls: list[tuple[object, str, str]] = []
+        self.find_calls: list[tuple[object, str, str, str, int, bool]] = []
+        self.list_calls: list[tuple[object, str, str, bool]] = []
+        self.app_pull_calls: list[tuple[object, str, str, str, str | None, bool]] = []
 
     async def find_metadata(
         self,
@@ -49,8 +50,10 @@ class DummyFileManager:
         name: str,
         kind: str,
         max_depth: int,
+        *,
+        use_root: bool,
     ) -> list[dict[str, Any]]:
-        self.find_calls.append((device, path, name, kind, max_depth))
+        self.find_calls.append((device, path, name, kind, max_depth, use_root))
         return self.matches
 
     async def list_metadata(
@@ -58,9 +61,24 @@ class DummyFileManager:
         device: object,
         path: str,
         kind: str,
+        *,
+        use_root: bool,
     ) -> list[dict[str, Any]]:
-        self.list_calls.append((device, path, kind))
+        self.list_calls.append((device, path, kind, use_root))
         return self.matches
+
+    async def app_pull(
+        self,
+        device: object,
+        serial: str,
+        package: str,
+        remote_path: str,
+        local_path: str | None,
+        *,
+        use_root: bool,
+    ) -> str:
+        self.app_pull_calls.append((device, serial, package, remote_path, local_path, use_root))
+        return "/tmp/pulled.json"
 
 
 class DummyCore:
@@ -142,8 +160,8 @@ def test_files_find_success() -> None:
     assert "PATH\tTYPE\tSIZE" in data["output"]
     assert "/data/data/app/db.sqlite" in data["output"]
     assert len(file_manager.find_calls) == 1
-    _device, path, name, kind, depth = file_manager.find_calls[0]
-    assert (path, name, kind, depth) == ("/data/data", "*.db", "file", 2)
+    _device, path, name, kind, depth, use_root = file_manager.find_calls[0]
+    assert (path, name, kind, depth, use_root) == ("/data/data", "*.db", "file", 2, True)
 
 
 def test_files_list_success() -> None:
@@ -180,12 +198,12 @@ def test_files_list_success() -> None:
     assert data["count"] == 1
     assert data["results"] == matches
     assert len(file_manager.list_calls) == 1
-    _device, path, kind = file_manager.list_calls[0]
-    assert (path, kind) == ("/sdcard", "dir")
+    _device, path, kind, use_root = file_manager.list_calls[0]
+    assert (path, kind, use_root) == ("/sdcard", "dir", True)
 
 
-def test_files_find_requires_root() -> None:
-    """Should reject find when device is not rooted."""
+def test_files_find_uses_direct_shell_without_root() -> None:
+    """Non-root targets should search paths available to the shell user."""
     with _client_with_core(info=DummyInfo(is_rooted=False), matches=[]) as (
         client,
         _file_manager,
@@ -199,14 +217,13 @@ def test_files_find_requires_root() -> None:
             },
         )
 
-    assert resp.status_code == 403
-    data = resp.json()
-    assert data["status"] == "error"
-    assert data["error"]["code"] == "ERR_PERMISSION"
+    assert resp.status_code == 200
+    assert DummyCore.last is not None
+    assert DummyCore.last.file_manager.find_calls[0][-1] is False
 
 
-def test_files_list_requires_root() -> None:
-    """Should reject list when device is not rooted."""
+def test_files_list_uses_direct_shell_without_root() -> None:
+    """Non-root targets should list paths available to the shell user."""
     with _client_with_core(info=DummyInfo(is_rooted=False), matches=[]) as (
         client,
         _file_manager,
@@ -219,7 +236,25 @@ def test_files_list_requires_root() -> None:
             },
         )
 
-    assert resp.status_code == 403
-    data = resp.json()
-    assert data["status"] == "error"
-    assert data["error"]["code"] == "ERR_PERMISSION"
+    assert resp.status_code == 200
+    assert DummyCore.last is not None
+    assert DummyCore.last.file_manager.list_calls[0][-1] is False
+
+
+def test_files_app_pull_uses_run_as_path_without_root() -> None:
+    """Non-root targets should let the manager use run-as for debuggable apps."""
+    with _client_with_core(info=DummyInfo(is_rooted=False), matches=[]) as (
+        client,
+        file_manager,
+    ):
+        resp = client.post(
+            "/files/app_pull",
+            json={
+                "serial": "emulator-5554",
+                "package": "com.example.app",
+                "remote_path": "files/config.json",
+            },
+        )
+
+    assert resp.status_code == 200
+    assert file_manager.app_pull_calls[0][-1] is False

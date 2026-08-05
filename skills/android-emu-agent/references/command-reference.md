@@ -397,10 +397,13 @@ to preserve heap files on-device after pulling:
 
 - `file push <local> --device <serial>` Push to /sdcard/Download.
 - `file pull <remote> --device <serial>` Pull from shared storage.
-- `file find <path> --name <pattern> --device <serial>` Find files/folders + metadata (root).
-- `file list <path> --device <serial>` List files/folders (root).
-- `file app push <pkg> <local> --device <serial>` Push to app-private storage.
-- `file app pull <pkg> <remote> --device <serial>` Pull from app-private storage.
+- `file find <path> --name <pattern> --device <serial>` Find files/folders + metadata;
+  shell-readable paths work without root.
+- `file list <path> --device <serial>` List files/folders; shell-readable paths work without root.
+- `file app push <pkg> <local> --device <serial>` Push to app-private storage via root or `run-as`
+  for a debuggable app.
+- `file app pull <pkg> <remote> --device <serial>` Pull from app-private storage via root or
+  `run-as` for a debuggable app.
 
 See `references/reliability.md` for reliability triage workflows and output interpretation. See
 `references/files.md` for file transfer workflows. See `references/workflow-examples.md` for

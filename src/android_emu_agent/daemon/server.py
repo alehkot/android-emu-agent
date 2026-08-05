@@ -2611,13 +2611,13 @@ async def files_app_push(req: FileAppPushRequest) -> EndpointResponse:
     serial, device, info = resolved
 
     try:
-        require_root(bool(info and info.is_rooted), "push app data")
-    except AgentError as exc:
-        return _error_response(exc, status_code=403)
-
-    try:
         remote = await core.file_manager.app_push(
-            device, serial, req.package, req.local_path, req.remote_path
+            device,
+            serial,
+            req.package,
+            req.local_path,
+            req.remote_path,
+            use_root=bool(info and info.is_rooted),
         )
     except AgentError as exc:
         return _error_response(exc, status_code=400)
@@ -2645,13 +2645,13 @@ async def files_app_pull(req: FileAppPullRequest) -> EndpointResponse:
     serial, device, info = resolved
 
     try:
-        require_root(bool(info and info.is_rooted), "pull app data")
-    except AgentError as exc:
-        return _error_response(exc, status_code=403)
-
-    try:
         path = await core.file_manager.app_pull(
-            device, serial, req.package, req.remote_path, req.local_path
+            device,
+            serial,
+            req.package,
+            req.remote_path,
+            req.local_path,
+            use_root=bool(info and info.is_rooted),
         )
     except AgentError as exc:
         return _error_response(exc, status_code=400)
@@ -2674,13 +2674,13 @@ async def files_find(req: FileFindRequest) -> EndpointResponse:
     serial, device, info = resolved
 
     try:
-        require_root(bool(info and info.is_rooted), "find files")
-    except AgentError as exc:
-        return _error_response(exc, status_code=403)
-
-    try:
         matches = await core.file_manager.find_metadata(
-            device, req.path, req.name, req.kind, req.max_depth
+            device,
+            req.path,
+            req.name,
+            req.kind,
+            req.max_depth,
+            use_root=bool(info and info.is_rooted),
         )
     except AgentError as exc:
         return _error_response(exc, status_code=400)
@@ -2707,12 +2707,12 @@ async def files_list(req: FileListRequest) -> EndpointResponse:
     serial, device, info = resolved
 
     try:
-        require_root(bool(info and info.is_rooted), "list files")
-    except AgentError as exc:
-        return _error_response(exc, status_code=403)
-
-    try:
-        matches = await core.file_manager.list_metadata(device, req.path, req.kind)
+        matches = await core.file_manager.list_metadata(
+            device,
+            req.path,
+            req.kind,
+            use_root=bool(info and info.is_rooted),
+        )
     except AgentError as exc:
         return _error_response(exc, status_code=400)
 

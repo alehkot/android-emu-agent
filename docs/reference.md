@@ -3017,9 +3017,9 @@ android-emu-agent file [OPTIONS] COMMAND [ARGS]...
 
 - `push`: Push a local file to shared storage (sdcard).
 - `pull`: Pull a file from shared storage (sdcard).
-- `find`: Find files/folders and return metadata...
-- `list`: List files/folders in a directory...
-- `app`: App-private file operations (rooted/emulator)
+- `find`: Find files/folders visible to shell or root.
+- `list`: List files/folders visible to shell or root.
+- `app`: App-private files (root or run-as for...
 
 ### `android-emu-agent file push`
 
@@ -3067,7 +3067,7 @@ android-emu-agent file pull [OPTIONS] REMOTE_PATH
 
 ### `android-emu-agent file find`
 
-Find files/folders and return metadata (rooted/emulator).
+Find files/folders visible to shell or root.
 
 **Usage**:
 
@@ -3091,7 +3091,7 @@ android-emu-agent file find [OPTIONS] PATH
 
 ### `android-emu-agent file list`
 
-List files/folders in a directory (rooted/emulator).
+List files/folders visible to shell or root.
 
 **Usage**:
 
@@ -3113,7 +3113,7 @@ android-emu-agent file list [OPTIONS] PATH
 
 ### `android-emu-agent file app`
 
-App-private file operations (rooted/emulator)
+App-private files (root or run-as for debuggable apps)
 
 **Usage**:
 
@@ -3127,12 +3127,12 @@ android-emu-agent file app [OPTIONS] COMMAND [ARGS]...
 
 **Commands**:
 
-- `push`: Push a file into app-private storage...
-- `pull`: Pull a file from app-private storage...
+- `push`: Push into app-private storage via root or...
+- `pull`: Pull from app-private storage via root or...
 
 #### `android-emu-agent file app push`
 
-Push a file into app-private storage (rooted/emulator).
+Push into app-private storage via root or run-as.
 
 **Usage**:
 
@@ -3155,7 +3155,7 @@ android-emu-agent file app push [OPTIONS] PACKAGE LOCAL_PATH
 
 #### `android-emu-agent file app pull`
 
-Pull a file from app-private storage (rooted/emulator).
+Pull from app-private storage via root or run-as.
 
 **Usage**:
 

@@ -6,6 +6,8 @@ import asyncio
 import shlex
 import shutil
 import subprocess
+import tarfile
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
@@ -42,6 +44,7 @@ class FileManager:
 
     _FIND_DELIMITER = "|"
     _FIND_FORMAT = "%n|%F|%s|%u|%g|%a|%Y"
+    _SHELL_EXIT_MARKER = "__AEA_EXIT_CODE__:"
 
     def __init__(self, output_dir: Path | None = None) -> None:
         default_dir = Path.home() / ".android-emu-agent" / "artifacts" / "files"
@@ -73,23 +76,123 @@ class FileManager:
         package: str,
         remote_path: str,
         local_path: str | None,
+        *,
+        use_root: bool,
     ) -> Path:
         remote_abs = self._resolve_app_path(package, remote_path)
-        stage_dir = self._stage_dir(package)
-        stage_path = f"{stage_dir}/{self._stage_name(package)}"
-        stage_cmd = (
-            f"rm -rf {shlex.quote(stage_path)} "
-            f"&& mkdir -p {shlex.quote(stage_dir)} "
-            f"&& cp -r {shlex.quote(remote_abs)} {shlex.quote(stage_path)}"
-        )
-        await self._shell_su(device, stage_cmd)
-
         local = self._resolve_local_path(serial, remote_path, local_path, prefix=f"{package}_")
         local.parent.mkdir(parents=True, exist_ok=True)
-        await self._run_adb(serial, ["pull", stage_path, str(local)])
-        await self._shell_su(device, f"rm -rf {shlex.quote(stage_path)}")
+        if not use_root:
+            await self._app_pull_run_as(device, serial, package, remote_abs, local)
+            logger.info("app_file_pulled", serial=serial, remote=remote_abs, local=str(local))
+            return local
+
+        stage_dir = self._stage_dir(package)
+        stage_path = f"{stage_dir}/{self._stage_name(package)}"
+        prepare_parts = [
+            f"rm -rf {shlex.quote(stage_path)}",
+            f"mkdir -p {shlex.quote(stage_dir)}",
+            f"chmod 0733 {shlex.quote(stage_dir)}",
+        ]
+        await self._shell_with_optional_root(
+            device,
+            " && ".join(prepare_parts),
+            use_root=use_root,
+        )
+        stage_cmd = " && ".join(
+            [
+                f"cp -r {shlex.quote(remote_abs)} {shlex.quote(stage_path)}",
+                f"chmod -R a+rX {shlex.quote(stage_path)}",
+            ]
+        )
+
+        try:
+            await self._shell_app(device, package, stage_cmd, use_root=use_root)
+            await self._run_adb(serial, ["pull", stage_path, str(local)])
+        finally:
+            await self._shell(device, f"rm -rf {shlex.quote(stage_path)}")
         logger.info("app_file_pulled", serial=serial, remote=remote_abs, local=str(local))
         return local
+
+    async def _app_pull_run_as(
+        self,
+        device: AdbDevice,
+        serial: str,
+        package: str,
+        remote_abs: str,
+        local: Path,
+    ) -> None:
+        """Pull app data without copying it across SELinux domains on-device."""
+        safe_remote = shlex.quote(remote_abs)
+        kind_command = (
+            f"if [ -f {safe_remote} ]; then printf file; "
+            f"elif [ -d {safe_remote} ]; then printf dir; else exit 44; fi"
+        )
+        kind = await self._shell_app(device, package, kind_command, use_root=False)
+        if kind == "file":
+            destination = local / Path(remote_abs).name if local.is_dir() else local
+            await self._run_adb_to_file(
+                serial,
+                ["exec-out", "run-as", package, "cat", remote_abs],
+                destination,
+            )
+            return
+        if kind != "dir":
+            raise file_not_found_error(remote_abs)
+
+        await self._pull_app_directory(serial, package, remote_abs, local)
+
+    async def _pull_app_directory(
+        self,
+        serial: str,
+        package: str,
+        remote_abs: str,
+        local: Path,
+    ) -> None:
+        """Stream and safely extract an app-private directory through adb exec-out."""
+
+        def _extract(archive_path: Path, extract_root: Path) -> None:
+            with tarfile.open(archive_path, mode="r:*") as archive:
+                for member in archive.getmembers():
+                    target = (extract_root / member.name).resolve()
+                    if not target.is_relative_to(extract_root.resolve()):
+                        raise self._unsafe_archive_error(member.name)
+                    if member.isdir():
+                        target.mkdir(parents=True, exist_ok=True)
+                        continue
+                    if not member.isfile():
+                        raise self._unsafe_archive_error(member.name)
+                    source = archive.extractfile(member)
+                    if source is None:
+                        raise self._unsafe_archive_error(member.name)
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    with source, target.open("wb") as destination:
+                        shutil.copyfileobj(source, destination)
+
+            local.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(extract_root, local, dirs_exist_ok=True)
+
+        with tempfile.TemporaryDirectory(prefix="aea-app-pull-") as temp_dir:
+            temp_root = Path(temp_dir)
+            archive_path = temp_root / "payload.tar"
+            extract_root = temp_root / "extracted"
+            extract_root.mkdir()
+            await self._run_adb_to_file(
+                serial,
+                [
+                    "exec-out",
+                    "run-as",
+                    package,
+                    "tar",
+                    "-C",
+                    remote_abs,
+                    "-cf",
+                    "-",
+                    ".",
+                ],
+                archive_path,
+            )
+            await asyncio.to_thread(_extract, archive_path, extract_root)
 
     async def app_push(
         self,
@@ -98,6 +201,8 @@ class FileManager:
         package: str,
         local_path: str,
         remote_path: str | None,
+        *,
+        use_root: bool,
     ) -> str:
         local = Path(local_path).expanduser()
         if not local.exists():
@@ -107,14 +212,21 @@ class FileManager:
         stage_dir = self._stage_dir(package)
         stage_path = f"{stage_dir}/{self._stage_name(package, local.name)}"
 
-        await self._run_adb(serial, ["push", str(local), stage_path])
+        await self._shell_with_optional_root(
+            device,
+            f"mkdir -p {shlex.quote(stage_dir)} && chmod 0733 {shlex.quote(stage_dir)}",
+            use_root=use_root,
+        )
         dest_parent = str(Path(remote_abs).parent)
         stage_cmd = (
             f"mkdir -p {shlex.quote(dest_parent)} "
             f"&& cp -r {shlex.quote(stage_path)} {shlex.quote(remote_abs)}"
         )
-        await self._shell_su(device, stage_cmd)
-        await self._shell(device, f"rm -f {shlex.quote(stage_path)}")
+        try:
+            await self._run_adb(serial, ["push", str(local), stage_path])
+            await self._shell_app(device, package, stage_cmd, use_root=use_root)
+        finally:
+            await self._shell(device, f"rm -rf {shlex.quote(stage_path)}")
         logger.info("app_file_pushed", serial=serial, local=str(local), remote=remote_abs)
         return remote_abs
 
@@ -125,6 +237,8 @@ class FileManager:
         name: str,
         kind: str,
         max_depth: int,
+        *,
+        use_root: bool = False,
     ) -> list[FileMatch]:
         if max_depth < 0:
             raise AgentError(
@@ -146,6 +260,7 @@ class FileManager:
         depth_flag = f"-maxdepth {max_depth}"
         parts = [
             "find",
+            "-H",
             safe_path,
             depth_flag,
             type_flag,
@@ -159,10 +274,17 @@ class FileManager:
             "+",
         ]
         cmd = " ".join(part for part in parts if part)
-        output = await self._shell_su(device, cmd)
+        output = await self._shell_with_optional_root(device, cmd, use_root=use_root)
         return self._parse_find_output(output)
 
-    async def list_metadata(self, device: AdbDevice, path: str, kind: str) -> list[FileMatch]:
+    async def list_metadata(
+        self,
+        device: AdbDevice,
+        path: str,
+        kind: str,
+        *,
+        use_root: bool = False,
+    ) -> list[FileMatch]:
         type_flag = ""
         if kind == "file":
             type_flag = "-type f"
@@ -173,6 +295,7 @@ class FileManager:
         safe_format = shlex.quote(self._FIND_FORMAT)
         parts = [
             "find",
+            "-H",
             safe_path,
             "-mindepth 1",
             "-maxdepth 1",
@@ -185,7 +308,7 @@ class FileManager:
             "+",
         ]
         cmd = " ".join(part for part in parts if part)
-        output = await self._shell_su(device, cmd)
+        output = await self._shell_with_optional_root(device, cmd, use_root=use_root)
         return self._parse_find_output(output)
 
     def _resolve_local_path(
@@ -277,14 +400,57 @@ class FileManager:
 
     async def _shell(self, device: AdbDevice, command: str) -> str:
         def _run() -> str:
-            result = device.shell(command)
+            wrapped = (
+                f"{command}; _aea_exit_code=$?; "
+                f"printf '\\n{self._SHELL_EXIT_MARKER}%s' \"$_aea_exit_code\""
+            )
+            result = device.shell(wrapped)
             output = getattr(result, "output", None)
-            return output if isinstance(output, str) else str(result)
+            if isinstance(output, str):
+                raw_output = output
+            elif isinstance(result, bytes):
+                raw_output = result.decode("utf-8", errors="replace")
+            else:
+                raw_output = str(result)
+
+            body, marker, raw_exit_code = raw_output.rpartition(self._SHELL_EXIT_MARKER)
+            if not marker or not raw_exit_code.strip().isdigit():
+                raise adb_command_error(command, "Device shell did not report an exit status")
+            exit_code = int(raw_exit_code.strip())
+            body = body.rstrip("\r\n")
+            if exit_code != 0:
+                reason = body.strip() or f"exit status {exit_code}"
+                raise adb_command_error(command, reason)
+            return body
 
         return await asyncio.to_thread(_run)
 
     async def _shell_su(self, device: AdbDevice, command: str) -> str:
         return await self._shell(device, f"su -c {shlex.quote(command)}")
+
+    async def _shell_with_optional_root(
+        self,
+        device: AdbDevice,
+        command: str,
+        *,
+        use_root: bool,
+    ) -> str:
+        if use_root:
+            return await self._shell_su(device, command)
+        return await self._shell(device, command)
+
+    async def _shell_app(
+        self,
+        device: AdbDevice,
+        package: str,
+        command: str,
+        *,
+        use_root: bool,
+    ) -> str:
+        if use_root:
+            return await self._shell_su(device, command)
+        run_as_command = f"run-as {shlex.quote(package)} sh -c {shlex.quote(command)}"
+        return await self._shell(device, run_as_command)
 
     async def _run_adb(self, serial: str, args: list[str]) -> subprocess.CompletedProcess[str]:
         def _run() -> subprocess.CompletedProcess[str]:
@@ -307,6 +473,42 @@ class FileManager:
         except subprocess.CalledProcessError as exc:
             reason = (exc.stderr or exc.stdout or str(exc)).strip()
             raise adb_command_error(" ".join(args), reason) from exc
+
+    async def _run_adb_to_file(self, serial: str, args: list[str], destination: Path) -> None:
+        """Run adb with binary stdout written directly to a host file."""
+
+        def _run() -> None:
+            adb_path = shutil.which("adb")
+            if not adb_path:
+                raise adb_not_found_error()
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with destination.open("wb") as output:
+                subprocess.run(
+                    [adb_path, "-s", serial, *args],
+                    check=True,
+                    stdout=output,
+                    stderr=subprocess.PIPE,
+                )
+
+        try:
+            await asyncio.to_thread(_run)
+        except AgentError:
+            raise
+        except FileNotFoundError as exc:
+            raise adb_not_found_error() from exc
+        except subprocess.CalledProcessError as exc:
+            stderr = exc.stderr.decode("utf-8", errors="replace") if exc.stderr else ""
+            reason = stderr.strip() or str(exc)
+            raise adb_command_error(" ".join(args), reason) from exc
+
+    @staticmethod
+    def _unsafe_archive_error(member_name: str) -> AgentError:
+        return AgentError(
+            code="ERR_UNSAFE_ARCHIVE",
+            message="Refusing to extract an unsafe app-data archive entry",
+            context={"member": member_name},
+            remediation="Pull a regular file or directory without links or special entries.",
+        )
 
     @staticmethod
     def _timestamp() -> str:

@@ -14,7 +14,7 @@ from android_emu_agent.cli.utils import (
 )
 
 app = typer.Typer(help="File transfer commands")
-app_private = typer.Typer(help="App-private file operations (rooted/emulator)")
+app_private = typer.Typer(help="App-private files (root or run-as for debuggable apps)")
 app.add_typer(app_private, name="app")
 
 
@@ -66,7 +66,7 @@ def file_find(
     session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Find files/folders and return metadata (rooted/emulator)."""
+    """Find files/folders visible to shell or root."""
     payload = require_target(device, session_id)
     payload.update(
         {
@@ -90,7 +90,7 @@ def file_list(
     session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """List files/folders in a directory (rooted/emulator)."""
+    """List files/folders visible to shell or root."""
     payload = require_target(device, session_id)
     payload.update({"path": path, "kind": kind})
     client = DaemonClient(timeout=FILE_TRANSFER_TIMEOUT)
@@ -112,7 +112,7 @@ def file_app_push(
     session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Push a file into app-private storage (rooted/emulator)."""
+    """Push into app-private storage via root or run-as."""
     payload = require_target(device, session_id)
     payload.update({"package": package, "local_path": local_path, "remote_path": remote_path})
     client = DaemonClient(timeout=FILE_APP_TRANSFER_TIMEOUT)
@@ -130,7 +130,7 @@ def file_app_pull(
     session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Pull a file from app-private storage (rooted/emulator)."""
+    """Pull from app-private storage via root or run-as."""
     payload = require_target(device, session_id)
     payload.update({"package": package, "remote_path": remote_path, "local_path": local_path})
     client = DaemonClient(timeout=FILE_APP_TRANSFER_TIMEOUT)

@@ -275,6 +275,8 @@ These operations usually work without root access:
 - Install, uninstall, launch, stop, reset, or open a link in an app.
 - List, grant, and revoke runtime permissions.
 - Push and pull files in shared storage.
+- Find and list files in shell-readable storage.
+- Push and pull app-private files for debuggable apps via `run-as`.
 - Collect supported reliability, process, memory, graphics, and performance data.
 
 These operations require root or emulator access:
@@ -283,10 +285,8 @@ These operations require root or emulator access:
 - `reliability pull anr`
 - `reliability pull tombstones`
 - `reliability pull dropbox`
-- `file find`
-- `file list`
-- `file app push`
-- `file app pull`
+- `file find` and `file list` for paths the shell user cannot read.
+- `file app push` and `file app pull` for apps that do not permit `run-as`.
 
 Emulator snapshot save and restore commands require an emulator serial such as `emulator-5554`. A
 non-emulator serial returns `ERR_NOT_EMULATOR`.
