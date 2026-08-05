@@ -29,6 +29,24 @@ if TYPE_CHECKING:
 logger = structlog.get_logger()
 
 DEFAULT_EVENTS_PATTERN = r"am_proc_died|am_anr|am_crash|am_low_memory|wm_on_paused|wm_on_resumed"
+JOBSCHEDULER_MAX_LINES = 240
+JOBSCHEDULER_MAX_CHARS = 48_000
+
+_PROC_STATUS_FIELDS = frozenset(
+    {
+        "Name",
+        "State",
+        "Tgid",
+        "Pid",
+        "PPid",
+        "TracerPid",
+        "Uid",
+        "Gid",
+        "VmRSS",
+        "VmSwap",
+        "Threads",
+    }
+)
 
 TRIM_LEVELS = {
     "RUNNING_MODERATE",
@@ -121,22 +139,99 @@ class ReliabilityManager:
         return output
 
     async def jobscheduler(self, device: AdbDevice, package: str) -> str:
-        return await self._shell(device, f"dumpsys jobscheduler {shlex.quote(package)}")
+        output = await self._shell(device, f"dumpsys jobscheduler {shlex.quote(package)}")
+        return self._format_jobscheduler_package(output, package)
 
     async def process_info(self, device: AdbDevice, package: str) -> dict[str, str | int]:
         pid = await self._pidof(device, package)
         pid_str = str(pid)
-        ps = await self._shell(device, f"ps -A | grep -F {shlex.quote(package)}")
-        oom_adj = await self._shell(device, f"cat /proc/{pid_str}/oom_score_adj")
-        proc_state = await self._shell(
-            device, f"dumpsys activity processes | grep -m 20 -A 3 -F {shlex.quote(package)}"
+        ps = await self._shell(
+            device,
+            f"ps -p {pid_str} -o USER,PID,PPID,VSZ,RSS,WCHAN,ADDR,S,NAME",
         )
+        oom_adj = await self._shell(device, f"cat /proc/{pid_str}/oom_score_adj")
+        proc_status = await self._shell(device, f"cat /proc/{pid_str}/status")
         return {
             "pid": pid,
             "oom_score_adj": oom_adj.strip(),
             "ps": ps,
-            "process_state": proc_state,
+            "process_state": self._format_proc_status(proc_status),
         }
+
+    @classmethod
+    def _format_jobscheduler_package(cls, output: str, package: str) -> str:
+        """Return only registered job blocks belonging to one package."""
+        matching_blocks: list[list[str]] = []
+        current_block: list[str] | None = None
+
+        def append_current() -> None:
+            if current_block is None:
+                return
+            if any(
+                f" {package}/" in line or line.rstrip().endswith(f"pkg={package}")
+                for line in current_block
+            ):
+                matching_blocks.append(current_block)
+
+        for line in output.splitlines():
+            if re.match(r"^\s*JOB\s+", line):
+                append_current()
+                current_block = [line]
+                continue
+            if current_block is None:
+                continue
+            if line and not line[0].isspace():
+                append_current()
+                current_block = None
+                continue
+            current_block.append(line)
+        append_current()
+
+        if not matching_blocks:
+            return f"No registered jobs found for {package}."
+
+        lines = [f"Registered jobs for {package}: {len(matching_blocks)}"]
+        for block in matching_blocks:
+            lines.extend(block)
+        return cls._bounded_diagnostic_lines(lines)
+
+    @staticmethod
+    def _bounded_diagnostic_lines(lines: list[str]) -> str:
+        """Bound diagnostic text by line and character count with a visible marker."""
+        visible: list[str] = []
+        used_chars = 0
+        marker_reserve = 120
+        truncated = False
+
+        for line in lines:
+            if len(visible) >= JOBSCHEDULER_MAX_LINES - 1:
+                truncated = True
+                break
+            separator_chars = 1 if visible else 0
+            remaining = JOBSCHEDULER_MAX_CHARS - marker_reserve - used_chars - separator_chars
+            if len(line) > remaining:
+                if remaining > 24:
+                    visible.append(f"{line[: remaining - 20]}... [line truncated]")
+                truncated = True
+                break
+            visible.append(line)
+            used_chars += separator_chars + len(line)
+
+        if truncated:
+            visible.append(
+                "[truncated by android-emu-agent: "
+                f"showing {len(visible)} of {len(lines)} lines]"
+            )
+        return "\n".join(visible)
+
+    @staticmethod
+    def _format_proc_status(output: str) -> str:
+        """Keep stable, actionable fields from one process's proc status."""
+        return "\n".join(
+            line
+            for line in output.splitlines()
+            if line.partition(":")[0] in _PROC_STATUS_FIELDS
+        )
 
     async def meminfo(self, device: AdbDevice, package: str) -> str:
         return await self._shell(device, f"dumpsys meminfo {shlex.quote(package)}")

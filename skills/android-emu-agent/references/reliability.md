@@ -140,7 +140,7 @@ Check if the app is being restricted or killed by system policies.
 # Background restrictions (battery optimization, app standby bucket)
 uv run android-emu-agent reliability background com.example.app --device emulator-5554
 
-# Live process snapshot (pid, oom_adj score, process state)
+# Live process snapshot (exact pid, oom_adj score, selected /proc status fields)
 uv run android-emu-agent reliability process com.example.app --device emulator-5554
 ```
 
@@ -262,6 +262,10 @@ Check pending and running jobs for the app.
 ```bash
 uv run android-emu-agent reliability jobscheduler com.example.app --device emulator-5554
 ```
+
+The result is package-scoped and bounded. It includes registered job blocks and their required,
+satisfied, and unsatisfied constraints; device-wide scheduler settings and unrelated packages are
+omitted.
 
 ## Debuggable App Access (No Root Needed)
 

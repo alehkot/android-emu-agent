@@ -369,8 +369,10 @@ compatible alias.
 - `reliability dropbox print <tag> --device <serial>` Print DropBoxManager entry.
 - `reliability background <package> --device <serial>` Background restrictions.
 - `reliability last-anr --device <serial>` Last ANR summary.
-- `reliability jobscheduler <package> --device <serial>` JobScheduler constraints.
-- `reliability process <package> --device <serial>` Process snapshot (pid/oom/proc state).
+- `reliability jobscheduler <package> --device <serial>` Bounded, package-scoped JobScheduler
+  constraints.
+- `reliability process <package> --device <serial>` Exact-pid process snapshot (pid/oom/selected
+  proc status fields).
 - `reliability meminfo <package> --device <serial>` Memory diagnostics (`dumpsys meminfo`).
 - `reliability gfxinfo <package> --device <serial>` Rendering diagnostics (`dumpsys gfxinfo`).
 - `reliability compile <package> --mode reset|speed --device <serial>` Compile/reset package.

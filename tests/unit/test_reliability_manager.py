@@ -26,19 +26,104 @@ class TestProcessInfo:
                 "_shell",
                 AsyncMock(
                     side_effect=[
-                        "u0_a123 4321 com.example.app",
+                        "USER PID PPID VSZ RSS WCHAN ADDR S NAME\n"
+                        "u0_a123 4321 1 100 50 0 0 S com.example.app",
                         "800",
-                        "*APP* proc com.example.app",
+                        "Name:\texample.app\nState:\tS (sleeping)\nPid:\t4321\n"
+                        "PPid:\t1\nVmRSS:\t50 kB\nThreads:\t4\nCapEff:\t0",
                     ]
                 ),
-            ),
+            ) as shell_mock,
         ):
             result = await manager.process_info(mock_device, "com.example.app")
 
         assert result["pid"] == 4321
         assert result["oom_score_adj"] == "800"
         assert "com.example.app" in str(result["ps"])
-        assert "proc com.example.app" in str(result["process_state"])
+        assert "State:\tS (sleeping)" in str(result["process_state"])
+        assert "VmRSS:\t50 kB" in str(result["process_state"])
+        assert "CapEff" not in str(result["process_state"])
+        commands = [entry.args[1] for entry in shell_mock.await_args_list]
+        assert commands == [
+            "ps -p 4321 -o USER,PID,PPID,VSZ,RSS,WCHAN,ADDR,S,NAME",
+            "cat /proc/4321/oom_score_adj",
+            "cat /proc/4321/status",
+        ]
+
+
+class TestJobScheduler:
+    """Tests for package-scoped JobScheduler output."""
+
+    @pytest.mark.asyncio
+    async def test_jobscheduler_returns_only_requested_package_jobs(self) -> None:
+        """Global settings and other packages should not leak into output."""
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        manager = ReliabilityManager()
+        mock_device = MagicMock()
+        dump = """Settings:
+  max_jobs=100
+Registered 3 jobs:
+  JOB #u0a100/1: abc com.other/.OtherJob
+    Source: uid=u0a100 user=0 pkg=com.other
+    Required constraints: CHARGING
+  JOB #u0a101/2: def com.example.app/.SyncJob
+    Source: uid=u0a101 user=0 pkg=com.example.app
+    Required constraints: CONNECTIVITY
+    Unsatisfied constraints: CONNECTIVITY
+  JOB androidx.work.systemjobscheduler:u0a101/3: ghi com.example.app/.WorkerJob
+    Source: uid=u0a101 user=0 pkg=com.example.app
+    Required constraints: CHARGING
+Pending queue:
+  None
+"""
+
+        with patch.object(manager, "_shell", AsyncMock(return_value=dump)) as shell_mock:
+            output = await manager.jobscheduler(mock_device, "com.example.app")
+
+        assert output.startswith("Registered jobs for com.example.app: 2")
+        assert "com.example.app/.SyncJob" in output
+        assert "com.example.app/.WorkerJob" in output
+        assert "Unsatisfied constraints: CONNECTIVITY" in output
+        assert "Settings:" not in output
+        assert "com.other" not in output
+        assert "Pending queue:" not in output
+        shell_mock.assert_awaited_once_with(
+            mock_device, "dumpsys jobscheduler com.example.app"
+        )
+
+    @pytest.mark.asyncio
+    async def test_jobscheduler_reports_no_registered_jobs(self) -> None:
+        """A package without registered jobs should return a clear bounded result."""
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        manager = ReliabilityManager()
+        mock_device = MagicMock()
+
+        with patch.object(manager, "_shell", AsyncMock(return_value="Settings:\n  max_jobs=100")):
+            output = await manager.jobscheduler(mock_device, "com.example.app")
+
+        assert output == "No registered jobs found for com.example.app."
+
+    def test_jobscheduler_output_has_explicit_line_bound(self) -> None:
+        """Large packages should be truncated with a visible marker."""
+        from android_emu_agent.reliability.manager import (
+            JOBSCHEDULER_MAX_CHARS,
+            JOBSCHEDULER_MAX_LINES,
+            ReliabilityManager,
+        )
+
+        lines = [f"line {index}" for index in range(JOBSCHEDULER_MAX_LINES + 20)]
+
+        output = ReliabilityManager._bounded_diagnostic_lines(lines)
+
+        assert len(output.splitlines()) <= JOBSCHEDULER_MAX_LINES
+        assert len(output) <= JOBSCHEDULER_MAX_CHARS
+        assert "truncated by android-emu-agent" in output
+
+        long_output = ReliabilityManager._bounded_diagnostic_lines(["x" * 20_000] * 5)
+        assert len(long_output) <= JOBSCHEDULER_MAX_CHARS
+        assert "truncated by android-emu-agent" in long_output
 
 
 class TestMemGfxInfo:
