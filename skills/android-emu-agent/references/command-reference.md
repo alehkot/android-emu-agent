@@ -361,6 +361,9 @@ compatible alias.
 - `emulator snapshot restore <serial> <name>` Restore emulator snapshot and restart the emulator by
   default. Use `--no-restart` for a live console load.
 
+Snapshot names accept 1-128 letters, digits, dots, underscores, or hyphens. Spaces and line breaks
+are rejected before the emulator console is contacted.
+
 ### Reliability
 
 - `reliability profile <package> --device <serial>` Bounded process, memory, rendering, background,

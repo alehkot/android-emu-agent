@@ -32,7 +32,11 @@ def emulator_list_avds(
 @app.command("start")
 def emulator_start(
     avd_name: str = typer.Argument(..., help="AVD name from 'emulator -list-avds'"),
-    snapshot: str | None = typer.Option(None, "--snapshot", help="Snapshot name to load on boot"),
+    snapshot: str | None = typer.Option(
+        None,
+        "--snapshot",
+        help="Snapshot name (letters, digits, dots, underscores, or hyphens)",
+    ),
     wipe_data: bool = typer.Option(False, "--wipe-data", help="Wipe userdata before boot"),
     cold_boot: bool = typer.Option(
         False,
@@ -98,7 +102,10 @@ def emulator_stop(
 @snapshot_app.command("save")
 def emulator_snapshot_save(
     serial: str = typer.Argument(..., help="Emulator serial (e.g., emulator-5554)"),
-    name: str = typer.Argument(..., help="Snapshot name"),
+    name: str = typer.Argument(
+        ...,
+        help="Snapshot name (letters, digits, dots, underscores, or hyphens)",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Save emulator snapshot."""
@@ -115,7 +122,10 @@ def emulator_snapshot_save(
 @snapshot_app.command("restore")
 def emulator_snapshot_restore(
     serial: str = typer.Argument(..., help="Emulator serial (e.g., emulator-5554)"),
-    name: str = typer.Argument(..., help="Snapshot name"),
+    name: str = typer.Argument(
+        ...,
+        help="Snapshot name (letters, digits, dots, underscores, or hyphens)",
+    ),
     restart: bool = typer.Option(
         True,
         "--restart/--no-restart",

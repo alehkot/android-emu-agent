@@ -195,6 +195,18 @@ def emulator_launch_failed_error(avd_name: str, reason: str) -> AgentError:
     )
 
 
+def invalid_snapshot_name_error(name: str) -> AgentError:
+    """Create error for an unsafe or unsupported emulator snapshot name."""
+    return AgentError(
+        code="ERR_INVALID_SNAPSHOT_NAME",
+        message=f"Invalid emulator snapshot name: {name!r}",
+        context={"name": name},
+        remediation=(
+            "Use 1-128 letters, digits, dots, underscores, or hyphens with no spaces or newlines."
+        ),
+    )
+
+
 def invalid_package_error(package: str) -> AgentError:
     """Create error for invalid package name."""
     return AgentError(

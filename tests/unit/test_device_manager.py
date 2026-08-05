@@ -751,6 +751,36 @@ class TestEmulatorSnapshot:
             assert any("avd snapshot save baseline" in c for c in write_calls)
 
     @pytest.mark.asyncio
+    async def test_snapshot_save_rejects_console_command_injection(self) -> None:
+        from android_emu_agent.device.manager import DeviceManager
+        from android_emu_agent.errors import AgentError
+
+        manager = DeviceManager()
+        with (
+            patch("asyncio.open_connection", AsyncMock()) as open_connection,
+            pytest.raises(AgentError) as exc_info,
+        ):
+            await manager.emulator_snapshot_save("emulator-5554", "baseline\navd kill")
+
+        assert exc_info.value.code == "ERR_INVALID_SNAPSHOT_NAME"
+        open_connection.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_console_rejects_multiline_command(self) -> None:
+        from android_emu_agent.device.manager import DeviceManager
+        from android_emu_agent.errors import AgentError
+
+        manager = DeviceManager()
+        with (
+            patch("asyncio.open_connection", AsyncMock()) as open_connection,
+            pytest.raises(AgentError) as exc_info,
+        ):
+            await manager._send_console_command(5554, "avd snapshot save ok\navd kill")
+
+        assert exc_info.value.code == "ERR_EMULATOR_COMMAND"
+        open_connection.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_snapshot_restore(self) -> None:
         """Should restore emulator snapshot via stop/load/start by default."""
         from android_emu_agent.device.manager import DeviceManager

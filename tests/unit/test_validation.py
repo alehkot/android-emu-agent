@@ -106,6 +106,23 @@ class TestValidateUri:
         assert exc_info.value.code == "ERR_INVALID_URI"
 
 
+class TestValidateSnapshotName:
+    @pytest.mark.parametrize("name", ["baseline", "clean.boot-1", "_quick_boot"])
+    def test_valid_snapshot_name(self, name: str) -> None:
+        from android_emu_agent.validation import validate_snapshot_name
+
+        validate_snapshot_name(name)
+
+    @pytest.mark.parametrize("name", ["", "has space", "baseline\navd kill", "x" * 129])
+    def test_invalid_snapshot_name(self, name: str) -> None:
+        from android_emu_agent.validation import validate_snapshot_name
+
+        with pytest.raises(AgentError) as exc_info:
+            validate_snapshot_name(name)
+
+        assert exc_info.value.code == "ERR_INVALID_SNAPSHOT_NAME"
+
+
 class TestGetConsolePort:
     """Tests for get_console_port."""
 

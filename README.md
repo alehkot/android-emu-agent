@@ -331,22 +331,23 @@ adb devices
 uv run android-emu-agent daemon status --json
 ```
 
-| Error code                | Meaning                                      | Next action                                               |
-| ------------------------- | -------------------------------------------- | --------------------------------------------------------- |
-| `ERR_STALE_REF`           | The ref came from an old snapshot            | Take a new snapshot and use a current ref or selector     |
-| `ERR_NOT_FOUND`           | The target element was not found             | Inspect the screen with `--full` or use another selector  |
-| `ERR_BLOCKED_INPUT`       | A dialog, keyboard, or overlay blocked input | Dismiss the blocker or wait for the device to become idle |
-| `ERR_TIMEOUT`             | A wait or expectation did not complete       | Check the condition or increase `--timeout-ms`            |
-| `ERR_SESSION_EXPIRED`     | The session no longer exists                 | Start a new session                                       |
-| `ERR_DEVICE_OFFLINE`      | The device disconnected                      | Reconnect the device and rerun `device list`              |
-| `ERR_PERMISSION`          | The operation requires root access           | Use a rooted target or skip the operation                 |
-| `ERR_ADB_NOT_FOUND`       | `adb` is not on `PATH`                       | Install Android SDK platform-tools and update `PATH`      |
-| `ERR_SDK_TOOL_NOT_FOUND`  | An Android SDK command is missing            | Add `emulator` or `avdmanager` to `PATH`                  |
-| `ERR_JDK_NOT_FOUND`       | A Java runtime is missing                    | Install JDK 17 or later, or set `JAVA_HOME`               |
-| `ERR_JDK_UNSUPPORTED`     | Java is too old or lacks the JDI module      | Install JDK 17 or later, or update `JAVA_HOME`            |
-| `ERR_TASK_INVALID`        | A JSON task file is invalid                  | Fix the task and rerun `task validate`                    |
-| `ERR_TASK_SCRIPT_INVALID` | A `.aea` script is invalid                   | Fix the reported line and rerun `task validate`           |
-| `ERR_EXPECTATION_FAILED`  | The expected state was not observed          | Inspect the state, selector, and timeout                  |
+| Error code                  | Meaning                                      | Next action                                               |
+| --------------------------- | -------------------------------------------- | --------------------------------------------------------- |
+| `ERR_STALE_REF`             | The ref came from an old snapshot            | Take a new snapshot and use a current ref or selector     |
+| `ERR_NOT_FOUND`             | The target element was not found             | Inspect the screen with `--full` or use another selector  |
+| `ERR_BLOCKED_INPUT`         | A dialog, keyboard, or overlay blocked input | Dismiss the blocker or wait for the device to become idle |
+| `ERR_TIMEOUT`               | A wait or expectation did not complete       | Check the condition or increase `--timeout-ms`            |
+| `ERR_SESSION_EXPIRED`       | The session no longer exists                 | Start a new session                                       |
+| `ERR_DEVICE_OFFLINE`        | The device disconnected                      | Reconnect the device and rerun `device list`              |
+| `ERR_PERMISSION`            | The operation requires root access           | Use a rooted target or skip the operation                 |
+| `ERR_ADB_NOT_FOUND`         | `adb` is not on `PATH`                       | Install Android SDK platform-tools and update `PATH`      |
+| `ERR_SDK_TOOL_NOT_FOUND`    | An Android SDK command is missing            | Add `emulator` or `avdmanager` to `PATH`                  |
+| `ERR_JDK_NOT_FOUND`         | A Java runtime is missing                    | Install JDK 17 or later, or set `JAVA_HOME`               |
+| `ERR_JDK_UNSUPPORTED`       | Java is too old or lacks the JDI module      | Install JDK 17 or later, or update `JAVA_HOME`            |
+| `ERR_INVALID_SNAPSHOT_NAME` | Snapshot name contains unsupported input     | Use only letters, digits, `.`, `_`, or `-`                |
+| `ERR_TASK_INVALID`          | A JSON task file is invalid                  | Fix the task and rerun `task validate`                    |
+| `ERR_TASK_SCRIPT_INVALID`   | A `.aea` script is invalid                   | Fix the reported line and rerun `task validate`           |
+| `ERR_EXPECTATION_FAILED`    | The expected state was not observed          | Inspect the state, selector, and timeout                  |
 
 For more recovery guidance, see the
 [troubleshooting reference](https://github.com/alehkot/android-emu-agent/blob/main/skills/android-emu-agent/references/troubleshooting.md).

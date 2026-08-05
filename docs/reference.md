@@ -2322,7 +2322,7 @@ android-emu-agent emulator start [OPTIONS] AVD_NAME
 
 **Options**:
 
-- `--snapshot TEXT`: Snapshot name to load on boot
+- `--snapshot TEXT`: Snapshot name (letters, digits, dots, underscores, or hyphens)
 - `--wipe-data`: Wipe userdata before boot
 - `--cold-boot`: Start without loading Quick Boot or snapshot state
 - `--no-snapshot-save`: Do not save Quick Boot state on exit
@@ -2384,7 +2384,7 @@ android-emu-agent emulator snapshot save [OPTIONS] SERIAL NAME
 **Arguments**:
 
 - `SERIAL`: Emulator serial (e.g., emulator-5554) [required]
-- `NAME`: Snapshot name [required]
+- `NAME`: Snapshot name (letters, digits, dots, underscores, or hyphens) [required]
 
 **Options**:
 
@@ -2404,7 +2404,7 @@ android-emu-agent emulator snapshot restore [OPTIONS] SERIAL NAME
 **Arguments**:
 
 - `SERIAL`: Emulator serial (e.g., emulator-5554) [required]
-- `NAME`: Snapshot name [required]
+- `NAME`: Snapshot name (letters, digits, dots, underscores, or hyphens) [required]
 
 **Options**:
 

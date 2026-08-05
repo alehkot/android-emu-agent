@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import re
 
-from android_emu_agent.errors import invalid_package_error, invalid_uri_error, not_emulator_error
+from android_emu_agent.errors import (
+    invalid_package_error,
+    invalid_snapshot_name_error,
+    invalid_uri_error,
+    not_emulator_error,
+)
 
 # Package name: starts with letter, segments separated by dots, each segment alphanumeric/underscore
 PACKAGE_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$")
 URI_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:[^\s]+$")
+SNAPSHOT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 
 
 def validate_package(package: str) -> None:
@@ -35,6 +41,12 @@ def validate_uri(uri: str) -> None:
     """
     if not URI_PATTERN.fullmatch(uri):
         raise invalid_uri_error(uri)
+
+
+def validate_snapshot_name(name: str) -> None:
+    """Validate an emulator snapshot name before using the line-oriented console protocol."""
+    if not SNAPSHOT_NAME_PATTERN.fullmatch(name):
+        raise invalid_snapshot_name_error(name)
 
 
 def get_console_port(serial: str) -> int:

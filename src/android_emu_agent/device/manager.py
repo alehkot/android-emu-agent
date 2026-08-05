@@ -31,7 +31,7 @@ from android_emu_agent.errors import (
     snapshot_failed_error,
     timeout_error,
 )
-from android_emu_agent.validation import get_console_port
+from android_emu_agent.validation import get_console_port, validate_snapshot_name
 
 
 class Orientation(Enum):
@@ -860,6 +860,8 @@ class DeviceManager:
         available_avds = await self.emulator_list_avds()
         if avd_name not in available_avds:
             raise avd_not_found_error(avd_name)
+        if snapshot is not None:
+            validate_snapshot_name(snapshot)
 
         emulator_path = self._resolve_sdk_tool("emulator")
         existing_serials = await self._list_running_emulator_serials()
@@ -925,6 +927,7 @@ class DeviceManager:
             serial: Emulator serial (e.g., 'emulator-5554')
             name: Snapshot name
         """
+        validate_snapshot_name(name)
         port = get_console_port(serial)
         await self._send_console_command(port, f"avd snapshot save {name}")
         logger.info("snapshot_saved", serial=serial, name=name)
@@ -938,6 +941,7 @@ class DeviceManager:
             serial: Emulator serial (e.g., 'emulator-5554')
             name: Snapshot name
         """
+        validate_snapshot_name(name)
         port = get_console_port(serial)
         await self.evict_device(serial)
 
@@ -1109,6 +1113,9 @@ class DeviceManager:
         Raises:
             AgentError: If connection fails or command returns error
         """
+        if "\n" in command or "\r" in command:
+            raise emulator_command_error("console", "command must contain exactly one line")
+
         try:
             reader, writer = await asyncio.open_connection("localhost", port)
         except OSError as e:
