@@ -62,8 +62,10 @@ draining them; add `--drain-events` only when you intentionally want to consume 
 
 `debug break set` may return `status=pending` when the class is not loaded yet. This is expected.
 The bridge subscribes to class-prepare events and resolves the breakpoint automatically when the
-class loads. Use `debug events` to watch for `breakpoint_resolved` and `breakpoint_hit`. Exception
-breakpoints can also resolve lazily (`exception_breakpoint_resolved`).
+class loads. Use `debug events` to watch for `breakpoint_resolved`, `breakpoint_invalid`, and
+`breakpoint_hit`. An invalid line on an already loaded exact class fails immediately; a deferred
+exact class breakpoint emits `breakpoint_invalid` if that class loads without executable code on the
+requested line. Exception breakpoints can also resolve lazily (`exception_breakpoint_resolved`).
 
 When launching with `app launch ... --wait-debugger`, attach with `--keep-suspended` if you need to
 set initial breakpoints before any code runs:
@@ -115,6 +117,7 @@ On hit, `debug events` returns `exception_hit` with throw/catch locations and st
 `debug events` can return mixed event types in one queue drain. Common ones:
 
 - `breakpoint_resolved`, `breakpoint_hit`
+- `breakpoint_invalid`
 - `breakpoint_condition_error`
 - `logpoint_hit`
 - `exception_breakpoint_resolved`, `exception_hit`

@@ -116,6 +116,27 @@ class CommandsIntegrationTest {
         assertEquals(0, after["count"]?.jsonPrimitive?.int)
     }
 
+    @Test
+    fun `loaded class with invalid breakpoint line returns actionable error`() {
+        rpcResult(
+            "attach",
+            """{"host":"localhost","port":$targetPort,"keep_suspended":true}""",
+        )
+
+        val response =
+            rpc(
+                "set_breakpoint",
+                """{"class_pattern":"java.lang.String","line":999999}""",
+            )
+        val error = response["error"]?.jsonObject
+            ?: throw AssertionError("Missing error payload")
+
+        assertEquals(INVALID_PARAMS, error["code"]?.jsonPrimitive?.int)
+        assertTrue(
+            error["message"]?.jsonPrimitive?.content?.contains("ERR_BREAKPOINT_INVALID_LINE") == true,
+        )
+    }
+
     private fun rpcResult(method: String, paramsJson: String = "{}"): JsonObject {
         val response = rpc(method, paramsJson)
         val error = response["error"]

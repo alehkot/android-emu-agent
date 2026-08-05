@@ -286,8 +286,10 @@ Step commands return an Observe-Act-Verify payload with `status`, `location`, `m
 an actionable remediation hint.
 
 `debug break set` may return `status=pending` when the class is not loaded yet. Keep execution
-running and use `debug events` to wait for `breakpoint_resolved` / `breakpoint_hit`. Exception
-breakpoints can also resolve later via `exception_breakpoint_resolved`.
+running and use `debug events` to wait for `breakpoint_resolved`, `breakpoint_invalid`, or
+`breakpoint_hit`. Invalid lines on loaded exact classes fail immediately; deferred exact classes
+emit `breakpoint_invalid` if the requested line has no executable code. Exception breakpoints can
+also resolve later via `exception_breakpoint_resolved`.
 
 `--condition` is parsed at set time and supports value paths, literals (`null`, booleans, numbers,
 strings), boolean operators (`!`, `&&`, `||`), comparisons (`==`, `!=`, `>`, `>=`, `<`, `<=`), and

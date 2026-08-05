@@ -956,6 +956,7 @@ class DebugManager:
 
                 if event_type in {
                     "breakpoint_hit",
+                    "breakpoint_invalid",
                     "breakpoint_resolved",
                     "logpoint_hit",
                     "breakpoint_condition_error",

@@ -1176,6 +1176,34 @@ class TestMilestone2DebugMethods:
         assert isinstance(queued[0]["timestamp_ms"], int)
 
     @pytest.mark.asyncio
+    async def test_monitor_events_queues_invalid_breakpoint_notifications(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+        bridge = MagicMock()
+        bridge.next_event = AsyncMock(
+            side_effect=[
+                {
+                    "jsonrpc": "2.0",
+                    "method": "event",
+                    "params": {
+                        "type": "breakpoint_invalid",
+                        "breakpoint_id": 3,
+                        "class_pattern": "com.example.MainActivity",
+                        "line": 999,
+                        "reason": "no_executable_code",
+                    },
+                },
+                asyncio.CancelledError(),
+            ]
+        )
+
+        await manager._monitor_events("s-test", bridge, MagicMock())
+
+        queued = manager._event_queues["s-test"]
+        assert queued[0]["type"] == "breakpoint_invalid"
+        assert queued[0]["reason"] == "no_executable_code"
+
+    @pytest.mark.asyncio
     async def test_monitor_events_records_logpoint_history(self) -> None:
         manager = DebugManager()
         self._attach_session(manager)

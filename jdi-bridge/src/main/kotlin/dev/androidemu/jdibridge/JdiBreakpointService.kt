@@ -3,12 +3,12 @@ package dev.androidemu.jdibridge
 import com.sun.jdi.BooleanValue
 import com.sun.jdi.ByteValue
 import com.sun.jdi.CharValue
-import com.sun.jdi.ClassType
 import com.sun.jdi.DoubleValue
 import com.sun.jdi.FloatValue
 import com.sun.jdi.IntegerValue
 import com.sun.jdi.Location
 import com.sun.jdi.LongValue
+import com.sun.jdi.ReferenceType
 import com.sun.jdi.ShortValue
 import com.sun.jdi.StringReference
 import com.sun.jdi.ThreadReference
@@ -35,6 +35,7 @@ internal class JdiBreakpointService(
     private val emitEvent: (String, JsonObject) -> Unit,
 ) {
     companion object {
+        private const val ERR_BREAKPOINT_INVALID_LINE = "ERR_BREAKPOINT_INVALID_LINE"
         private const val ERR_CONDITION_SYNTAX = "ERR_CONDITION_SYNTAX"
     }
 
@@ -84,7 +85,8 @@ internal class JdiBreakpointService(
                 id
             }
 
-        val resolvedLocation = findLoadedLocation(machine, classPattern, line)
+        val loadedTypes = findLoadedTypes(machine, classPattern)
+        val resolvedLocation = findLocationOnTypes(loadedTypes, line)
         if (resolvedLocation != null) {
             val request = createEnabledBreakpoint(machine, resolvedLocation, breakpointId)
             val locationText = formatLocation(resolvedLocation)
@@ -118,6 +120,7 @@ internal class JdiBreakpointService(
                 }
             }
         }
+        rejectInvalidLineForLoadedExactClass(classPattern, line, loadedTypes)
 
         val prepareRequest =
             machine
@@ -127,48 +130,7 @@ internal class JdiBreakpointService(
                     addClassFilter(classPattern)
                     setSuspendPolicy(EventRequest.SUSPEND_NONE)
                     putProperty("breakpoint_id", breakpointId)
-                    enable()
                 }
-
-        val resolvedAfterPrepare = findLoadedLocation(machine, classPattern, line)
-        if (resolvedAfterPrepare != null) {
-            val request = createEnabledBreakpoint(machine, resolvedAfterPrepare, breakpointId)
-            val locationText = formatLocation(resolvedAfterPrepare)
-            try {
-                machine.eventRequestManager().deleteEventRequest(prepareRequest)
-            } catch (_: Exception) {
-                // Best effort cleanup.
-            }
-            synchronized(state.lock) {
-                state.breakpoints[breakpointId] =
-                    BreakpointState(
-                        id = breakpointId,
-                        classPattern = classPattern,
-                        line = line,
-                        status = "set",
-                        location = locationText,
-                        request = request,
-                        condition = normalizedCondition,
-                        compiledCondition = compiledCondition,
-                        logMessage = logMessage,
-                        captureStack = captureStack,
-                        stackMaxFrames = stackMaxFrames,
-                    )
-            }
-            return buildJsonObject {
-                put("status", "set")
-                put("breakpoint_id", breakpointId)
-                put("location", locationText)
-                if (normalizedCondition != null) {
-                    put("condition", normalizedCondition)
-                }
-                if (logMessage != null) {
-                    put("log_message", logMessage)
-                    put("capture_stack", captureStack)
-                    put("stack_max_frames", stackMaxFrames)
-                }
-            }
-        }
 
         synchronized(state.lock) {
             state.breakpoints[breakpointId] =
@@ -184,6 +146,55 @@ internal class JdiBreakpointService(
                     captureStack = captureStack,
                     stackMaxFrames = stackMaxFrames,
                 )
+            prepareRequest.enable()
+
+            val loadedAfterPrepare = findLoadedTypes(machine, classPattern)
+            val resolvedAfterPrepare = findLocationOnTypes(loadedAfterPrepare, line)
+            if (resolvedAfterPrepare != null) {
+                val request = createEnabledBreakpoint(machine, resolvedAfterPrepare, breakpointId)
+                val locationText = formatLocation(resolvedAfterPrepare)
+                try {
+                    machine.eventRequestManager().deleteEventRequest(prepareRequest)
+                } catch (_: Exception) {
+                    // Best effort cleanup.
+                }
+                state.breakpoints[breakpointId] =
+                    BreakpointState(
+                        id = breakpointId,
+                        classPattern = classPattern,
+                        line = line,
+                        status = "set",
+                        location = locationText,
+                        request = request,
+                        condition = normalizedCondition,
+                        compiledCondition = compiledCondition,
+                        logMessage = logMessage,
+                        captureStack = captureStack,
+                        stackMaxFrames = stackMaxFrames,
+                    )
+                return buildJsonObject {
+                    put("status", "set")
+                    put("breakpoint_id", breakpointId)
+                    put("location", locationText)
+                    if (normalizedCondition != null) {
+                        put("condition", normalizedCondition)
+                    }
+                    if (logMessage != null) {
+                        put("log_message", logMessage)
+                        put("capture_stack", captureStack)
+                        put("stack_max_frames", stackMaxFrames)
+                    }
+                }
+            }
+            if (shouldRejectInvalidLine(classPattern, loadedAfterPrepare)) {
+                try {
+                    machine.eventRequestManager().deleteEventRequest(prepareRequest)
+                } catch (_: Exception) {
+                    // Best effort cleanup.
+                }
+                state.breakpoints.remove(breakpointId)
+                rejectInvalidLineForLoadedExactClass(classPattern, line, loadedAfterPrepare)
+            }
         }
 
         return buildJsonObject {
@@ -499,7 +510,33 @@ internal class JdiBreakpointService(
 
         for (id in pendingIds) {
             val stateEntry = synchronized(state.lock) { state.breakpoints[id] } ?: continue
-            val location = findLocationOnType(event.referenceType() as? ClassType, stateEntry.line) ?: continue
+            val location = findLocationOnType(event.referenceType(), stateEntry.line)
+            if (location == null) {
+                if (!stateEntry.classPattern.contains('*')) {
+                    synchronized(state.lock) {
+                        val current = state.breakpoints[id] ?: return@synchronized
+                        current.status = "invalid"
+                        current.prepareRequest?.let {
+                            try {
+                                machine.eventRequestManager().deleteEventRequest(it)
+                            } catch (_: Exception) {
+                                // Best effort cleanup.
+                            }
+                        }
+                        current.prepareRequest = null
+                    }
+                    emitEvent(
+                        "breakpoint_invalid",
+                        buildJsonObject {
+                            put("breakpoint_id", id)
+                            put("class_pattern", stateEntry.classPattern)
+                            put("line", stateEntry.line)
+                            put("reason", "no_executable_code")
+                        },
+                    )
+                }
+                continue
+            }
             val request = createEnabledBreakpoint(machine, location, id)
             val locationText = formatLocation(location)
 
@@ -866,31 +903,43 @@ internal class JdiBreakpointService(
         }
     }
 
-    private fun findLoadedLocation(
+    private fun findLoadedTypes(
         machine: VirtualMachine,
         classPattern: String,
-        line: Int,
-    ): Location? {
+    ): List<ReferenceType> {
         return machine
             .allClasses()
-            .asSequence()
-            .filterIsInstance<ClassType>()
             .filter { classPatternMatches(it.name(), classPattern) }
-            .mapNotNull { findLocationOnType(it, line) }
-            .firstOrNull()
     }
 
-    private fun findLocationOnType(classType: ClassType?, line: Int): Location? {
-        if (classType == null) {
-            return null
-        }
+    private fun findLocationOnTypes(types: List<ReferenceType>, line: Int): Location? =
+        types.asSequence().mapNotNull { findLocationOnType(it, line) }.firstOrNull()
 
+    private fun findLocationOnType(referenceType: ReferenceType, line: Int): Location? {
         return try {
-            classType.locationsOfLine(line).firstOrNull()
+            referenceType.locationsOfLine(line).firstOrNull()
         } catch (_: Exception) {
             null
         }
     }
+
+    private fun rejectInvalidLineForLoadedExactClass(
+        classPattern: String,
+        line: Int,
+        loadedTypes: List<ReferenceType>,
+    ) {
+        if (shouldRejectInvalidLine(classPattern, loadedTypes)) {
+            throw RpcException(
+                INVALID_PARAMS,
+                "$ERR_BREAKPOINT_INVALID_LINE: no executable code at $classPattern:$line",
+            )
+        }
+    }
+
+    private fun shouldRejectInvalidLine(
+        classPattern: String,
+        loadedTypes: List<ReferenceType>,
+    ): Boolean = !classPattern.contains('*') && loadedTypes.isNotEmpty()
 
     private fun createEnabledBreakpoint(
         machine: VirtualMachine,
