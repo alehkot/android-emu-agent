@@ -58,6 +58,10 @@ This allows safe interleaving of UI and debugger operations in one session.
 non-destructive by default because it peeks queued events and buffered logpoint hits without
 draining them; add `--drain-events` only when you intentionally want to consume the queue.
 
+`debug status` reports `unresponsive` when cached attachment metadata exists but the bridge process
+is missing, stopped, or does not answer its bounded health check. Retry once, then detach and attach
+again; do not treat `unresponsive` as an attached debugger.
+
 ## Deferred Breakpoints
 
 `debug break set` may return `status=pending` when the class is not loaded yet. This is expected.

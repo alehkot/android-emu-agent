@@ -552,6 +552,53 @@ class TestStatus:
         assert result["pid"] == 123
         assert result["thread_count"] == 5
         assert result["suspended"] is False
+        mock_bridge.request.assert_awaited_once_with("status", timeout_seconds=5.0)
+
+    @pytest.mark.asyncio
+    async def test_status_reports_unresponsive_bridge_failure(self) -> None:
+        """A failed health RPC must not fall back to the cached attached state."""
+        manager = DebugManager()
+        manager._debug_sessions["s-test"] = DebugSessionState(
+            session_id="s-test",
+            package="com.example.app",
+            process_name="com.example.app",
+            pid=123,
+            jdwp_port=123,
+            local_forward_port=54321,
+            device_serial="emulator-5554",
+            state="attached",
+        )
+        bridge = AsyncMock()
+        bridge.is_alive = True
+        bridge.request = AsyncMock(side_effect=RuntimeError("bridge timed out"))
+        manager._bridges["s-test"] = bridge
+
+        result = await manager.status("s-test")
+
+        assert result["status"] == "unresponsive"
+        assert result["reason"] == "bridge_status_failed"
+        assert result["detail"] == "bridge timed out"
+        assert "detach and attach again" in result["remediation"]
+
+    @pytest.mark.asyncio
+    async def test_status_reports_missing_bridge_as_unresponsive(self) -> None:
+        """Cached attachment metadata without a bridge must not report attached."""
+        manager = DebugManager()
+        manager._debug_sessions["s-test"] = DebugSessionState(
+            session_id="s-test",
+            package="com.example.app",
+            process_name="com.example.app",
+            pid=123,
+            jdwp_port=123,
+            local_forward_port=54321,
+            device_serial="emulator-5554",
+            state="attached",
+        )
+
+        result = await manager.status("s-test")
+
+        assert result["status"] == "unresponsive"
+        assert result["reason"] == "bridge_missing"
 
     @pytest.mark.asyncio
     async def test_status_disconnected_includes_remediation(self) -> None:

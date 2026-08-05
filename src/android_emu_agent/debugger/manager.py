@@ -39,6 +39,7 @@ from android_emu_agent.errors import (
 logger = structlog.get_logger()
 
 BRIDGE_STEP_TIMEOUT_GRACE_SECONDS = 5.0
+BRIDGE_STATUS_TIMEOUT_SECONDS = 5.0
 
 # Default relative path from project root when developing locally.
 _DEV_JAR_RELATIVE = Path("jdi-bridge/build/libs")
@@ -389,7 +390,11 @@ class DebugManager:
         bridge = self._bridges.get(session_id)
         if bridge and bridge.is_alive:
             try:
-                result = await bridge.request("status")
+                raw_result = await bridge.request(
+                    "status",
+                    timeout_seconds=BRIDGE_STATUS_TIMEOUT_SECONDS,
+                )
+                result = self._ensure_bridge_result(raw_result, method="status")
                 suspended_raw = result.get("suspended")
                 suspended = suspended_raw if isinstance(suspended_raw, bool) else None
                 thread_count_raw = result.get("thread_count")
@@ -406,16 +411,35 @@ class DebugManager:
                     "thread_count": thread_count,
                     "suspended": suspended,
                 }
-            except Exception:
-                pass
+            except Exception as exc:
+                detail = str(exc).strip() or type(exc).__name__
+                return self._unresponsive_status(ds, "bridge_status_failed", detail)
 
+        reason = "bridge_missing" if bridge is None else "bridge_stopped"
+        detail = (
+            "No debugger bridge is registered for this attached session."
+            if bridge is None
+            else "The debugger bridge process is no longer running."
+        )
+        return self._unresponsive_status(ds, reason, detail)
+
+    @staticmethod
+    def _unresponsive_status(
+        ds: DebugSessionState,
+        reason: str,
+        detail: str,
+    ) -> dict[str, Any]:
+        """Return an honest health state when cached attachment state cannot be verified."""
         return {
-            "status": ds.state,
-            "session_id": session_id,
+            "status": "unresponsive",
+            "session_id": ds.session_id,
             "package": ds.package,
             "process_name": ds.process_name,
             "pid": ds.pid,
             "local_port": ds.local_forward_port,
+            "reason": reason,
+            "detail": detail,
+            "remediation": "Retry status once; if it remains unresponsive, detach and attach again.",
         }
 
     async def set_breakpoint(
