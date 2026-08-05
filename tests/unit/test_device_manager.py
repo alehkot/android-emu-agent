@@ -632,6 +632,78 @@ class TestEmulatorSnapshot:
         }
 
     @pytest.mark.asyncio
+    async def test_emulator_start_cleans_process_when_boot_fails(self) -> None:
+        """A failed readiness check must not leave the spawned emulator running."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        process = MagicMock(pid=4321)
+
+        with (
+            patch.object(
+                manager,
+                "emulator_list_avds",
+                AsyncMock(return_value=["Pixel_8_API_34"]),
+            ),
+            patch.object(
+                manager,
+                "_resolve_sdk_tool",
+                return_value=Path("/sdk/emulator/emulator"),
+            ),
+            patch.object(
+                manager,
+                "_list_running_emulator_serials",
+                AsyncMock(return_value=set()),
+            ),
+            patch.object(
+                manager,
+                "_spawn_emulator_process",
+                AsyncMock(return_value=process),
+            ),
+            patch.object(
+                manager,
+                "_wait_for_new_emulator_serial",
+                AsyncMock(return_value="emulator-5554"),
+            ),
+            patch.object(
+                manager,
+                "_wait_for_emulator_ready",
+                AsyncMock(side_effect=RuntimeError("boot failed")),
+            ),
+            patch.object(
+                manager,
+                "_terminate_emulator_process",
+                AsyncMock(),
+            ) as terminate,
+            pytest.raises(RuntimeError, match="boot failed"),
+        ):
+            await manager.emulator_start("Pixel_8_API_34")
+
+        terminate.assert_awaited_once_with(process, "Pixel_8_API_34")
+
+    @pytest.mark.asyncio
+    async def test_failed_emulator_cleanup_escalates_to_kill(self) -> None:
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        process = MagicMock(pid=4321)
+        process.poll.return_value = None
+        with patch(
+            "asyncio.to_thread",
+            AsyncMock(
+                side_effect=[
+                    subprocess.TimeoutExpired(cmd="emulator", timeout=5.0),
+                    0,
+                ]
+            ),
+        ) as to_thread:
+            await manager._terminate_emulator_process(process, "Pixel_8_API_34")
+
+        process.terminate.assert_called_once_with()
+        process.kill.assert_called_once_with()
+        assert to_thread.await_count == 2
+
+    @pytest.mark.asyncio
     async def test_emulator_stop(self) -> None:
         """Should stop a running emulator through adb emu kill."""
         from android_emu_agent.device.manager import DeviceManager

@@ -54,6 +54,7 @@ EMULATOR_RESTART_TIMEOUT_S = 120.0
 EMULATOR_BOOT_POLL_INTERVAL_S = 1.0
 EMULATOR_START_TIMEOUT_S = 180.0
 EMULATOR_STOP_TIMEOUT_S = 30.0
+EMULATOR_PROCESS_STOP_TIMEOUT_S = 5.0
 
 
 @dataclass
@@ -882,14 +883,18 @@ class DeviceManager:
         process = await self._spawn_emulator_process(args, avd_name)
         serial = f"emulator-{port}" if port is not None else None
 
-        if wait_boot:
-            serial = await self._wait_for_new_emulator_serial(
-                avd_name,
-                existing_serials,
-                expected_serial=serial,
-                process=process,
-            )
-            await self._wait_for_emulator_ready(serial, timeout_s=EMULATOR_START_TIMEOUT_S)
+        try:
+            if wait_boot:
+                serial = await self._wait_for_new_emulator_serial(
+                    avd_name,
+                    existing_serials,
+                    expected_serial=serial,
+                    process=process,
+                )
+                await self._wait_for_emulator_ready(serial, timeout_s=EMULATOR_START_TIMEOUT_S)
+        except BaseException:
+            await self._terminate_emulator_process(process, avd_name)
+            raise
 
         logger.info(
             "emulator_started",
@@ -966,6 +971,31 @@ class DeviceManager:
             raise sdk_tool_not_found_error("emulator") from exc
         except OSError as exc:
             raise emulator_launch_failed_error(avd_name, str(exc)) from exc
+
+    async def _terminate_emulator_process(
+        self,
+        process: subprocess.Popen[bytes],
+        avd_name: str,
+    ) -> None:
+        """Best-effort cleanup for an emulator process whose startup did not complete."""
+        if process.poll() is not None:
+            return
+
+        try:
+            process.terminate()
+            try:
+                await asyncio.to_thread(process.wait, EMULATOR_PROCESS_STOP_TIMEOUT_S)
+            except subprocess.TimeoutExpired:
+                if process.poll() is None:
+                    process.kill()
+                    await asyncio.to_thread(process.wait, EMULATOR_PROCESS_STOP_TIMEOUT_S)
+        except (OSError, subprocess.SubprocessError) as exc:
+            logger.warning(
+                "emulator_process_cleanup_failed",
+                avd_name=avd_name,
+                pid=process.pid,
+                reason=str(exc),
+            )
 
     async def _list_running_emulator_serials(self) -> set[str]:
         await self.refresh()
