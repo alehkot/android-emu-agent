@@ -51,6 +51,8 @@ class CommandOutput:
 class ReliabilityManager:
     """Runs reliability diagnostics via ADB."""
 
+    _SHELL_EXIT_MARKER = "__AEA_EXIT_CODE__:"
+
     def __init__(self, output_dir: Path | None = None) -> None:
         default_dir = Path.home() / ".android-emu-agent" / "artifacts" / "reliability"
         self.output_dir = output_dir or default_dir
@@ -585,9 +587,28 @@ class ReliabilityManager:
 
     async def _shell(self, device: AdbDevice, command: str) -> str:
         def _run() -> str:
-            result = device.shell(command)
+            wrapped = (
+                f"{command}; _aea_exit_code=$?; "
+                f"printf '\\n{self._SHELL_EXIT_MARKER}%s' \"$_aea_exit_code\""
+            )
+            result = device.shell(wrapped)
             output = getattr(result, "output", None)
-            return output if isinstance(output, str) else str(result)
+            if isinstance(output, str):
+                raw_output = output
+            elif isinstance(result, bytes):
+                raw_output = result.decode("utf-8", errors="replace")
+            else:
+                raw_output = str(result)
+
+            body, marker, raw_exit_code = raw_output.rpartition(self._SHELL_EXIT_MARKER)
+            if not marker or not raw_exit_code.strip().isdigit():
+                raise adb_command_error(command, "Device shell did not report an exit status")
+            exit_code = int(raw_exit_code.strip())
+            body = body.rstrip("\r\n")
+            if exit_code != 0:
+                reason = body.strip() or f"exit status {exit_code}"
+                raise adb_command_error(command, reason)
+            return body
 
         return await asyncio.to_thread(_run)
 

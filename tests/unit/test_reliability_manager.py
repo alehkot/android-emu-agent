@@ -179,6 +179,69 @@ class TestDropboxPrint:
         )
 
 
+class TestShellFailures:
+    """Tests for device shell exit-status handling."""
+
+    @pytest.mark.asyncio
+    async def test_shell_returns_output_only_after_zero_exit(self) -> None:
+        """Successful commands should have their internal status marker removed."""
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        manager = ReliabilityManager()
+        device = MagicMock()
+        device.shell.return_value = "entry\n__AEA_EXIT_CODE__:0"
+
+        output = await manager._shell(device, "ls files")
+
+        assert output == "entry"
+        assert "__AEA_EXIT_CODE__" in device.shell.call_args.args[0]
+
+    @pytest.mark.asyncio
+    async def test_run_as_ls_reports_non_debuggable_app(self) -> None:
+        """A rejected run-as command must not be returned as successful listing output."""
+        from android_emu_agent.errors import AgentError
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        manager = ReliabilityManager()
+        device = MagicMock()
+        device.shell.return_value = "run-as: package not debuggable\n__AEA_EXIT_CODE__:1"
+
+        with pytest.raises(AgentError) as exc_info:
+            await manager.run_as_ls(device, "com.example.release", "files")
+
+        assert exc_info.value.code == "ERR_ADB_COMMAND"
+        assert exc_info.value.context["reason"] == "run-as: package not debuggable"
+
+    @pytest.mark.asyncio
+    async def test_simpleperf_stops_after_record_command_failure(self, tmp_path: Path) -> None:
+        """A failed recording must not produce a report or attempt an adb pull."""
+        from android_emu_agent.errors import AgentError
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        manager = ReliabilityManager(output_dir=tmp_path)
+        device = MagicMock()
+        device.shell.side_effect = [
+            "1234\n__AEA_EXIT_CODE__:0",
+            "simpleperf: permission denied\n__AEA_EXIT_CODE__:1",
+        ]
+
+        with (
+            patch.object(manager, "_run_adb", AsyncMock()) as adb_mock,
+            pytest.raises(AgentError) as exc_info,
+        ):
+            await manager.simpleperf_record(
+                device,
+                "emulator-5554",
+                "com.example.app",
+                duration_seconds=1,
+            )
+
+        assert exc_info.value.code == "ERR_ADB_COMMAND"
+        assert exc_info.value.context["reason"] == "simpleperf: permission denied"
+        adb_mock.assert_not_awaited()
+        assert list(tmp_path.iterdir()) == []
+
+
 class TestNativePerformanceArtifacts:
     """Tests for bounded native artifact captures."""
 
