@@ -92,3 +92,26 @@ async def test_trace_replay_can_stop_at_first_failure(tmp_path: Path) -> None:
     assert replay["stopped_at_failure"] is True
     assert replay["step_count"] == 1
     assert replay["steps"][0]["error"]["code"] == "ERR_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_trace_manager_does_not_archive_typed_input(tmp_path: Path) -> None:
+    """Trace archives should redact set-text values from daemon exchanges."""
+    manager = TraceManager(tmp_path / "traces")
+    await manager.start("s-abc123")
+    await manager.record_daemon_exchange(
+        session_id="s-abc123",
+        diagnostic_id="diag-1",
+        method="POST",
+        path="/actions/set_text",
+        status_code=200,
+        elapsed_ms=1.0,
+        request_payload={"session_id": "s-abc123", "ref": "^a1", "text": "audit-secret"},
+        response_payload={"status": "done"},
+    )
+    stopped = await manager.stop("s-abc123")
+
+    archive_path = Path(stopped["path"])
+    assert b"audit-secret" not in archive_path.read_bytes()
+    exchange = manager.load_events(archive_path)[1]
+    assert exchange["request"]["text"] == "***REDACTED***"

@@ -13,6 +13,7 @@ from typing import Any, cast
 from uuid import uuid4
 
 from android_emu_agent.errors import AgentError
+from android_emu_agent.redaction import redact_sensitive_data
 from android_emu_agent.security import (
     ensure_private_directory,
     ensure_private_file,
@@ -22,7 +23,6 @@ from android_emu_agent.security import (
 TRACE_SCHEMA_VERSION = 1
 DEFAULT_TRACE_DIR = Path.home() / ".android-emu-agent" / "traces"
 TRACE_ARCHIVE_SUFFIX = ".aea-trace.zip"
-SENSITIVE_KEY_MARKERS = ("token", "secret", "password", "authorization", "api_key", "apikey")
 
 
 @dataclass
@@ -280,18 +280,7 @@ class TraceManager:
 
     def _redact(self, value: Any) -> Any:
         """Recursively redact sensitive values from trace payloads."""
-        if isinstance(value, dict):
-            redacted: dict[str, Any] = {}
-            for key, item in value.items():
-                lowered = key.lower()
-                if any(marker in lowered for marker in SENSITIVE_KEY_MARKERS):
-                    redacted[key] = "***REDACTED***"
-                else:
-                    redacted[key] = self._redact(item)
-            return redacted
-        if isinstance(value, list):
-            return [self._redact(item) for item in value]
-        return value
+        return redact_sensitive_data(value)
 
     def _trace_payload(self, trace: ActiveTrace, *, status: str) -> dict[str, Any]:
         return {

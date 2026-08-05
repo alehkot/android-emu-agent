@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from android_emu_agent.daemon.diagnostics import RequestDiagnostics
@@ -102,3 +103,19 @@ def test_error_response_logs_redacted_request_payload(tmp_path: Path) -> None:
     assert events[0]["session_id"] == "missing"
     assert events[0]["request"]["api_key"] == "***REDACTED***"
     assert events[0]["error"]["code"] == "ERR_SESSION_EXPIRED"
+
+
+@pytest.mark.asyncio
+async def test_set_text_payload_is_not_persisted(tmp_path: Path) -> None:
+    """Typed input should be redacted even though its key is only 'text'."""
+    diagnostics = RequestDiagnostics(tmp_path / "diagnostics")
+
+    event = {
+        "path": "/actions/set_text",
+        "request": {"session_id": "s-123", "ref": "^a1", "text": "audit-secret"},
+    }
+    await diagnostics.record(event)
+
+    raw_event = diagnostics.path.read_text(encoding="utf-8")
+    assert "audit-secret" not in raw_event
+    assert _read_events(diagnostics.path)[0]["request"]["text"] == "***REDACTED***"

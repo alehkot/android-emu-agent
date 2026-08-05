@@ -8,13 +8,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from android_emu_agent.redaction import redact_sensitive_data
 from android_emu_agent.security import (
     ensure_private_directory,
     ensure_private_file,
     open_private_append,
 )
-
-SENSITIVE_KEY_MARKERS = ("token", "secret", "password", "authorization", "api_key", "apikey")
 
 
 class RequestDiagnostics:
@@ -40,18 +39,7 @@ class RequestDiagnostics:
 
     def redact(self, value: Any) -> Any:
         """Recursively redact sensitive values in payloads."""
-        if isinstance(value, dict):
-            redacted: dict[str, Any] = {}
-            for key, item in value.items():
-                lowered = key.lower()
-                if any(marker in lowered for marker in SENSITIVE_KEY_MARKERS):
-                    redacted[key] = "***REDACTED***"
-                else:
-                    redacted[key] = self.redact(item)
-            return redacted
-        if isinstance(value, list):
-            return [self.redact(item) for item in value]
-        return value
+        return redact_sensitive_data(value)
 
     @staticmethod
     def timestamp() -> str:
