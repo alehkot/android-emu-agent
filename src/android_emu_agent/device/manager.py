@@ -59,6 +59,7 @@ EMULATOR_BOOT_POLL_INTERVAL_S = 1.0
 EMULATOR_START_TIMEOUT_S = 180.0
 EMULATOR_STOP_TIMEOUT_S = 30.0
 EMULATOR_PROCESS_STOP_TIMEOUT_S = 5.0
+EMULATOR_CONSOLE_MAX_RESPONSE_BYTES = 64 * 1024
 
 
 @dataclass
@@ -1130,23 +1131,63 @@ class DeviceManager:
             raise console_connect_error(port) from e
 
         try:
-            # Read initial banner until OK
-            await asyncio.wait_for(reader.read(1024), timeout=5.0)
+            _, banner_ok = await self._read_console_response(reader, timeout_s=5.0)
+            if not banner_ok:
+                raise emulator_command_error("console", "emulator console rejected the connection")
 
             # Send command
             writer.write(f"{command}\n".encode())
             await writer.drain()
 
-            # Read response
-            response = await asyncio.wait_for(reader.read(1024), timeout=30.0)
-            response_str = response.decode()
-
-            if "OK" not in response_str:
-                # Extract error message
-                error_msg = response_str.strip() or "Unknown error"
+            response, command_ok = await self._read_console_response(reader, timeout_s=30.0)
+            if not command_ok:
+                error_msg = response.strip() or "Unknown error"
                 raise snapshot_failed_error(command.split()[-1], error_msg)
 
-            return response_str
+            return response
         finally:
             writer.close()
             await writer.wait_closed()
+
+    async def _read_console_response(
+        self,
+        reader: asyncio.StreamReader,
+        *,
+        timeout_s: float,
+    ) -> tuple[str, bool]:
+        """Read a complete line-oriented console response through its terminal status line."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout_s
+        lines: list[str] = []
+        response_size = 0
+
+        while True:
+            remaining_s = deadline - loop.time()
+            if remaining_s <= 0:
+                raise emulator_command_error("console", "timed out waiting for a complete response")
+            try:
+                raw_line = await asyncio.wait_for(reader.readline(), timeout=remaining_s)
+            except TimeoutError as exc:
+                raise emulator_command_error(
+                    "console", "timed out waiting for a complete response"
+                ) from exc
+            except ValueError as exc:
+                raise emulator_command_error(
+                    "console", "response line exceeded the stream limit"
+                ) from exc
+
+            if not raw_line:
+                raise emulator_command_error(
+                    "console", "connection closed before the final OK or KO status"
+                )
+
+            response_size += len(raw_line)
+            if response_size > EMULATOR_CONSOLE_MAX_RESPONSE_BYTES:
+                raise emulator_command_error("console", "response exceeded 64 KiB")
+
+            line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+            lines.append(line)
+            if line == "OK":
+                return "\n".join(lines), True
+            if line == "KO" or line.startswith("KO:"):
+                return "\n".join(lines), False

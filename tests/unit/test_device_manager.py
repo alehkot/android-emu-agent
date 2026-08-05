@@ -786,8 +786,9 @@ class TestEmulatorSnapshot:
             mock_writer.drain = AsyncMock()
             mock_writer.wait_closed = AsyncMock()
             # Simulate console responses
-            mock_reader.read.side_effect = [
-                b"Android Console: type 'help' for a list of commands\r\nOK\r\n",
+            mock_reader.readline.side_effect = [
+                b"Android Console: type 'help' for a list of commands\r\n",
+                b"OK\r\n",
                 b"OK\r\n",
             ]
             mock_conn.return_value = (mock_reader, mock_writer)
@@ -797,6 +798,58 @@ class TestEmulatorSnapshot:
             # Verify command was sent
             write_calls = [str(c) for c in mock_writer.write.call_args_list]
             assert any("avd snapshot save baseline" in c for c in write_calls)
+
+    @pytest.mark.asyncio
+    async def test_console_reads_until_exact_terminal_status(self) -> None:
+        """Text containing OK must not be mistaken for the final protocol status."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        reader = AsyncMock()
+        reader.readline.side_effect = [
+            b"Android Console\r\n",
+            b"OK\r\n",
+            b"LOOKING for snapshot\r\n",
+            b"still working\r\n",
+            b"OK\r\n",
+        ]
+        writer = MagicMock()
+        writer.drain = AsyncMock()
+        writer.wait_closed = AsyncMock()
+
+        with patch("asyncio.open_connection", AsyncMock(return_value=(reader, writer))):
+            response = await manager._send_console_command(5554, "avd snapshot save baseline")
+
+        assert response == "LOOKING for snapshot\nstill working\nOK"
+        assert reader.readline.await_count == 5
+
+    @pytest.mark.asyncio
+    async def test_console_rejects_eof_before_terminal_status(self) -> None:
+        """A partial response must fail instead of being accepted or silently truncated."""
+        from android_emu_agent.device.manager import DeviceManager
+        from android_emu_agent.errors import AgentError
+
+        manager = DeviceManager()
+        reader = AsyncMock()
+        reader.readline.side_effect = [
+            b"Android Console\r\n",
+            b"OK\r\n",
+            b"saving snapshot\r\n",
+            b"",
+        ]
+        writer = MagicMock()
+        writer.drain = AsyncMock()
+        writer.wait_closed = AsyncMock()
+
+        with (
+            patch("asyncio.open_connection", AsyncMock(return_value=(reader, writer))),
+            pytest.raises(AgentError) as exc_info,
+        ):
+            await manager._send_console_command(5554, "avd snapshot save baseline")
+
+        assert exc_info.value.code == "ERR_EMULATOR_COMMAND"
+        writer.close.assert_called_once_with()
+        writer.wait_closed.assert_awaited_once_with()
 
     @pytest.mark.asyncio
     async def test_snapshot_save_rejects_console_command_injection(self) -> None:
