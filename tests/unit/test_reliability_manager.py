@@ -423,6 +423,131 @@ class TestNativePerformanceArtifacts:
         adb_mock.assert_awaited_once()
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("method_name", ["perfetto_trace", "screenrecord"])
+    async def test_native_capture_cleans_remote_file_when_pull_fails(
+        self,
+        tmp_path: Path,
+        method_name: str,
+    ) -> None:
+        """A failed pull should preserve its error while still removing device artifacts."""
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        manager = ReliabilityManager(output_dir=tmp_path)
+        mock_device = MagicMock()
+        method = getattr(manager, method_name)
+
+        with (
+            patch.object(manager, "_timestamp", return_value="20260616_120000"),
+            patch.object(manager, "_shell", AsyncMock(return_value="")) as shell_mock,
+            patch.object(manager, "_run_adb", AsyncMock(side_effect=RuntimeError("pull failed"))),
+            pytest.raises(RuntimeError, match="pull failed"),
+        ):
+            await method(mock_device, "emulator-5554", duration_seconds=1)
+
+        assert shell_mock.await_args_list[-1].args[1].startswith("rm -f ")
+
+    @pytest.mark.asyncio
+    async def test_simpleperf_cleans_remote_file_when_report_fails(self, tmp_path: Path) -> None:
+        """A report failure should not bypass cleanup of captured simpleperf data."""
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        manager = ReliabilityManager(output_dir=tmp_path)
+        mock_device = MagicMock()
+
+        with (
+            patch.object(manager, "_pidof", AsyncMock(return_value=1234)),
+            patch.object(
+                manager,
+                "_shell",
+                AsyncMock(side_effect=["", RuntimeError("report failed"), ""]),
+            ) as shell_mock,
+            pytest.raises(RuntimeError, match="report failed"),
+        ):
+            await manager.simpleperf_record(
+                mock_device,
+                "emulator-5554",
+                "com.example.app",
+                duration_seconds=1,
+            )
+
+        assert shell_mock.await_args_list[-1].args[1].startswith("rm -f ")
+
+    @pytest.mark.asyncio
+    async def test_cleanup_warning_is_returned_after_successful_capture(
+        self, tmp_path: Path
+    ) -> None:
+        """Successful captures should disclose a remote cleanup failure."""
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        manager = ReliabilityManager(output_dir=tmp_path)
+        mock_device = MagicMock()
+
+        with (
+            patch.object(manager, "_timestamp", return_value="20260616_120000"),
+            patch.object(
+                manager,
+                "_shell",
+                AsyncMock(side_effect=["", RuntimeError("permission denied")]),
+            ),
+            patch.object(manager, "_run_adb", AsyncMock()),
+        ):
+            result = await manager.screenrecord(
+                mock_device,
+                "emulator-5554",
+                duration_seconds=1,
+            )
+
+        assert "Unable to remove remote artifact" in result["warning"]
+
+    @pytest.mark.asyncio
+    async def test_dump_heap_cleans_remote_file_when_pull_fails(self, tmp_path: Path) -> None:
+        """A failed heap pull should still remove the remote dump unless explicitly retained."""
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        manager = ReliabilityManager(output_dir=tmp_path)
+        mock_device = MagicMock()
+
+        with (
+            patch.object(manager, "_shell", AsyncMock(return_value="")) as shell_mock,
+            patch.object(manager, "_run_adb", AsyncMock(side_effect=RuntimeError("pull failed"))),
+            pytest.raises(RuntimeError, match="pull failed"),
+        ):
+            await manager.dump_heap(
+                mock_device,
+                "emulator-5554",
+                "com.example.app",
+                keep_remote=False,
+            )
+
+        assert shell_mock.await_args_list[-1].args[1].startswith("rm -f ")
+
+    @pytest.mark.asyncio
+    async def test_root_dir_pull_cleans_stage_when_pull_fails(self, tmp_path: Path) -> None:
+        """A failed root-directory pull should still remove its staging directory."""
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        manager = ReliabilityManager(output_dir=tmp_path)
+        mock_device = MagicMock()
+
+        with (
+            patch.object(manager, "_shell_su", AsyncMock(return_value="")),
+            patch.object(manager, "_shell", AsyncMock(return_value="")) as shell_mock,
+            patch.object(manager, "_run_adb", AsyncMock(side_effect=RuntimeError("pull failed"))),
+            pytest.raises(RuntimeError, match="pull failed"),
+        ):
+            await manager.pull_root_dir(
+                mock_device,
+                "emulator-5554",
+                "/data/anr",
+                "anr",
+            )
+
+        shell_mock.assert_awaited_once_with(
+            mock_device,
+            "rm -rf /data/local/tmp/android-emu-agent/anr",
+        )
+
+    @pytest.mark.asyncio
     async def test_perfetto_rejects_unbounded_duration(self, tmp_path: Path) -> None:
         """Native captures should enforce bounded durations."""
         from android_emu_agent.errors import AgentError

@@ -315,17 +315,17 @@ class ReliabilityManager:
         timestamp = self._timestamp()
         safe_pkg = package.replace(".", "_")
         remote_path = f"/data/local/tmp/{safe_pkg}_{timestamp}.hprof"
-        await self._shell(
-            device,
-            f"am dumpheap {shlex.quote(package)} {shlex.quote(remote_path)}",
-        )
-
         local_path = self.output_dir / f"heap_{safe_pkg}_{timestamp}.hprof"
-        await self._run_adb(serial, ["pull", remote_path, str(local_path)])
-        ensure_private_file(local_path)
-
-        if not keep_remote:
-            await self._shell(device, f"rm -f {shlex.quote(remote_path)}")
+        try:
+            await self._shell(
+                device,
+                f"am dumpheap {shlex.quote(package)} {shlex.quote(remote_path)}",
+            )
+            await self._run_adb(serial, ["pull", remote_path, str(local_path)])
+            ensure_private_file(local_path)
+        finally:
+            if not keep_remote:
+                await self._cleanup_remote(device, remote_path)
 
         logger.info("heap_dump_saved", serial=serial, path=str(local_path))
         return local_path
@@ -356,17 +356,23 @@ class ReliabilityManager:
             f"-t {duration_seconds}s "
             f"{' '.join(shlex.quote(token) for token in category_tokens)}"
         )
-        await self._shell(device, command)
-        await self._run_adb(serial, ["pull", remote_path, str(local_path)])
-        ensure_private_file(local_path)
-        await self._shell(device, f"rm -f {shlex.quote(remote_path)}")
+        cleanup_error: str | None = None
+        try:
+            await self._shell(device, command)
+            await self._run_adb(serial, ["pull", remote_path, str(local_path)])
+            ensure_private_file(local_path)
+        finally:
+            cleanup_error = await self._cleanup_remote(device, remote_path)
         logger.info("perfetto_trace_saved", serial=serial, path=str(local_path))
-        return {
+        result = {
             "path": str(local_path),
             "remote_path": remote_path,
             "duration_seconds": duration_seconds,
             "categories": trace_categories,
         }
+        if cleanup_error:
+            result["warning"] = cleanup_error
+        return result
 
     async def simpleperf_record(
         self,
@@ -392,21 +398,24 @@ class ReliabilityManager:
         local_data = self.output_dir / base_name
         local_report = self.output_dir / f"{stem}.txt"
 
-        await self._shell(
-            device,
-            (
-                f"simpleperf record -p {pid} --duration {duration_seconds} "
-                f"-o {shlex.quote(remote_data)}"
-            ),
-        )
-        report = await self._shell(device, f"simpleperf report -i {shlex.quote(remote_data)}")
-        local_report.write_text(report, encoding="utf-8")
-        ensure_private_file(local_report)
-        await self._run_adb(serial, ["pull", remote_data, str(local_data)])
-        ensure_private_file(local_data)
-        await self._shell(device, f"rm -f {shlex.quote(remote_data)}")
+        cleanup_error: str | None = None
+        try:
+            await self._shell(
+                device,
+                (
+                    f"simpleperf record -p {pid} --duration {duration_seconds} "
+                    f"-o {shlex.quote(remote_data)}"
+                ),
+            )
+            report = await self._shell(device, f"simpleperf report -i {shlex.quote(remote_data)}")
+            local_report.write_text(report, encoding="utf-8")
+            ensure_private_file(local_report)
+            await self._run_adb(serial, ["pull", remote_data, str(local_data)])
+            ensure_private_file(local_data)
+        finally:
+            cleanup_error = await self._cleanup_remote(device, remote_data)
         logger.info("simpleperf_saved", serial=serial, package=package, path=str(local_data))
-        return {
+        result = {
             "path": str(local_data),
             "report_path": str(local_report),
             "remote_path": remote_data,
@@ -414,6 +423,9 @@ class ReliabilityManager:
             "pid": pid,
             "duration_seconds": duration_seconds,
         }
+        if cleanup_error:
+            result["warning"] = cleanup_error
+        return result
 
     async def screenrecord(
         self,
@@ -434,17 +446,23 @@ class ReliabilityManager:
         if bit_rate is not None:
             command_parts.extend(["--bit-rate", str(bit_rate)])
         command_parts.append(remote_path)
-        await self._shell(device, " ".join(shlex.quote(part) for part in command_parts))
-        await self._run_adb(serial, ["pull", remote_path, str(local_path)])
-        ensure_private_file(local_path)
-        await self._shell(device, f"rm -f {shlex.quote(remote_path)}")
+        cleanup_error: str | None = None
+        try:
+            await self._shell(device, " ".join(shlex.quote(part) for part in command_parts))
+            await self._run_adb(serial, ["pull", remote_path, str(local_path)])
+            ensure_private_file(local_path)
+        finally:
+            cleanup_error = await self._cleanup_remote(device, remote_path)
         logger.info("screenrecord_saved", serial=serial, path=str(local_path))
-        return {
+        result = {
             "path": str(local_path),
             "remote_path": remote_path,
             "duration_seconds": duration_seconds,
             "bit_rate": bit_rate,
         }
+        if cleanup_error:
+            result["warning"] = cleanup_error
+        return result
 
     async def sigquit(self, device: AdbDevice, package: str) -> int:
         pid = await self._pidof(device, package)
@@ -580,14 +598,35 @@ class ReliabilityManager:
         stage_cmd = (
             f"rm -rf {stage_dir} && mkdir -p {stage_parent} && cp -r {remote_dir} {stage_parent}"
         )
-        await self._shell_su(device, stage_cmd)
-
         local_path = self.output_dir / f"{serial}_{self._timestamp()}_{name}"
-        await self._run_adb(serial, ["pull", stage_dir, str(local_path)])
-
-        await self._shell(device, f"rm -rf {stage_dir}")
+        try:
+            await self._shell_su(device, stage_cmd)
+            await self._run_adb(serial, ["pull", stage_dir, str(local_path)])
+        finally:
+            await self._cleanup_remote(device, stage_dir, recursive=True)
         logger.info("root_dir_pulled", serial=serial, remote=remote_dir, local=str(local_path))
         return local_path
+
+    async def _cleanup_remote(
+        self,
+        device: AdbDevice,
+        remote_path: str,
+        *,
+        recursive: bool = False,
+    ) -> str | None:
+        """Best-effort cleanup that never replaces the capture or pull result."""
+        flag = "-rf" if recursive else "-f"
+        try:
+            await self._shell(device, f"rm {flag} {shlex.quote(remote_path)}")
+        except Exception as exc:  # pragma: no cover - exact transport errors vary
+            warning = f"Unable to remove remote artifact {remote_path}: {exc}"
+            logger.warning(
+                "remote_artifact_cleanup_failed",
+                remote_path=remote_path,
+                reason=str(exc),
+            )
+            return warning
+        return None
 
     @staticmethod
     def parse_meminfo_summary(output: str) -> dict[str, int]:
