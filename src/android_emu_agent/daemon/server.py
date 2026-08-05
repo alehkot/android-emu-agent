@@ -192,20 +192,36 @@ async def diagnostics_middleware(request: Request, call_next: Any) -> Response:
             "request": request_context.get("request"),
             "error": payload.get("error"),
         }
-        await diagnostics.record(event)
+        try:
+            await diagnostics.record(event)
+        except Exception:
+            logger.exception(
+                "diagnostics_record_failed",
+                diagnostic_id=diagnostic_id,
+                method=request.method,
+                path=request.url.path,
+            )
     trace_manager = getattr(core, "trace_manager", None)
     if trace_manager is not None:
         session_id = _trace_session_id(request_context, payload)
-        await trace_manager.record_daemon_exchange(
-            session_id=session_id,
-            diagnostic_id=diagnostic_id,
-            method=request.method,
-            path=request.url.path,
-            status_code=response.status_code,
-            elapsed_ms=round((time.perf_counter() - started) * 1000, 2),
-            request_payload=request_context.get("request"),
-            response_payload=payload,
-        )
+        try:
+            await trace_manager.record_daemon_exchange(
+                session_id=session_id,
+                diagnostic_id=diagnostic_id,
+                method=request.method,
+                path=request.url.path,
+                status_code=response.status_code,
+                elapsed_ms=round((time.perf_counter() - started) * 1000, 2),
+                request_payload=request_context.get("request"),
+                response_payload=payload,
+            )
+        except Exception:
+            logger.exception(
+                "trace_record_failed",
+                diagnostic_id=diagnostic_id,
+                method=request.method,
+                path=request.url.path,
+            )
     return response
 
 

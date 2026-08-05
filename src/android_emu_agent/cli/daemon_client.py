@@ -25,6 +25,7 @@ SOCKET_PATH = Path("/tmp/android-emu-agent.sock")
 PID_FILE = STATE_DIR / "daemon.pid"
 LOG_FILE = STATE_DIR / "daemon.log"
 BASE_URL = "http://android-emu-agent"
+RETRYABLE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
 class DaemonController:
@@ -175,7 +176,7 @@ class DaemonClient:
         try:
             return self._client.request(method, path, json=json_body)
         except httpx.TransportError:
-            if not self.auto_start:
+            if not self.auto_start or method.upper() not in RETRYABLE_METHODS:
                 raise
             self.controller.start()
             self._wait_for_health()

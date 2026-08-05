@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -103,6 +103,18 @@ def test_trace_start_rejects_duplicate_active_trace(tmp_path: Path) -> None:
     assert first.status_code == 200
     assert second.status_code == 409
     assert second.json()["error"]["code"] == "ERR_TRACE_ACTIVE"
+
+
+def test_trace_start_response_survives_diagnostics_failure(tmp_path: Path) -> None:
+    """A completed state mutation should not fail because observability storage failed."""
+    with _client_with_core(tmp_path) as (client, _trace_manager):
+        failure = AsyncMock(side_effect=OSError("synthetic diagnostics failure"))
+        with patch.object(DummyCore.diagnostics, "record", failure):
+            response = client.post("/trace/start", json={"session_id": "s-abc123"})
+
+    assert response.status_code == 200
+    assert response.json()["trace_status"] == "active"
+    failure.assert_awaited_once()
 
 
 def test_trace_export_rejects_unsupported_format_with_agent_error(tmp_path: Path) -> None:

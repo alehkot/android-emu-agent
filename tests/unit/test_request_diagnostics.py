@@ -7,7 +7,7 @@ import stat
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -35,12 +35,14 @@ class DummyHealthMonitor:
 
 class DummyCore:
     diagnostics: RequestDiagnostics
+    trace_manager: Any = None
 
     def __init__(self) -> None:
         self.device_manager = DummyDeviceManager()
         self.session_manager = DummySessionManager()
         self.health_monitor = DummyHealthMonitor()
         self.diagnostics = self.__class__.diagnostics
+        self.trace_manager = self.__class__.trace_manager
         self._running = False
 
     async def start(self) -> None:
@@ -59,6 +61,7 @@ def _client_with_core(tmp_path: Path) -> Any:
     from android_emu_agent.daemon import server
 
     DummyCore.diagnostics = RequestDiagnostics(tmp_path / "diagnostics")
+    DummyCore.trace_manager = None
     with patch.object(server, "DaemonCore", DummyCore), TestClient(server.app) as client:
         yield client, DummyCore.diagnostics
 
@@ -119,3 +122,38 @@ async def test_set_text_payload_is_not_persisted(tmp_path: Path) -> None:
     raw_event = diagnostics.path.read_text(encoding="utf-8")
     assert "audit-secret" not in raw_event
     assert _read_events(diagnostics.path)[0]["request"]["text"] == "***REDACTED***"
+
+
+def test_diagnostics_failure_does_not_replace_endpoint_response(tmp_path: Path) -> None:
+    """A completed endpoint response should survive diagnostics storage failure."""
+    diagnostics = RequestDiagnostics(tmp_path / "diagnostics")
+
+    async def fail_record(_event: dict[str, Any]) -> None:
+        raise OSError("synthetic diagnostics failure")
+
+    with patch.object(diagnostics, "record", side_effect=fail_record):
+        from android_emu_agent.daemon import server
+
+        DummyCore.diagnostics = diagnostics
+        DummyCore.trace_manager = None
+        with patch.object(server, "DaemonCore", DummyCore), TestClient(server.app) as client:
+            response = client.get("/devices")
+
+    assert response.status_code == 200
+    assert response.json()["devices"] == []
+
+
+def test_trace_failure_does_not_replace_endpoint_response(tmp_path: Path) -> None:
+    """A completed endpoint response should survive trace storage failure."""
+    trace_manager = AsyncMock()
+    trace_manager.record_daemon_exchange.side_effect = OSError("synthetic trace failure")
+
+    from android_emu_agent.daemon import server
+
+    DummyCore.diagnostics = RequestDiagnostics(tmp_path / "diagnostics")
+    DummyCore.trace_manager = trace_manager
+    with patch.object(server, "DaemonCore", DummyCore), TestClient(server.app) as client:
+        response = client.get("/devices")
+
+    assert response.status_code == 200
+    assert response.json()["devices"] == []
