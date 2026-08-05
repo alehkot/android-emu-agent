@@ -423,7 +423,14 @@ class TaskManager:
 
     @staticmethod
     def _response_passed(response: Mapping[str, Any]) -> bool:
-        return response.get("status") == "done"
+        if "error" in response:
+            return False
+        if response.get("status") == "done":
+            return True
+        return all(
+            key in response
+            for key in ("schema_version", "session_id", "generation", "elements")
+        )
 
     @staticmethod
     def _failure_payload(kind: str, result: Mapping[str, Any]) -> dict[str, Any]:

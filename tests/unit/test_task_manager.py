@@ -130,6 +130,31 @@ async def test_task_run_executes_steps_and_verifiers() -> None:
 
 
 @pytest.mark.asyncio
+async def test_task_run_accepts_structured_snapshot_response() -> None:
+    """Snapshot payloads are successful even though they have no generic status field."""
+    manager = TaskManager()
+
+    async def dispatcher(call: TaskCall) -> dict[str, Any]:
+        assert (call.kind, call.operation) == ("ui", "snapshot")
+        return {
+            "schema_version": 2,
+            "session_id": "s-abc123",
+            "generation": 4,
+            "elements": [],
+        }
+
+    result = await manager.run(
+        {"steps": [{"ui": "snapshot"}]},
+        session_id="s-abc123",
+        dispatcher=dispatcher,
+    )
+
+    assert result["status"] == "done"
+    assert result["passed"] is True
+    assert result["steps"][0]["passed"] is True
+
+
+@pytest.mark.asyncio
 async def test_task_run_stops_on_failed_verifier() -> None:
     """The first failed verifier should fail the task and stop by default."""
     manager = TaskManager()

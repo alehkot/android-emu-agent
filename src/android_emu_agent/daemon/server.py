@@ -1187,7 +1187,7 @@ async def _dispatch_task_call(call: TaskCall) -> dict[str, Any]:
             raise _unsupported_task_call(call)
     except AgentError as exc:
         return _agent_error_payload(exc)
-    return _endpoint_payload(response)
+    return _task_endpoint_payload(call, response)
 
 
 def _unsupported_task_call(call: TaskCall) -> AgentError:
@@ -1215,6 +1215,23 @@ def _endpoint_payload(response: EndpointResponse) -> dict[str, Any]:
     if isinstance(response, Response):
         return cast(dict[str, Any], json.loads(bytes(response.body).decode("utf-8")))
     return response
+
+
+def _task_endpoint_payload(call: TaskCall, response: EndpointResponse) -> dict[str, Any]:
+    """Normalize non-JSON task endpoint responses into task result payloads."""
+    if (
+        call.kind == "ui"
+        and call.operation == "snapshot"
+        and isinstance(response, Response)
+        and response.status_code < 400
+        and response.media_type == "application/xml"
+    ):
+        return {
+            "status": "done",
+            "mode": "raw",
+            "xml": bytes(response.body).decode("utf-8"),
+        }
+    return _endpoint_payload(response)
 
 
 @app.post("/expect/idle", response_model=None)

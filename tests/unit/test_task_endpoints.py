@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
+from starlette.responses import Response
 
 from android_emu_agent.actions.executor import ActionExecutor
 from android_emu_agent.actions.wait import WaitEngine
-from android_emu_agent.tasks import TaskManager
+from android_emu_agent.tasks import TaskCall, TaskManager
 from android_emu_agent.ui.ref_resolver import RefResolver
 
 
@@ -144,3 +146,21 @@ def test_task_script_run_endpoint_dispatches_compiled_script() -> None:
     assert data["source_name"] == "smoke.aea"
     assert data["compiled_task"]["steps"] == [{"wait": "idle"}]
     assert data["passed"] is True
+
+
+def test_task_dispatcher_wraps_raw_snapshot_response() -> None:
+    """Raw snapshot task steps should return JSON task evidence instead of failing to decode XML."""
+    from android_emu_agent.daemon import server
+
+    response = Response(content="<hierarchy />", media_type="application/xml")
+    call = TaskCall(
+        kind="ui",
+        operation="snapshot",
+        payload={"session_id": "s-abc123", "mode": "raw"},
+        label="ui:snapshot",
+    )
+
+    with patch.object(server, "ui_snapshot", AsyncMock(return_value=response)):
+        result = asyncio.run(server._dispatch_task_call(call))
+
+    assert result == {"status": "done", "mode": "raw", "xml": "<hierarchy />"}
