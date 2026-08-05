@@ -52,8 +52,12 @@ class DaemonController:
             return None
 
     def _socket_healthy(self) -> bool:
+        return self._socket_health() is not None
+
+    def _socket_health(self) -> dict[str, Any] | None:
+        """Return health data from the process owning the daemon socket."""
         if not self.socket_path.exists():
-            return False
+            return None
         secure_socket(self.socket_path)
         client = httpx.Client(
             transport=httpx.HTTPTransport(uds=str(self.socket_path)),
@@ -62,14 +66,22 @@ class DaemonController:
         )
         try:
             resp = client.get("/health")
-            healthy = resp.status_code == 200
-            if healthy:
-                secure_socket(self.socket_path)
-            return healthy
-        except httpx.HTTPError:
-            return False
+            if resp.status_code != 200:
+                return None
+            payload = resp.json()
+            if not isinstance(payload, dict):
+                return None
+            secure_socket(self.socket_path)
+            return payload
+        except (httpx.HTTPError, ValueError):
+            return None
         finally:
             client.close()
+
+    def _pid_matches_daemon(self, pid: int) -> bool:
+        """Confirm the PID file points at the process serving the daemon socket."""
+        health = self._socket_health()
+        return health is not None and health.get("pid") == pid
 
     def health(self) -> bool:
         """Return True if the daemon socket responds to /health."""
@@ -79,7 +91,9 @@ class DaemonController:
         """Start the daemon; returns PID, or -1 if already running but PID unknown."""
         pid = self._read_pid()
         if pid and self._pid_running(pid):
-            return pid
+            if self._pid_matches_daemon(pid):
+                return pid
+            PID_FILE.unlink(missing_ok=True)
         if pid:
             PID_FILE.unlink(missing_ok=True)
         if self._socket_healthy():
@@ -125,6 +139,8 @@ class DaemonController:
         if not self._pid_running(pid):
             PID_FILE.unlink(missing_ok=True)
             return False
+        if not self._pid_matches_daemon(pid):
+            return False
 
         os.kill(pid, signal.SIGTERM)
         for _ in range(20):
@@ -137,9 +153,11 @@ class DaemonController:
     def status(self) -> dict[str, Any]:
         """Return daemon status summary."""
         pid = self._read_pid()
+        pid_running = self._pid_running(pid) if pid else False
         return {
             "pid": pid,
-            "pid_running": self._pid_running(pid) if pid else False,
+            "pid_running": pid_running,
+            "pid_matches_daemon": self._pid_matches_daemon(pid) if pid_running and pid else False,
             "socket": str(self.socket_path),
             "socket_exists": self.socket_path.exists(),
         }

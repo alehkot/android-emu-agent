@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from unittest.mock import Mock
+from pathlib import Path
+from unittest.mock import Mock, patch
 
 import httpx
 import pytest
 
-from android_emu_agent.cli.daemon_client import DaemonClient
+from android_emu_agent.cli import daemon_client
+from android_emu_agent.cli.daemon_client import DaemonClient, DaemonController
 
 
 def _client_with_transport(transport_client: Mock) -> tuple[DaemonClient, Mock, Mock]:
@@ -54,3 +56,48 @@ def test_safe_request_can_retry_after_transport_error() -> None:
     assert transport_client.request.call_count == 2
     controller.start.assert_called_once_with()
     wait_for_health.assert_called_once_with()
+
+
+def _controller(socket_path: Path) -> DaemonController:
+    controller = object.__new__(DaemonController)
+    controller.socket_path = socket_path
+    return controller
+
+
+def test_stop_refuses_pid_not_serving_daemon_socket(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A reused PID must never receive the daemon's termination signal."""
+    pid_file = tmp_path / "daemon.pid"
+    pid_file.write_text("4242", encoding="utf-8")
+    monkeypatch.setattr(daemon_client, "PID_FILE", pid_file)
+    controller = _controller(tmp_path / "daemon.sock")
+    monkeypatch.setattr(controller, "_pid_running", lambda _pid: True)
+    monkeypatch.setattr(controller, "_socket_health", lambda: {"pid": 9898})
+
+    with patch.object(daemon_client.os, "kill") as kill:
+        assert controller.stop() is False
+
+    kill.assert_not_called()
+    assert pid_file.read_text(encoding="utf-8") == "4242"
+
+
+def test_start_does_not_treat_live_unowned_pid_as_daemon(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A stale reused PID should not prevent a daemon from starting."""
+    pid_file = tmp_path / "daemon.pid"
+    pid_file.write_text("4242", encoding="utf-8")
+    monkeypatch.setattr(daemon_client, "PID_FILE", pid_file)
+    monkeypatch.setattr(daemon_client, "LOG_FILE", tmp_path / "daemon.log")
+    controller = _controller(tmp_path / "daemon.sock")
+    monkeypatch.setattr(controller, "_pid_running", lambda _pid: True)
+    monkeypatch.setattr(controller, "_pid_matches_daemon", lambda _pid: False)
+    monkeypatch.setattr(controller, "_socket_healthy", lambda: False)
+    monkeypatch.setattr(controller, "_wait_for_secure_socket", Mock())
+    process = Mock(pid=5151)
+
+    with patch.object(daemon_client.subprocess, "Popen", return_value=process):
+        assert controller.start() == 5151
+
+    assert pid_file.read_text(encoding="utf-8") == "5151"

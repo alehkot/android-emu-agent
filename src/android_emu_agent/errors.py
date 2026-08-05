@@ -207,6 +207,19 @@ def invalid_snapshot_name_error(name: str) -> AgentError:
     )
 
 
+def daemon_identity_error(pid: int) -> AgentError:
+    """Create error when a PID file cannot be tied to the live daemon socket."""
+    return AgentError(
+        code="ERR_DAEMON_IDENTITY",
+        message=f"PID {pid} is running but does not own the daemon socket",
+        context={"pid": pid},
+        remediation=(
+            "Inspect ~/.android-emu-agent/daemon.log and the process before removing daemon.pid "
+            "or terminating it manually."
+        ),
+    )
+
+
 def invalid_package_error(package: str) -> AgentError:
     """Create error for invalid package name."""
     return AgentError(

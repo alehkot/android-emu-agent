@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 import zipfile
 from collections.abc import AsyncGenerator, AsyncIterator
@@ -655,6 +656,7 @@ async def health() -> dict[str, Any]:
 
     return {
         "status": "ok" if (all_healthy or not devices) else "degraded",
+        "pid": os.getpid(),
         "running": core.is_running,
         "active_sessions": len(sessions),
         "devices": devices,

@@ -38,6 +38,9 @@ inspect AVD definitions outside `android-emu-agent`.
 - `daemon stop` Stop the daemon.
 - `daemon status` Check daemon status.
 
+Daemon status reports both raw PID liveness and whether that PID owns the live daemon socket. Stop
+refuses to signal a live PID when socket ownership cannot be verified.
+
 ### Device
 
 - `device list` List connected devices.

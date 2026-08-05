@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -256,3 +257,24 @@ class TestGetStatus:
         assert "emulator-5554" in status["devices"]
         assert status["devices"]["emulator-5554"]["adb_ok"] is True
         assert status["devices"]["emulator-5554"]["u2_ok"] is True
+
+
+@pytest.mark.asyncio
+async def test_health_reports_daemon_pid() -> None:
+    """The health response should identify the process serving the socket."""
+    from android_emu_agent.daemon import server
+
+    core = SimpleNamespace(
+        health_monitor=MagicMock(get_status=MagicMock(return_value={"devices": {}})),
+        session_manager=SimpleNamespace(list_sessions=AsyncMock(return_value=[])),
+        is_running=True,
+    )
+    previous_core = getattr(server.app.state, "core", None)
+    server.app.state.core = core
+    try:
+        with patch.object(server.os, "getpid", return_value=4242):
+            result = await server.health()
+    finally:
+        server.app.state.core = previous_core
+
+    assert result["pid"] == 4242
