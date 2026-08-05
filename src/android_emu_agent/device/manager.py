@@ -1028,12 +1028,13 @@ class DeviceManager:
             current_serials = await self._list_running_emulator_serials()
             last_context["running_emulators"] = sorted(current_serials)
 
-            if expected_serial and expected_serial in current_serials:
-                return expected_serial
-
-            new_serials = sorted(current_serials - existing_serials)
-            if new_serials:
-                return new_serials[0]
+            if expected_serial:
+                if expected_serial in current_serials:
+                    return expected_serial
+            else:
+                new_serials = sorted(current_serials - existing_serials)
+                if new_serials:
+                    return new_serials[0]
 
             if process.poll() is not None:
                 raise emulator_launch_failed_error(

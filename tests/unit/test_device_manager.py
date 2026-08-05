@@ -682,6 +682,36 @@ class TestEmulatorSnapshot:
         terminate.assert_awaited_once_with(process, "Pixel_8_API_34")
 
     @pytest.mark.asyncio
+    async def test_fixed_port_wait_ignores_other_new_emulators(self) -> None:
+        """A concurrent emulator must not be mistaken for the requested fixed-port instance."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        process = MagicMock()
+        process.poll.return_value = None
+        running_serials = AsyncMock(
+            side_effect=[
+                {"emulator-5556"},
+                {"emulator-5554", "emulator-5556"},
+            ]
+        )
+
+        with (
+            patch.object(manager, "_list_running_emulator_serials", running_serials),
+            patch("asyncio.sleep", AsyncMock()),
+        ):
+            serial = await manager._wait_for_new_emulator_serial(
+                "Pixel_8_API_34",
+                set(),
+                expected_serial="emulator-5554",
+                process=process,
+                timeout_s=1.0,
+            )
+
+        assert serial == "emulator-5554"
+        assert running_serials.await_count == 2
+
+    @pytest.mark.asyncio
     async def test_failed_emulator_cleanup_escalates_to_kill(self) -> None:
         from android_emu_agent.device.manager import DeviceManager
 
