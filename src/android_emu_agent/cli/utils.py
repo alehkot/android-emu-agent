@@ -42,6 +42,12 @@ def _maybe_render_error(data: dict[str, Any]) -> None:
     raise typer.Exit(code=1)
 
 
+def _exit_if_error(data: dict[str, Any]) -> None:
+    """Return a failure exit code after machine-readable output is emitted."""
+    if data.get("error"):
+        raise typer.Exit(code=1)
+
+
 def _maybe_render_done(data: dict[str, Any]) -> bool:
     if not (isinstance(data, dict) and data.get("status") == "done"):
         return False
@@ -68,6 +74,7 @@ def handle_response(resp: Any, json_output: bool = False) -> None:
     data = _parse_response_json(resp)
     if json_output:
         typer.echo(format_json(data))
+        _exit_if_error(data)
         return
 
     _maybe_render_error(data)
@@ -80,6 +87,7 @@ def handle_output_response(resp: Any, json_output: bool = False) -> None:
     data = _parse_response_json(resp)
     if json_output:
         typer.echo(format_json(data))
+        _exit_if_error(data)
         return
 
     _maybe_render_error(data)
@@ -113,6 +121,7 @@ def handle_response_with_pull(
 
     if json_output:
         typer.echo(format_json(data))
+        _exit_if_error(data)
         return
 
     _maybe_render_error(data)
