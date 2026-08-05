@@ -137,7 +137,7 @@ class DebugManager:
         except Exception as exc:
             raise bridge_not_running_error(f"Failed to resolve bridge JAR: {exc}") from None
 
-    async def start_bridge(self, session_id: str) -> BridgeClient:
+    async def start_bridge(self, session_id: str, *, verify: bool = True) -> BridgeClient:
         """Start a new bridge for a debug session. Returns the client."""
         if session_id in self._bridges:
             client = self._bridges[session_id]
@@ -151,14 +151,15 @@ class DebugManager:
         client = BridgeClient(java_path, jar_path)
         await client.start()
 
-        try:
-            result = await client.ping()
-            logger.info("bridge_ping_ok", session_id=session_id, result=result)
-        except Exception as exc:
-            await client.stop()
-            if isinstance(exc, AgentError):
-                raise
-            raise bridge_not_running_error("bridge started but ping failed") from None
+        if verify:
+            try:
+                result = await client.ping()
+                logger.info("bridge_ping_ok", session_id=session_id, result=result)
+            except Exception as exc:
+                await client.stop()
+                if isinstance(exc, AgentError):
+                    raise
+                raise bridge_not_running_error("bridge started but ping failed") from None
 
         self._bridges[session_id] = client
         return client
@@ -188,9 +189,13 @@ class DebugManager:
             await self.cleanup_session(session_id)
 
     async def ping(self, session_id: str) -> dict[str, Any]:
-        """Start a bridge (if needed) and ping it."""
-        client = await self.start_bridge(session_id)
-        return await client.ping()
+        """Start a bridge (if needed), ping it, and release transient bridges."""
+        client = await self.start_bridge(session_id, verify=False)
+        try:
+            return await client.ping()
+        finally:
+            if session_id not in self._debug_sessions:
+                await self.stop_bridge(session_id)
 
     async def attach(
         self,

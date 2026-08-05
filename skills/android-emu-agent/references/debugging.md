@@ -147,6 +147,9 @@ watchdog behavior. If you pause on `main`, inspect quickly and run `debug resume
 Debugger requires JDK 17+. If you see `ERR_JDK_NOT_FOUND`, guide the user to install it and ensure
 `java` is available via `PATH` or `JAVA_HOME`.
 
+`debug ping <session-id>` is a transient health check before attachment. It stops the temporary
+bridge after responding; attached sessions keep their existing bridge.
+
 ## End-to-End Flow
 
 ```bash

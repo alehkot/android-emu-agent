@@ -140,6 +140,44 @@ class TestDebugManagerLifecycle:
         assert manager._adb_devices == {}
         assert manager._bridges == {}
 
+    @pytest.mark.asyncio
+    async def test_ping_stops_bridge_without_debug_attachment(self) -> None:
+        manager = DebugManager()
+        bridge = AsyncMock()
+        bridge.ping = AsyncMock(return_value={"pong": True})
+        manager._bridges["s-test"] = bridge
+
+        with patch.object(manager, "start_bridge", AsyncMock(return_value=bridge)) as start_bridge:
+            result = await manager.ping("s-test")
+
+        assert result == {"pong": True}
+        start_bridge.assert_awaited_once_with("s-test", verify=False)
+        bridge.stop.assert_awaited_once_with()
+        assert "s-test" not in manager._bridges
+
+    @pytest.mark.asyncio
+    async def test_ping_keeps_attached_session_bridge(self) -> None:
+        manager = DebugManager()
+        manager._debug_sessions["s-test"] = DebugSessionState(
+            session_id="s-test",
+            package="com.example.app",
+            process_name="com.example.app",
+            pid=123,
+            jdwp_port=123,
+            local_forward_port=54321,
+            device_serial="emulator-5554",
+        )
+        bridge = AsyncMock()
+        bridge.ping = AsyncMock(return_value={"pong": True})
+        manager._bridges["s-test"] = bridge
+
+        with patch.object(manager, "start_bridge", AsyncMock(return_value=bridge)) as start_bridge:
+            await manager.ping("s-test")
+
+        start_bridge.assert_awaited_once_with("s-test", verify=False)
+        bridge.stop.assert_not_awaited()
+        assert manager._bridges["s-test"] is bridge
+
 
 class TestAttach:
     """Tests for debug attach flow."""
