@@ -1610,7 +1610,10 @@ async def action_tap(req: ActionRequest) -> EndpointResponse:
 
     elif isinstance(selector, CoordsSelector):
         # Direct coordinate tap without element lookup
-        await asyncio.to_thread(device.click, selector.x, selector.y)
+        try:
+            await asyncio.to_thread(device.click, selector.x, selector.y)
+        except Exception as exc:
+            return _action_failure_response(ActionType.TAP, req.ref, exc)
         return {"status": "done", "selector": f"coords:{selector.x},{selector.y}"}
 
     elif isinstance(selector, FallbackSelector):
@@ -1621,6 +1624,8 @@ async def action_tap(req: ActionRequest) -> EndpointResponse:
                     return {"status": "done", "selector": req.ref, "matched_selector": matched}
         except AgentError as exc:
             return _error_response(exc, status_code=409)
+        except Exception as exc:
+            return _action_failure_response(ActionType.TAP, req.ref, exc)
         return _error_response(not_found_error(req.ref), status_code=404)
 
     else:
@@ -1628,6 +1633,8 @@ async def action_tap(req: ActionRequest) -> EndpointResponse:
             matched = await _tap_selector_option(device, selector)
         except AgentError as exc:
             return _error_response(exc, status_code=409)
+        except Exception as exc:
+            return _action_failure_response(ActionType.TAP, req.ref, exc)
         if not matched:
             return _error_response(not_found_error(req.ref), status_code=404)
         return {"status": "done", "selector": req.ref}
@@ -1719,6 +1726,8 @@ async def _action_with_locator(
                     return payload
         except AgentError as exc:
             return _error_response(exc, status_code=409)
+        except Exception as exc:
+            return _action_failure_response(action, req.ref, exc)
         return _error_response(not_found_error(req.ref), status_code=404)
 
     locator, warning = await _resolve_ref_target(core, req.session_id, req.ref, session.generation)
@@ -1735,6 +1744,21 @@ async def _action_with_locator(
     if warning and payload.get("status") == "done":
         payload["warning"] = warning
     return payload
+
+
+def _action_failure_response(
+    action: ActionType,
+    target: str,
+    exc: Exception,
+) -> JSONResponse:
+    """Shape unexpected direct-selector failures like executor-backed action failures."""
+    error = AgentError(
+        code="ERR_ACTION_FAILED",
+        message=str(exc) or type(exc).__name__,
+        context={"action": action.value, "target": target},
+        remediation="Verify the device is online, take a fresh snapshot, and retry the action.",
+    )
+    return _error_response(error, status_code=500)
 
 
 async def _tap_selector_option(device: Any, selector: Selector) -> str | None:

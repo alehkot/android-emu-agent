@@ -274,6 +274,50 @@ def test_long_tap_accepts_coordinate_selector() -> None:
     device.long_click.assert_called_once_with(120, 340)
 
 
+def test_coordinate_tap_returns_structured_action_failure() -> None:
+    """Coordinate transport failures should not escape as unhandled server exceptions."""
+    device = MagicMock()
+    device.click.side_effect = RuntimeError("device connection lost")
+
+    with _client_with_core(device) as (client, _ref_resolver):
+        resp = client.post(
+            "/actions/tap",
+            json={"session_id": "s-abc123", "ref": "coords:120,340"},
+        )
+
+    assert resp.status_code == 500
+    error = resp.json()["error"]
+    assert error["code"] == "ERR_ACTION_FAILED"
+    assert error["context"] == {"action": "tap", "target": "coords:120,340"}
+
+
+def test_selector_set_text_returns_structured_action_failure() -> None:
+    """Selector mutation failures should preserve the action error contract."""
+    device = MagicMock()
+    element = MagicMock()
+    element.count = 1
+    element.set_text.side_effect = RuntimeError("uiautomator service stopped")
+    device.return_value = element
+
+    with _client_with_core(device) as (client, _ref_resolver):
+        resp = client.post(
+            "/actions/set_text",
+            json={
+                "session_id": "s-abc123",
+                "ref": "id:com.example:id/email",
+                "text": "agent@example.com",
+            },
+        )
+
+    assert resp.status_code == 500
+    error = resp.json()["error"]
+    assert error["code"] == "ERR_ACTION_FAILED"
+    assert error["context"] == {
+        "action": "set_text",
+        "target": "id:com.example:id/email",
+    }
+
+
 def test_swipe_rejects_ambiguous_container_selector() -> None:
     """Container bounds cannot come from an arbitrary first match."""
     device = MagicMock()
