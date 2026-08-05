@@ -35,6 +35,8 @@ from android_emu_agent.errors import (
 
 logger = structlog.get_logger()
 
+BRIDGE_STEP_TIMEOUT_GRACE_SECONDS = 5.0
+
 # Default relative path from project root when developing locally.
 _DEV_JAR_RELATIVE = Path("jdi-bridge/build/libs")
 _JAR_GLOB = "jdi-bridge-*-all.jar"
@@ -630,6 +632,7 @@ class DebugManager:
                 "thread_name": thread_name,
                 "timeout_seconds": timeout_seconds,
             },
+            timeout_seconds=timeout_seconds + BRIDGE_STEP_TIMEOUT_GRACE_SECONDS,
         )
         return self._ensure_bridge_result(
             result,

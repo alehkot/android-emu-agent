@@ -903,6 +903,7 @@ class TestMilestone2DebugMethods:
         bridge.request.assert_awaited_once_with(
             "step_over",
             {"thread_name": "main", "timeout_seconds": 10.0},
+            timeout_seconds=15.0,
         )
 
     @pytest.mark.asyncio
@@ -920,6 +921,7 @@ class TestMilestone2DebugMethods:
         bridge.request.assert_awaited_once_with(
             "step_into",
             {"thread_name": "main", "timeout_seconds": 10.0},
+            timeout_seconds=15.0,
         )
 
     @pytest.mark.asyncio
@@ -937,6 +939,7 @@ class TestMilestone2DebugMethods:
         bridge.request.assert_awaited_once_with(
             "step_out",
             {"thread_name": "main", "timeout_seconds": 10.0},
+            timeout_seconds=15.0,
         )
 
     @pytest.mark.asyncio

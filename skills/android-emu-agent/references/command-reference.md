@@ -260,6 +260,10 @@ debugger to the app at startup:
   next call and return stopped location + locals.
 - `debug step-out --session <session_id> [--thread <name>] [--timeout-seconds <sec>]` Step out of
   the current method and return stopped location + locals.
+
+The step timeout also extends the bridge RPC and daemon-client deadlines, so values above 30 seconds
+are honored end to end.
+
 - `debug resume --session <session_id> [--thread <name>]` Resume one thread (when set) or all
   threads.
 - `debug events --session <session_id>` Drain queued debugger events (for example `breakpoint_hit`,

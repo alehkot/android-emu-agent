@@ -690,6 +690,39 @@ def test_debug_step_over_calls_endpoint() -> None:
     )
 
 
+def test_debug_step_http_timeout_scales_with_requested_timeout() -> None:
+    """The daemon request must outlive a caller-requested long bridge step."""
+    from android_emu_agent.cli.commands import debug
+
+    client_timeouts: list[float] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, timeout: float, **__: Any) -> None:
+            client_timeouts.append(timeout)
+
+        def request(
+            self,
+            _method: str,
+            _path: str,
+            json_body: dict[str, Any] | None = None,
+        ):
+            del json_body
+            return DummyResponse({"status": "done"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(debug, "DaemonClient", DummyClient):
+        debug.debug_step_over(
+            session_id="s-abc123",
+            thread="main",
+            timeout_seconds=75.0,
+            json_output=False,
+        )
+
+    assert client_timeouts == [85.0]
+
+
 def test_debug_step_into_calls_endpoint() -> None:
     from android_emu_agent.cli.commands import debug
 

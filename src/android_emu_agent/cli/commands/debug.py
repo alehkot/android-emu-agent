@@ -17,6 +17,17 @@ app.add_typer(break_app, name="break")
 app.add_typer(break_exception_app, name="break-exception")
 app.add_typer(mapping_app, name="mapping")
 
+DEBUG_STEP_HTTP_TIMEOUT_GRACE_SECONDS = 10.0
+MIN_DEBUG_HTTP_TIMEOUT_SECONDS = 30.0
+
+
+def _step_http_timeout(timeout_seconds: float) -> float:
+    """Leave time for the bridge result to traverse the daemon after a step."""
+    return max(
+        MIN_DEBUG_HTTP_TIMEOUT_SECONDS,
+        timeout_seconds + DEBUG_STEP_HTTP_TIMEOUT_GRACE_SECONDS,
+    )
+
 
 @app.command("ping")
 def debug_ping(
@@ -482,7 +493,7 @@ def debug_step_over(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Step over and return stopped state atomically."""
-    client = DaemonClient(timeout=60.0)
+    client = DaemonClient(timeout=_step_http_timeout(timeout_seconds))
     resp = client.request(
         "POST",
         "/debug/step_over",
@@ -508,7 +519,7 @@ def debug_step_into(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Step into and return stopped state atomically."""
-    client = DaemonClient(timeout=60.0)
+    client = DaemonClient(timeout=_step_http_timeout(timeout_seconds))
     resp = client.request(
         "POST",
         "/debug/step_into",
@@ -534,7 +545,7 @@ def debug_step_out(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Step out and return stopped state atomically."""
-    client = DaemonClient(timeout=60.0)
+    client = DaemonClient(timeout=_step_http_timeout(timeout_seconds))
     resp = client.request(
         "POST",
         "/debug/step_out",

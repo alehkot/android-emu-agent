@@ -97,7 +97,13 @@ class BridgeClient:
         logger.info("bridge_stopped", pid=self._process.pid)
         self._process = None
 
-    async def request(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def request(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        *,
+        timeout_seconds: float = 30.0,
+    ) -> dict[str, Any]:
         """Send a JSON-RPC request and wait for the response."""
         if not self.is_alive or self._process is None or self._process.stdin is None:
             raise bridge_crashed_error("bridge process not running")
@@ -126,10 +132,10 @@ class BridgeClient:
             raise bridge_crashed_error(f"bridge write failed: {exc}") from None
 
         try:
-            return await asyncio.wait_for(future, timeout=30.0)
+            return await asyncio.wait_for(future, timeout=timeout_seconds)
         except TimeoutError:
             self._pending.pop(req_id, None)
-            raise bridge_crashed_error("request timed out") from None
+            raise bridge_crashed_error(f"request timed out after {timeout_seconds:g}s") from None
 
     async def ping(self) -> dict[str, Any]:
         """Send a ping request to verify the bridge is responsive."""

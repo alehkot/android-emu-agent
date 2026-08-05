@@ -71,6 +71,26 @@ class TestBridgeClientRequestFormat:
             await client.request("ping")
         assert exc_info.value.code == "ERR_BRIDGE_CRASHED"
 
+    @pytest.mark.asyncio
+    async def test_request_honors_operation_timeout(self) -> None:
+        """Long debugger operations should override the default RPC deadline."""
+        client = BridgeClient(Path("/usr/bin/java"), Path("/tmp/fake.jar"))
+        mock_proc = MagicMock(returncode=None)
+        mock_proc.stdin = MagicMock()
+        mock_proc.stdin.drain = AsyncMock()
+        client._process = mock_proc
+
+        with (
+            patch("asyncio.wait_for", AsyncMock(side_effect=TimeoutError)) as wait_for,
+            pytest.raises(AgentError) as exc_info,
+        ):
+            await client.request("step_over", timeout_seconds=75.0)
+
+        assert exc_info.value.code == "ERR_BRIDGE_CRASHED"
+        assert "75s" in exc_info.value.message
+        assert wait_for.await_args is not None
+        assert wait_for.await_args.kwargs["timeout"] == 75.0
+
 
 class TestBridgeClientLifecycle:
     """Tests for bridge subprocess lifecycle."""
