@@ -131,6 +131,14 @@ class TestErrorConstructors:
         assert error.code == "ERR_INVALID_ARTIFACT_NAME"
         assert error.context == {"filename": "../escape"}
 
+    def test_ambiguous_selector_error(self) -> None:
+        """Should report the conflicting selector and match count."""
+        from android_emu_agent.errors import ambiguous_selector_error
+
+        error = ambiguous_selector_error("text:Delete", 2)
+        assert error.code == "ERR_AMBIGUOUS_SELECTOR"
+        assert error.context == {"selector": "text:Delete", "match_count": 2}
+
     def test_invalid_package_error(self) -> None:
         """Should create invalid package error."""
         from android_emu_agent.errors import invalid_package_error

@@ -121,6 +121,7 @@ from android_emu_agent.daemon.models import (
 from android_emu_agent.device.manager import Orientation
 from android_emu_agent.errors import (
     AgentError,
+    ambiguous_selector_error,
     device_offline_error,
     log_follow_unsupported_error,
     not_found_error,
@@ -375,9 +376,14 @@ async def _resolve_swipe_bounds(
     else:
         kwargs = selector.to_u2_kwargs()
         element = device(**kwargs)
-        exists = await asyncio.to_thread(element.exists)
-        if not exists:
+        match_count = await _selector_match_count(element)
+        if match_count == 0:
             return _error_response(not_found_error(container), status_code=404)
+        if match_count > 1:
+            return _error_response(
+                ambiguous_selector_error(_selector_label(kwargs), match_count),
+                status_code=409,
+            )
         element_info = await asyncio.to_thread(lambda: element.info)
         bounds = _bounds_from_info(element_info)
 
@@ -1604,14 +1610,20 @@ async def action_tap(req: ActionRequest) -> EndpointResponse:
         return {"status": "done", "selector": f"coords:{selector.x},{selector.y}"}
 
     elif isinstance(selector, FallbackSelector):
-        for option in selector.options:
-            matched = await _tap_selector_option(device, option)
-            if matched:
-                return {"status": "done", "selector": req.ref, "matched_selector": matched}
+        try:
+            for option in selector.options:
+                matched = await _tap_selector_option(device, option)
+                if matched:
+                    return {"status": "done", "selector": req.ref, "matched_selector": matched}
+        except AgentError as exc:
+            return _error_response(exc, status_code=409)
         return _error_response(not_found_error(req.ref), status_code=404)
 
     else:
-        matched = await _tap_selector_option(device, selector)
+        try:
+            matched = await _tap_selector_option(device, selector)
+        except AgentError as exc:
+            return _error_response(exc, status_code=409)
         if not matched:
             return _error_response(not_found_error(req.ref), status_code=404)
         return {"status": "done", "selector": req.ref}
@@ -1706,11 +1718,19 @@ async def _tap_selector_option(device: Any, selector: Selector) -> str | None:
         return None
     kwargs = selector.to_u2_kwargs()
     element = device(**kwargs)
-    exists = await asyncio.to_thread(element.exists)
-    if not exists:
+    match_count = await _selector_match_count(element)
+    if match_count == 0:
         return None
+    label = _selector_label(kwargs)
+    if match_count > 1:
+        raise ambiguous_selector_error(label, match_count)
     await asyncio.to_thread(element.click)
-    return _selector_label(kwargs)
+    return label
+
+
+async def _selector_match_count(element: Any) -> int:
+    """Return the number of uiautomator2 nodes matched by one selector."""
+    return int(await asyncio.to_thread(lambda: element.count))
 
 
 def _selector_label(kwargs: dict[str, Any]) -> str:

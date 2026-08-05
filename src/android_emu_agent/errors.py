@@ -171,6 +171,19 @@ def invalid_artifact_name_error(filename: str) -> AgentError:
     )
 
 
+def ambiguous_selector_error(selector: str, match_count: int) -> AgentError:
+    """Create error when a single-target selector matches multiple elements."""
+    return AgentError(
+        code="ERR_AMBIGUOUS_SELECTOR",
+        message=f"Selector matched {match_count} elements: {selector}",
+        context={"selector": selector, "match_count": match_count},
+        remediation=(
+            "Use a fresh ^ref or add id, class, text, description, or state filters until exactly "
+            "one element matches."
+        ),
+    )
+
+
 def snapshot_failed_error(name: str, reason: str) -> AgentError:
     """Create error for snapshot operation failure."""
     return AgentError(

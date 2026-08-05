@@ -142,9 +142,9 @@ def test_tap_tries_fallback_selectors_in_order() -> None:
     """Tap should try selector alternatives separated by ||."""
     device = MagicMock()
     missing = MagicMock()
-    missing.exists.return_value = False
+    missing.count = 0
     found = MagicMock()
-    found.exists.return_value = True
+    found.count = 1
     device.side_effect = [missing, found]
 
     with _client_with_core(device) as (client, _ref_resolver):
@@ -163,6 +163,76 @@ def test_tap_tries_fallback_selectors_in_order() -> None:
     assert device.call_args_list[0].kwargs == {"text": "Missing"}
     assert device.call_args_list[1].kwargs == {"resourceId": "com.example:id/login"}
     found.click.assert_called_once_with()
+
+
+def test_tap_rejects_ambiguous_selector() -> None:
+    """A single-target action must not click uiautomator2's arbitrary first match."""
+    device = MagicMock()
+    element = MagicMock()
+    element.count = 2
+    device.return_value = element
+
+    with _client_with_core(device) as (client, _ref_resolver):
+        resp = client.post(
+            "/actions/tap",
+            json={
+                "session_id": "s-abc123",
+                "ref": 'text:"Delete"',
+            },
+        )
+
+    assert resp.status_code == 409
+    data = resp.json()
+    assert data["error"]["code"] == "ERR_AMBIGUOUS_SELECTOR"
+    assert data["error"]["context"]["match_count"] == 2
+    element.click.assert_not_called()
+
+
+def test_tap_fallback_does_not_skip_ambiguous_match() -> None:
+    """Fallbacks should advance only on zero matches, not hide an ambiguous alternative."""
+    device = MagicMock()
+    ambiguous = MagicMock()
+    ambiguous.count = 2
+    unique = MagicMock()
+    unique.count = 1
+    device.side_effect = [ambiguous, unique]
+
+    with _client_with_core(device) as (client, _ref_resolver):
+        resp = client.post(
+            "/actions/tap",
+            json={
+                "session_id": "s-abc123",
+                "ref": 'text:"Delete" || id:com.example:id/delete',
+            },
+        )
+
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "ERR_AMBIGUOUS_SELECTOR"
+    assert device.call_count == 1
+    ambiguous.click.assert_not_called()
+    unique.click.assert_not_called()
+
+
+def test_swipe_rejects_ambiguous_container_selector() -> None:
+    """Container bounds cannot come from an arbitrary first match."""
+    device = MagicMock()
+    element = MagicMock()
+    element.count = 2
+    device.return_value = element
+
+    with _client_with_core(device) as (client, _ref_resolver):
+        resp = client.post(
+            "/actions/swipe",
+            json={
+                "session_id": "s-abc123",
+                "direction": "up",
+                "container": "class:android.widget.ScrollView",
+            },
+        )
+
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "ERR_AMBIGUOUS_SELECTOR"
+    device.swipe.assert_not_called()
 
 
 def test_swipe_rejects_invalid_distance() -> None:

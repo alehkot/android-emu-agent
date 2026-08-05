@@ -450,6 +450,10 @@ The `action tap` command accepts these selector formats:
 - `text:"Sign in" || id:com.example:id/login`: try fallback selectors in order.
 - `coords:540,1200`: tap at absolute coordinates.
 
+Tap and swipe-container selectors must match exactly one node. If a selector is ambiguous, add
+compound id/class/text/state filters or use a fresh snapshot `^ref`; fallback selectors do not skip
+an ambiguous earlier alternative.
+
 `long-tap`, `set-text`, and `clear` require an `^ref`.
 
 ## Swipe and Scroll Directions
