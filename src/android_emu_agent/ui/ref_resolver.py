@@ -360,17 +360,27 @@ class RefResolver:
     def _score_candidate(self, locator: LocatorBundle, candidate: LocatorBundle) -> int:
         """Score a candidate when the selector chain is not uniquely identifying."""
         score = 0
-        if locator.resource_id and self.normalize_resource_id(locator.resource_id) == self.normalize_resource_id(candidate.resource_id):
+        if locator.resource_id and self.normalize_resource_id(
+            locator.resource_id
+        ) == self.normalize_resource_id(candidate.resource_id):
             score += 80
-        if self.normalize_text(locator.content_desc) and self.normalize_text(locator.content_desc) == self.normalize_text(candidate.content_desc):
+        if self.normalize_text(locator.content_desc) and self.normalize_text(
+            locator.content_desc
+        ) == self.normalize_text(candidate.content_desc):
             score += 50
-        if self.normalize_text(locator.text) and self.normalize_text(locator.text) == self.normalize_text(candidate.text):
+        if self.normalize_text(locator.text) and self.normalize_text(
+            locator.text
+        ) == self.normalize_text(candidate.text):
             score += 40
-        if self.normalize_text(locator.label) and self.normalize_text(locator.label) == self.normalize_text(candidate.label):
+        if self.normalize_text(locator.label) and self.normalize_text(
+            locator.label
+        ) == self.normalize_text(candidate.label):
             score += 30
         if locator.role == candidate.role:
             score += 20
-        if self.state_signature(locator.state) and self.state_signature(locator.state) == self.state_signature(candidate.state):
+        if self.state_signature(locator.state) and self.state_signature(
+            locator.state
+        ) == self.state_signature(candidate.state):
             score += 15
         if locator.element_hash and locator.element_hash == candidate.element_hash:
             score += 25

@@ -60,7 +60,9 @@ def parse_task_script(script: str, *, source_name: str = "<script>") -> dict[str
             step = spec["steps"][-1]
             verify = step.setdefault("verify", [])
             if not isinstance(verify, list):
-                raise _script_error(source_name, line_number, "previous step has invalid verify list")
+                raise _script_error(
+                    source_name, line_number, "previous step has invalid verify list"
+                )
             verify.append(_parse_verifier(args, source_name, line_number))
         else:
             spec["steps"].append(_parse_step(keyword, args, source_name, line_number))

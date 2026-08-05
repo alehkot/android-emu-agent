@@ -88,9 +88,7 @@ Pending queue:
         assert "Settings:" not in output
         assert "com.other" not in output
         assert "Pending queue:" not in output
-        shell_mock.assert_awaited_once_with(
-            mock_device, "dumpsys jobscheduler com.example.app"
-        )
+        shell_mock.assert_awaited_once_with(mock_device, "dumpsys jobscheduler com.example.app")
 
     @pytest.mark.asyncio
     async def test_jobscheduler_reports_no_registered_jobs(self) -> None:
@@ -350,7 +348,9 @@ class TestNativePerformanceArtifacts:
                 categories="sched gfx",
             )
 
-        assert result["path"] == str(tmp_path / "perfetto_emulator-5554_20260616_120000.perfetto-trace")
+        assert result["path"] == str(
+            tmp_path / "perfetto_emulator-5554_20260616_120000.perfetto-trace"
+        )
         assert "perfetto -o" in shell_mock.await_args_list[0].args[1]
         assert "-t 3s sched gfx" in shell_mock.await_args_list[0].args[1]
         adb_mock.assert_awaited_once_with(

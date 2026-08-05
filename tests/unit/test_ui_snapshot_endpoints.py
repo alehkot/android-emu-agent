@@ -160,7 +160,9 @@ async def test_concurrent_structured_snapshots_get_distinct_generations() -> Non
     )
 
     assert all(isinstance(response, dict) for response in responses)
-    assert sorted(response["generation"] for response in responses if isinstance(response, dict)) == [
+    assert sorted(
+        response["generation"] for response in responses if isinstance(response, dict)
+    ) == [
         5,
         6,
     ]

@@ -416,7 +416,9 @@ class UISnapshotter:
         if self._own_label(node):
             return None
 
-        descendants = [child for child in node.iterdescendants() if isinstance(child, etree._Element)]
+        descendants = [
+            child for child in node.iterdescendants() if isinstance(child, etree._Element)
+        ]
         for descendant in descendants:
             if self._is_interactive(descendant):
                 continue

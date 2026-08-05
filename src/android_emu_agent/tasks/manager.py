@@ -45,8 +45,7 @@ class TaskManager:
             "status": "done",
             "task": self._task_metadata(normalized),
             "step_count": len(steps),
-            "verifier_count": len(verifiers)
-            + sum(len(step["verifiers"]) for step in steps),
+            "verifier_count": len(verifiers) + sum(len(step["verifiers"]) for step in steps),
             "steps": [
                 {
                     "index": step["index"],
@@ -329,7 +328,9 @@ class TaskManager:
         operation = cast(str, step["operation"])
         source = cast(dict[str, Any], step["source"])
         payload = self._payload_for(kind, operation, source, session_id=session_id)
-        return TaskCall(kind=kind, operation=operation, payload=payload, label=cast(str, step["name"]))
+        return TaskCall(
+            kind=kind, operation=operation, payload=payload, label=cast(str, step["name"])
+        )
 
     def _call_for_verifier(self, verifier: dict[str, Any], *, session_id: str) -> TaskCall:
         operation = cast(str, verifier["operation"])
@@ -428,8 +429,7 @@ class TaskManager:
         if response.get("status") == "done":
             return True
         return all(
-            key in response
-            for key in ("schema_version", "session_id", "generation", "elements")
+            key in response for key in ("schema_version", "session_id", "generation", "elements")
         )
 
     @staticmethod

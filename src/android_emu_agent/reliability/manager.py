@@ -219,8 +219,7 @@ class ReliabilityManager:
 
         if truncated:
             visible.append(
-                "[truncated by android-emu-agent: "
-                f"showing {len(visible)} of {len(lines)} lines]"
+                f"[truncated by android-emu-agent: showing {len(visible)} of {len(lines)} lines]"
             )
         return "\n".join(visible)
 
@@ -228,9 +227,7 @@ class ReliabilityManager:
     def _format_proc_status(output: str) -> str:
         """Keep stable, actionable fields from one process's proc status."""
         return "\n".join(
-            line
-            for line in output.splitlines()
-            if line.partition(":")[0] in _PROC_STATUS_FIELDS
+            line for line in output.splitlines() if line.partition(":")[0] in _PROC_STATUS_FIELDS
         )
 
     async def meminfo(self, device: AdbDevice, package: str) -> str:
@@ -251,7 +248,9 @@ class ReliabilityManager:
         process = await self._profile_section(
             lambda: self._process_profile(device, package, include_raw)
         )
-        memory = await self._profile_section(lambda: self._memory_profile(device, package, include_raw))
+        memory = await self._profile_section(
+            lambda: self._memory_profile(device, package, include_raw)
+        )
         graphics = await self._profile_section(
             lambda: self._graphics_profile(device, package, include_raw)
         )
@@ -338,10 +337,14 @@ class ReliabilityManager:
         """Capture a bounded Perfetto trace and pull it locally."""
         self._validate_duration(duration_seconds)
         timestamp = self._timestamp()
-        local_name = self._artifact_name(filename, f"perfetto_{serial}_{timestamp}", ".perfetto-trace")
+        local_name = self._artifact_name(
+            filename, f"perfetto_{serial}_{timestamp}", ".perfetto-trace"
+        )
         remote_path = f"/data/misc/perfetto-traces/{local_name}"
         local_path = self.output_dir / local_name
-        trace_categories = categories or "sched freq idle am wm gfx view binder_driver hal dalvik input res"
+        trace_categories = (
+            categories or "sched freq idle am wm gfx view binder_driver hal dalvik input res"
+        )
         category_tokens = shlex.split(trace_categories)
         command = (
             f"perfetto -o {shlex.quote(remote_path)} "
@@ -656,15 +659,16 @@ class ReliabilityManager:
                     f"janky={graphics_summary['janky_frames']}"
                     f" ({graphics_summary.get('janky_percent', 'unknown')})"
                 )
-            lines.append(f"GRAPHICS {' '.join(graphics_parts) if graphics_parts else graphics_summary}")
+            lines.append(
+                f"GRAPHICS {' '.join(graphics_parts) if graphics_parts else graphics_summary}"
+            )
         else:
             lines.append("GRAPHICS unavailable")
 
         events = sections.get("events", {})
         if events.get("status") == "done":
             lines.append(
-                f"EVENTS matched={events.get('line_count', 0)} "
-                f"total={events.get('total_lines', 0)}"
+                f"EVENTS matched={events.get('line_count', 0)} total={events.get('total_lines', 0)}"
             )
         else:
             lines.append("EVENTS unavailable")

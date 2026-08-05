@@ -95,7 +95,9 @@ def wait_exists(
     session_id: str = typer.Argument(..., help="Session ID"),
     ref: str | None = typer.Option(None, "--ref", help="Element ref (^g1a1)"),
     text: str | None = typer.Option(None, "--text", help="Text selector"),
-    text_contains: str | None = typer.Option(None, "--text-contains", help="Text contains selector"),
+    text_contains: str | None = typer.Option(
+        None, "--text-contains", help="Text contains selector"
+    ),
     resource_id: str | None = typer.Option(None, "--id", help="Resource ID selector"),
     resource_id_matches: str | None = typer.Option(
         None, "--id-matches", help="Resource ID regex selector"
@@ -139,7 +141,9 @@ def wait_gone(
     session_id: str = typer.Argument(..., help="Session ID"),
     ref: str | None = typer.Option(None, "--ref", help="Element ref (^g1a1)"),
     text: str | None = typer.Option(None, "--text", help="Text selector"),
-    text_contains: str | None = typer.Option(None, "--text-contains", help="Text contains selector"),
+    text_contains: str | None = typer.Option(
+        None, "--text-contains", help="Text contains selector"
+    ),
     resource_id: str | None = typer.Option(None, "--id", help="Resource ID selector"),
     resource_id_matches: str | None = typer.Option(
         None, "--id-matches", help="Resource ID regex selector"

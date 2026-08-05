@@ -51,7 +51,9 @@ def app_uninstall(
     package: str = typer.Argument(..., help="Package name"),
     device: str | None = typer.Option(None, "--device", "-d", help="Device serial"),
     session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
-    keep_data: bool = typer.Option(False, "--keep-data", help="Keep app data and cache directories"),
+    keep_data: bool = typer.Option(
+        False, "--keep-data", help="Keep app data and cache directories"
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Uninstall a package from the target device."""

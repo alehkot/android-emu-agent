@@ -305,7 +305,9 @@ def parse_selector(target: str) -> Selector:
     for prefix in BOOLEAN_SELECTOR_KEYS:
         token_prefix = f"{prefix}:"
         if target.startswith(token_prefix):
-            return U2Selector(kwargs={BOOLEAN_SELECTOR_KEYS[prefix]: _bool_value(target, token_prefix)})
+            return U2Selector(
+                kwargs={BOOLEAN_SELECTOR_KEYS[prefix]: _bool_value(target, token_prefix)}
+            )
 
     if target.startswith("coords:"):
         try:

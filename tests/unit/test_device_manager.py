@@ -308,9 +308,7 @@ class TestAppLaunch:
         mock_device.shell.return_value = "Starting: Intent { ... }"
 
         with patch.object(manager, "get_adb_device", return_value=mock_device):
-            await manager.app_launch(
-                "emulator-5554", "com.example.app", activity="MainActivity;id"
-            )
+            await manager.app_launch("emulator-5554", "com.example.app", activity="MainActivity;id")
 
         call_arg = mock_device.shell.call_args[0][0]
         assert "'com.example.app/.MainActivity;id'" in call_arg

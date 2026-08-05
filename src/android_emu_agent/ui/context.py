@@ -50,9 +50,7 @@ class ContextResolver:
         window_info = self._unwrap_result(results[1], default={})
         ime_info = self._unwrap_result(results[2], default={})
 
-        package = activity_info.get("package") or self._string_or_none(
-            window_info.get("package")
-        )
+        package = activity_info.get("package") or self._string_or_none(window_info.get("package"))
         activity = activity_info.get("activity") or self._string_or_none(
             window_info.get("activity")
         )

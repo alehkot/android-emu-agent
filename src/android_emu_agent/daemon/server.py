@@ -292,8 +292,10 @@ def _bounds_from_info(info: Any) -> list[int] | None:
             if all(isinstance(value, (int, float)) for value in values):
                 return [int(value) for value in values]
 
-    if isinstance(info, (list, tuple)) and len(info) == 4 and all(
-        isinstance(value, (int, float)) for value in info
+    if (
+        isinstance(info, (list, tuple))
+        and len(info) == 4
+        and all(isinstance(value, (int, float)) for value in info)
     ):
         return [int(value) for value in info]
 
@@ -302,10 +304,7 @@ def _bounds_from_info(info: Any) -> list[int] | None:
 
 def _bounds_are_usable(bounds: list[int] | None) -> bool:
     return (
-        bounds is not None
-        and len(bounds) == 4
-        and bounds[2] > bounds[0]
-        and bounds[3] > bounds[1]
+        bounds is not None and len(bounds) == 4 and bounds[2] > bounds[0] and bounds[3] > bounds[1]
     )
 
 
@@ -426,7 +425,9 @@ async def _response_with_diagnostic_id(
     """Attach diagnostic metadata to JSON responses and headers."""
     body = await _read_response_body(response)
     content_type = response.headers.get("content-type", response.media_type or "")
-    headers = {key: value for key, value in response.headers.items() if key.lower() != "content-length"}
+    headers = {
+        key: value for key, value in response.headers.items() if key.lower() != "content-length"
+    }
     headers["x-diagnostic-id"] = diagnostic_id
 
     payload = _json_body_from_bytes(body, content_type)
@@ -1774,7 +1775,9 @@ async def wait_exists(req: WaitSelectorRequest) -> EndpointResponse:
     selector = req.selector
     warning: str | None = None
     if req.ref:
-        locator, warning = await _resolve_ref_target(core, req.session_id, req.ref, session.generation)
+        locator, warning = await _resolve_ref_target(
+            core, req.session_id, req.ref, session.generation
+        )
         if not locator:
             return _error_response(not_found_error(req.ref), status_code=404)
         selector = _selector_from_locator(locator)
@@ -1812,7 +1815,9 @@ async def wait_gone(req: WaitSelectorRequest) -> EndpointResponse:
     selector = req.selector
     warning: str | None = None
     if req.ref:
-        locator, warning = await _resolve_ref_target(core, req.session_id, req.ref, session.generation)
+        locator, warning = await _resolve_ref_target(
+            core, req.session_id, req.ref, session.generation
+        )
         if not locator:
             return _error_response(not_found_error(req.ref), status_code=404)
         selector = _selector_from_locator(locator)

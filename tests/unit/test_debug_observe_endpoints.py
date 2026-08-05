@@ -191,9 +191,7 @@ def test_debug_observe_fuses_app_snapshot_and_debug_context() -> None:
     assert data["events"]["events"][0]["type"] == "breakpoint_hit"
     assert data["logpoints"]["hits"][0]["message"] == "x=1"
     assert data["stack"]["frames"][0]["location"] == "com.example.MainActivity:42"
-    assert debug_manager.peek_calls == [
-        {"session_id": "s-abc123", "drain": False, "limit": 1}
-    ]
+    assert debug_manager.peek_calls == [{"session_id": "s-abc123", "drain": False, "limit": 1}]
     assert debug_manager.logpoint_calls == [{"session_id": "s-abc123", "limit": 1}]
     assert debug_manager.stack_calls == [
         {"session_id": "s-abc123", "thread_name": "main", "max_frames": 4}

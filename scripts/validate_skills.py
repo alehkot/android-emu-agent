@@ -146,7 +146,9 @@ def _validate_skill(skill_dir: Path) -> list[str]:
             if "Read this file when" not in first_lines:
                 errors.append(f"{reference_file}: missing top-of-file read trigger")
             if len(reference_lines) > 100 and "## Contents" not in "\n".join(reference_lines[:40]):
-                errors.append(f"{reference_file}: references over 100 lines need a top-level Contents")
+                errors.append(
+                    f"{reference_file}: references over 100 lines need a top-level Contents"
+                )
             if "TODO" in reference_text or "FIXME" in reference_text:
                 errors.append(f"{reference_file}: contains TODO/FIXME markers")
 

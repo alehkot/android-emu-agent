@@ -16,15 +16,9 @@ async def test_resolve_parses_android_36_top_resumed_activity() -> None:
 
     def shell(command: str) -> str:
         if command.startswith("dumpsys activity"):
-            return (
-                "topResumedActivity=ActivityRecord{123 u0 "
-                "com.example.app/.MainActivity t77}"
-            )
+            return "topResumedActivity=ActivityRecord{123 u0 com.example.app/.MainActivity t77}"
         if command.startswith("dumpsys window"):
-            return (
-                "mCurrentFocus=Window{abc u0 "
-                "com.example.app/com.example.app.MainActivity}"
-            )
+            return "mCurrentFocus=Window{abc u0 com.example.app/com.example.app.MainActivity}"
         if command.startswith("dumpsys input |"):
             return "SurfaceOrientation: 0"
         return ""
@@ -47,10 +41,7 @@ async def test_resolve_falls_back_to_current_window_component() -> None:
         if command.startswith("dumpsys activity"):
             return ""
         if command.startswith("dumpsys window"):
-            return (
-                "mCurrentFocus=Window{abc u0 "
-                "com.example.app/com.example.app.MainActivity}"
-            )
+            return "mCurrentFocus=Window{abc u0 com.example.app/com.example.app.MainActivity}"
         if command.startswith("dumpsys input |"):
             return "SurfaceOrientation: 0"
         return ""
