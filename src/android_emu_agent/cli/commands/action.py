@@ -111,7 +111,9 @@ def action_recents(
 def action_swipe(
     direction: str = typer.Argument(..., help="Direction: up, down, left, right"),
     session: str = typer.Option(..., "--session", "-s", help="Session ID"),
-    container: str | None = typer.Option(None, "--in", help="Container ^ref or selector"),
+    container: str | None = typer.Option(
+        None, "--in", help="Container ^ref or selector; supports || fallbacks"
+    ),
     distance: float = typer.Option(0.8, "--distance", "-d", help="Swipe distance (0.0-1.0)"),
     duration: int = typer.Option(300, "--duration", help="Swipe duration in ms"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
@@ -137,7 +139,9 @@ def action_swipe(
 def action_scroll(
     direction: str = typer.Argument(..., help="Direction: up, down, left, right"),
     session: str = typer.Option(..., "--session", "-s", help="Session ID"),
-    container: str | None = typer.Option(None, "--in", help="Container ^ref or selector"),
+    container: str | None = typer.Option(
+        None, "--in", help="Container ^ref or selector; supports || fallbacks"
+    ),
     distance: float = typer.Option(0.8, "--distance", "-d", help="Scroll distance (0.0-1.0)"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:

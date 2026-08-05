@@ -1731,7 +1731,7 @@ android-emu-agent action swipe [OPTIONS] DIRECTION
 **Options**:
 
 - `-s, --session TEXT`: Session ID [required]
-- `--in TEXT`: Container ^ref or selector
+- `--in TEXT`: Container ^ref or selector; supports || fallbacks
 - `-d, --distance FLOAT`: Swipe distance (0.0-1.0) [default: 0.8]
 - `--duration INTEGER`: Swipe duration in ms [default: 300]
 - `--json`: Output JSON
@@ -1754,7 +1754,7 @@ android-emu-agent action scroll [OPTIONS] DIRECTION
 **Options**:
 
 - `-s, --session TEXT`: Session ID [required]
-- `--in TEXT`: Container ^ref or selector
+- `--in TEXT`: Container ^ref or selector; supports || fallbacks
 - `-d, --distance FLOAT`: Scroll distance (0.0-1.0) [default: 0.8]
 - `--json`: Output JSON
 - `--help`: Show this message and exit.

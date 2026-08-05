@@ -351,7 +351,8 @@ async def _resolve_swipe_bounds(
     except AgentError as exc:
         return _error_response(exc, status_code=400)
 
-    if isinstance(selector, CoordsSelector):
+    selector_options = selector.options if isinstance(selector, FallbackSelector) else [selector]
+    if any(isinstance(option, CoordsSelector) for option in selector_options):
         return _error_response(
             AgentError(
                 code="ERR_INVALID_CONTAINER",
@@ -362,44 +363,47 @@ async def _resolve_swipe_bounds(
             status_code=400,
         )
 
-    warning: str | None = None
-    if isinstance(selector, RefSelector):
-        locator, warning = await _resolve_ref_target(core, session_id, selector.ref, generation)
-        if not locator:
-            return _error_response(not_found_error(selector.ref), status_code=404)
-        if warning is None and locator.generation < generation:
-            return _error_response(
-                stale_ref_error(selector.ref, locator.generation, generation),
-                status_code=409,
-            )
-        bounds = locator.bounds
-    else:
-        kwargs = selector.to_u2_kwargs()
-        element = device(**kwargs)
-        match_count = await _selector_match_count(element)
-        if match_count == 0:
-            return _error_response(not_found_error(container), status_code=404)
-        if match_count > 1:
-            return _error_response(
-                ambiguous_selector_error(_selector_label(kwargs), match_count),
-                status_code=409,
-            )
-        element_info = await asyncio.to_thread(lambda: element.info)
-        bounds = _bounds_from_info(element_info)
+    for option in selector_options:
+        warning: str | None = None
+        if isinstance(option, RefSelector):
+            locator, warning = await _resolve_ref_target(core, session_id, option.ref, generation)
+            if not locator:
+                continue
+            if warning is None and locator.generation < generation:
+                return _error_response(
+                    stale_ref_error(option.ref, locator.generation, generation),
+                    status_code=409,
+                )
+            bounds = locator.bounds
+        else:
+            kwargs = option.to_u2_kwargs()
+            element = device(**kwargs)
+            match_count = await _selector_match_count(element)
+            if match_count == 0:
+                continue
+            if match_count > 1:
+                return _error_response(
+                    ambiguous_selector_error(_selector_label(kwargs), match_count),
+                    status_code=409,
+                )
+            element_info = await asyncio.to_thread(getattr, element, "info")
+            bounds = _bounds_from_info(element_info)
 
-    if not _bounds_are_usable(bounds):
-        return _error_response(
-            AgentError(
-                code="ERR_INVALID_CONTAINER_BOUNDS",
-                message=f"Container has no usable bounds: {container}",
-                context={"container": container, "bounds": bounds},
-                remediation="Use a visible container ref or selector from a fresh snapshot.",
-            ),
-            status_code=400,
-        )
+        if not _bounds_are_usable(bounds):
+            return _error_response(
+                AgentError(
+                    code="ERR_INVALID_CONTAINER_BOUNDS",
+                    message=f"Container has no usable bounds: {container}",
+                    context={"container": container, "bounds": bounds},
+                    remediation="Use a visible container ref or selector from a fresh snapshot.",
+                ),
+                status_code=400,
+            )
 
-    assert bounds is not None
-    return bounds, warning
+        assert bounds is not None
+        return bounds, warning
+
+    return _error_response(not_found_error(container), status_code=404)
 
 
 def _json_body_from_bytes(body: bytes, content_type: str) -> dict[str, Any] | None:

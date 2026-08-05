@@ -467,7 +467,8 @@ Directions: `up`, `down`, `left`, `right`
 
 Options:
 
-- `--in <target>`: Constrain gesture to a container element
+- `--in <target>`: Constrain the gesture to a container `^ref` or selector; `||` fallbacks are tried
+  in order and stop on ambiguity
 - `--distance <0-1>`: Gesture distance as fraction of screen (default varies)
 - `--duration <ms>`: Swipe duration in milliseconds (swipe only)
 

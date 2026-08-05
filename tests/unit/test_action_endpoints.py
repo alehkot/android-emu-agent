@@ -235,6 +235,58 @@ def test_swipe_rejects_ambiguous_container_selector() -> None:
     device.swipe.assert_not_called()
 
 
+def test_swipe_tries_fallback_container_selectors_in_order() -> None:
+    """Swipe containers should use the first fallback selector with one match."""
+    device = MagicMock()
+    missing = MagicMock()
+    missing.count = 0
+    found = MagicMock()
+    found.count = 1
+    found.info = {"bounds": {"left": 100, "top": 200, "right": 500, "bottom": 1000}}
+    device.side_effect = [missing, found]
+
+    with _client_with_core(device) as (client, _ref_resolver):
+        resp = client.post(
+            "/actions/swipe",
+            json={
+                "session_id": "s-abc123",
+                "direction": "up",
+                "container": 'text:"Missing" || id:com.example:id/list',
+            },
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["bounds"] == [100, 200, 500, 1000]
+    assert device.call_args_list[0].kwargs == {"text": "Missing"}
+    assert device.call_args_list[1].kwargs == {"resourceId": "com.example:id/list"}
+    device.swipe.assert_called_once()
+
+
+def test_swipe_fallback_does_not_skip_ambiguous_container() -> None:
+    """Swipe fallbacks must not hide an ambiguous earlier container selector."""
+    device = MagicMock()
+    ambiguous = MagicMock()
+    ambiguous.count = 2
+    unique = MagicMock()
+    unique.count = 1
+    device.side_effect = [ambiguous, unique]
+
+    with _client_with_core(device) as (client, _ref_resolver):
+        resp = client.post(
+            "/actions/swipe",
+            json={
+                "session_id": "s-abc123",
+                "direction": "up",
+                "container": 'text:"List" || id:com.example:id/list',
+            },
+        )
+
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "ERR_AMBIGUOUS_SELECTOR"
+    assert device.call_count == 1
+    device.swipe.assert_not_called()
+
+
 def test_swipe_rejects_invalid_distance() -> None:
     """Swipe should reject distances outside the supported range."""
     device = MagicMock()
