@@ -13,6 +13,11 @@ from typing import Any, cast
 from uuid import uuid4
 
 from android_emu_agent.errors import AgentError
+from android_emu_agent.security import (
+    ensure_private_directory,
+    ensure_private_file,
+    open_private_append,
+)
 
 TRACE_SCHEMA_VERSION = 1
 DEFAULT_TRACE_DIR = Path.home() / ".android-emu-agent" / "traces"
@@ -45,7 +50,7 @@ class TraceManager:
 
     def __init__(self, output_dir: Path | None = None) -> None:
         self.output_dir = output_dir or DEFAULT_TRACE_DIR
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        ensure_private_directory(self.output_dir)
         self._active: dict[str, ActiveTrace] = {}
         self._lock = asyncio.Lock()
 
@@ -63,7 +68,7 @@ class TraceManager:
 
             trace_id = f"tr-{uuid4().hex[:10]}"
             directory = self.output_dir / trace_id
-            directory.mkdir(parents=True, exist_ok=False)
+            directory.mkdir(mode=0o700, parents=True, exist_ok=False)
             trace = ActiveTrace(
                 trace_id=trace_id,
                 session_id=session_id,
@@ -197,9 +202,7 @@ class TraceManager:
         """Return a dry replay plan from a trace archive."""
         events = self.load_events(archive_path)
         replayable = [
-            self._replay_step(event)
-            for event in events
-            if event.get("kind") == "daemon_exchange"
+            self._replay_step(event) for event in events if event.get("kind") == "daemon_exchange"
         ]
         stopped_at_failure = False
         if until_failure:
@@ -241,6 +244,7 @@ class TraceManager:
             destination = Path(output_path).expanduser()
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_text(markdown, encoding="utf-8")
+            ensure_private_file(destination)
             result["output_path"] = str(destination)
         return result
 
@@ -310,7 +314,7 @@ class TraceManager:
 
     @staticmethod
     def _append_line(path: Path, line: str) -> None:
-        with path.open("a", encoding="utf-8") as handle:
+        with open_private_append(path) as handle:
             handle.write(line)
 
     @staticmethod
@@ -344,6 +348,7 @@ class TraceManager:
             json.dumps(manifest, indent=2, ensure_ascii=True, sort_keys=True),
             encoding="utf-8",
         )
+        ensure_private_file(trace.manifest_path)
 
     @staticmethod
     def _zip_trace(directory: Path, archive_path: Path) -> None:
@@ -353,6 +358,7 @@ class TraceManager:
             for path in sorted(directory.rglob("*")):
                 if path.is_file():
                     zf.write(path, path.relative_to(directory))
+        ensure_private_file(archive_path)
 
     @staticmethod
     def _replay_step(event: dict[str, Any]) -> dict[str, Any]:
@@ -413,4 +419,4 @@ class TraceManager:
         self._active.clear()
         if self.output_dir.exists():
             shutil.rmtree(self.output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        ensure_private_directory(self.output_dir)

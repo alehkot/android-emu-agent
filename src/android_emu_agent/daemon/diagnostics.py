@@ -8,6 +8,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from android_emu_agent.security import (
+    ensure_private_directory,
+    ensure_private_file,
+    open_private_append,
+)
+
 SENSITIVE_KEY_MARKERS = ("token", "secret", "password", "authorization", "api_key", "apikey")
 
 
@@ -17,8 +23,9 @@ class RequestDiagnostics:
     def __init__(self, output_dir: Path | None = None) -> None:
         state_dir = Path.home() / ".android-emu-agent"
         self.output_dir = output_dir or (state_dir / "diagnostics")
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        ensure_private_directory(self.output_dir)
         self.path = self.output_dir / "requests.ndjson"
+        ensure_private_file(self.path)
         self._lock = asyncio.Lock()
 
     async def record(self, event: dict[str, Any]) -> None:
@@ -28,7 +35,7 @@ class RequestDiagnostics:
             await asyncio.to_thread(self._append_line, line)
 
     def _append_line(self, line: str) -> None:
-        with self.path.open("a", encoding="utf-8") as handle:
+        with open_private_append(self.path) as handle:
             handle.write(line)
 
     def redact(self, value: Any) -> Any:

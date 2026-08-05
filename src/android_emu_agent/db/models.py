@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, Any, cast
 import aiosqlite
 import structlog
 
+from android_emu_agent.security import ensure_private_directory, ensure_private_file
+
 if TYPE_CHECKING:
     pass
 
@@ -49,12 +51,14 @@ class Database:
 
     def __init__(self, db_path: Path | None = None) -> None:
         self.db_path = db_path or DEFAULT_DB_PATH
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_private_directory(self.db_path.parent)
+        ensure_private_file(self.db_path)
         self._connection: aiosqlite.Connection | None = None
 
     async def connect(self) -> None:
         """Connect to database and initialize schema."""
         self._connection = await aiosqlite.connect(self.db_path)
+        ensure_private_file(self.db_path)
         await self._connection.executescript(SCHEMA)
         await self._connection.commit()
         logger.info("database_connected", path=str(self.db_path))

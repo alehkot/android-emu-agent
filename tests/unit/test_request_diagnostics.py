@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import stat
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -79,6 +80,8 @@ def test_success_response_includes_diagnostic_id_and_logs_event(tmp_path: Path) 
     assert events[0]["path"] == "/devices"
     assert events[0]["status_code"] == 200
     assert events[0]["diagnostic_id"] == data["diagnostic_id"]
+    assert stat.S_IMODE(diagnostics.output_dir.stat().st_mode) == 0o700
+    assert stat.S_IMODE(diagnostics.path.stat().st_mode) == 0o600
 
 
 def test_error_response_logs_redacted_request_payload(tmp_path: Path) -> None:

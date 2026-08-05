@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import stat
 import zipfile
 from pathlib import Path
 
@@ -31,6 +32,8 @@ async def test_trace_manager_archives_redacted_daemon_events(tmp_path: Path) -> 
     archive_path = Path(stopped["path"])
     assert archive_path.exists()
     assert archive_path.suffixes[-2:] == [".aea-trace", ".zip"]
+    assert stat.S_IMODE(manager.output_dir.stat().st_mode) == 0o700
+    assert stat.S_IMODE(archive_path.stat().st_mode) == 0o600
 
     with zipfile.ZipFile(archive_path) as zf:
         names = set(zf.namelist())

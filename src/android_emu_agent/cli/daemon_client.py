@@ -13,6 +13,13 @@ from typing import Any
 
 import httpx
 
+from android_emu_agent.security import (
+    migrate_private_tree,
+    open_private_append,
+    secure_socket,
+    write_private_text,
+)
+
 STATE_DIR = Path.home() / ".android-emu-agent"
 SOCKET_PATH = Path("/tmp/android-emu-agent.sock")
 PID_FILE = STATE_DIR / "daemon.pid"
@@ -25,7 +32,8 @@ class DaemonController:
 
     def __init__(self, socket_path: Path = SOCKET_PATH) -> None:
         self.socket_path = socket_path
-        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        migrate_private_tree(STATE_DIR)
+        secure_socket(self.socket_path)
 
     def _pid_running(self, pid: int) -> bool:
         try:
@@ -45,6 +53,7 @@ class DaemonController:
     def _socket_healthy(self) -> bool:
         if not self.socket_path.exists():
             return False
+        secure_socket(self.socket_path)
         client = httpx.Client(
             transport=httpx.HTTPTransport(uds=str(self.socket_path)),
             base_url=BASE_URL,
@@ -52,7 +61,10 @@ class DaemonController:
         )
         try:
             resp = client.get("/health")
-            return resp.status_code == 200
+            healthy = resp.status_code == 200
+            if healthy:
+                secure_socket(self.socket_path)
+            return healthy
         except httpx.HTTPError:
             return False
         finally:
@@ -72,7 +84,6 @@ class DaemonController:
         if self._socket_healthy():
             return -1
 
-        LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
         args = [
             sys.executable,
             "-m",
@@ -83,15 +94,27 @@ class DaemonController:
             "--log-level",
             "info",
         ]
-        with LOG_FILE.open("a", encoding="utf-8") as log_handle:
+        with open_private_append(LOG_FILE) as log_handle:
             proc = subprocess.Popen(
                 args,
                 stdout=log_handle,
                 stderr=log_handle,
                 start_new_session=True,
+                umask=0o077,
             )
-        PID_FILE.write_text(str(proc.pid))
+        write_private_text(PID_FILE, str(proc.pid))
+        self._wait_for_secure_socket(proc)
         return proc.pid
+
+    def _wait_for_secure_socket(self, process: subprocess.Popen[Any]) -> None:
+        """Wait for Uvicorn to finish binding, then secure its socket."""
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            if self._socket_healthy():
+                return
+            if process.poll() is not None:
+                return
+            time.sleep(0.05)
 
     def stop(self) -> bool:
         """Stop the daemon if running."""
