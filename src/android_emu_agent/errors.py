@@ -298,6 +298,19 @@ def jdk_not_found_error() -> AgentError:
     )
 
 
+def jdk_unsupported_error(detected_version: str) -> AgentError:
+    """Create error for a Java runtime that cannot run the debugger bridge."""
+    return AgentError(
+        code="ERR_JDK_UNSUPPORTED",
+        message=f"JDK 17+ required; detected {detected_version}",
+        context={"detected_version": detected_version},
+        remediation=(
+            "Install JDK 17 or later and point JAVA_HOME to it, "
+            "or use Android Studio's bundled JDK."
+        ),
+    )
+
+
 def bridge_not_running_error(reason: str = "") -> AgentError:
     """Create error for bridge JAR not found or not startable."""
     return AgentError(

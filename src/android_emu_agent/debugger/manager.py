@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -27,6 +28,7 @@ from android_emu_agent.errors import (
     debug_not_attached_error,
     invalid_condition_error,
     jdk_not_found_error,
+    jdk_unsupported_error,
     not_suspended_error,
     object_collected_error,
     process_not_found_error,
@@ -42,6 +44,7 @@ _DEV_JAR_RELATIVE = Path("jdi-bridge/build/libs")
 _JAR_GLOB = "jdi-bridge-*-all.jar"
 _MAX_EVENT_HISTORY = 2000
 _MAX_LOGPOINT_HISTORY = 2000
+_JAVA_VERSION_PATTERN = re.compile(r'\bversion\s+"(?P<version>[^"]+)"')
 
 
 @dataclass(frozen=True)
@@ -93,15 +96,46 @@ class DebugManager:
         if java_home:
             candidate = Path(java_home) / "bin" / "java"
             if candidate.is_file():
+                self._require_supported_java(candidate)
                 self._java_path = candidate
                 return candidate
 
         which_java = shutil.which("java")
         if which_java:
-            self._java_path = Path(which_java)
+            candidate = Path(which_java)
+            self._require_supported_java(candidate)
+            self._java_path = candidate
             return self._java_path
 
         raise jdk_not_found_error()
+
+    @staticmethod
+    def _require_supported_java(java_path: Path) -> None:
+        """Raise an actionable error unless the selected Java runtime is version 17+."""
+        try:
+            result = subprocess.run(
+                [str(java_path), "--add-modules", "jdk.jdi", "-version"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise jdk_unsupported_error(f"an unusable runtime ({exc})") from None
+
+        output = "\n".join(part for part in (result.stderr, result.stdout) if part).strip()
+        match = _JAVA_VERSION_PATTERN.search(output)
+        version = match.group("version") if match else "an unknown version"
+        version_parts = version.split(".")
+        major_text = (
+            version_parts[1]
+            if version_parts[0] == "1" and len(version_parts) > 1
+            else version_parts[0]
+        )
+        major_match = re.match(r"\d+", major_text)
+        major = int(major_match.group()) if major_match else 0
+        if result.returncode != 0 or major < 17:
+            raise jdk_unsupported_error(version)
 
     def _find_jar(self) -> Path:
         """Locate the JDI Bridge JAR, downloading from releases if needed."""

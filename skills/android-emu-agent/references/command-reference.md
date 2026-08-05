@@ -317,7 +317,8 @@ appears.
 Do not leave the main thread suspended for more than ~8 seconds to avoid ANR risk.
 
 Debugger startup requires JDK 17+; `ERR_JDK_NOT_FOUND` means `java` is not available through
-`PATH`/`JAVA_HOME`.
+`PATH`/`JAVA_HOME`, while `ERR_JDK_UNSUPPORTED` reports an old runtime or a missing `jdk.jdi`
+module.
 
 When a mapping is loaded, stack traces and inspect output show deobfuscated names where the mapping
 provides them.

@@ -40,6 +40,8 @@ Match your symptom to the right section:
 | `ERR_SYSTEM_COMMAND_FAILED`   | Android system shell failed  | Verify device state and system service support         | Manual          |
 | `ERR_DEVICE_OFFLINE`          | Device disconnected          | Run `device list`, reconnect device                    | Not recoverable |
 | `ERR_SDK_TOOL_NOT_FOUND`      | Android SDK CLI missing      | Add `adb` / `emulator` / `avdmanager` to PATH          | Not recoverable |
+| `ERR_JDK_NOT_FOUND`           | Java runtime missing         | Install JDK 17+ or set `JAVA_HOME`                     | Not recoverable |
+| `ERR_JDK_UNSUPPORTED`         | Java too old or lacks JDI    | Point `JAVA_HOME` to a full JDK 17+                    | Not recoverable |
 | `ERR_SESSION_EXPIRED`         | Session timed out            | Create new session with `session start`                | Not recoverable |
 | `ERR_DAEMON_OFFLINE`          | Daemon not running           | Run `daemon start`                                     | Not recoverable |
 

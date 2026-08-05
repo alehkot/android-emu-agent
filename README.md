@@ -343,6 +343,7 @@ uv run android-emu-agent daemon status --json
 | `ERR_ADB_NOT_FOUND`       | `adb` is not on `PATH`                       | Install Android SDK platform-tools and update `PATH`      |
 | `ERR_SDK_TOOL_NOT_FOUND`  | An Android SDK command is missing            | Add `emulator` or `avdmanager` to `PATH`                  |
 | `ERR_JDK_NOT_FOUND`       | A Java runtime is missing                    | Install JDK 17 or later, or set `JAVA_HOME`               |
+| `ERR_JDK_UNSUPPORTED`     | Java is too old or lacks the JDI module      | Install JDK 17 or later, or update `JAVA_HOME`            |
 | `ERR_TASK_INVALID`        | A JSON task file is invalid                  | Fix the task and rerun `task validate`                    |
 | `ERR_TASK_SCRIPT_INVALID` | A `.aea` script is invalid                   | Fix the reported line and rerun `task validate`           |
 | `ERR_EXPECTATION_FAILED`  | The expected state was not observed          | Inspect the state, selector, and timeout                  |

@@ -32,7 +32,11 @@ class TestFindJava:
         java_bin.touch()
 
         manager = DebugManager()
-        with patch.dict(os.environ, {"JAVA_HOME": str(tmp_path)}):
+        java_version = MagicMock(returncode=0, stderr='openjdk version "17.0.12"', stdout="")
+        with (
+            patch.dict(os.environ, {"JAVA_HOME": str(tmp_path)}),
+            patch("subprocess.run", return_value=java_version),
+        ):
             result = manager._find_java()
         assert result == java_bin
 
@@ -41,6 +45,14 @@ class TestFindJava:
         with (
             patch.dict(os.environ, {}, clear=True),
             patch("shutil.which", return_value="/usr/bin/java"),
+            patch(
+                "subprocess.run",
+                return_value=MagicMock(
+                    returncode=0,
+                    stderr='openjdk version "21.0.4"',
+                    stdout="",
+                ),
+            ),
         ):
             os.environ.pop("JAVA_HOME", None)
             result = manager._find_java()
@@ -56,6 +68,26 @@ class TestFindJava:
             with pytest.raises(AgentError) as exc_info:
                 manager._find_java()
         assert exc_info.value.code == "ERR_JDK_NOT_FOUND"
+
+    def test_find_java_rejects_runtime_older_than_17(self) -> None:
+        manager = DebugManager()
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("shutil.which", return_value="/usr/bin/java"),
+            patch(
+                "subprocess.run",
+                return_value=MagicMock(
+                    returncode=0,
+                    stderr='openjdk version "11.0.24"',
+                    stdout="",
+                ),
+            ),
+            pytest.raises(AgentError) as exc_info,
+        ):
+            manager._find_java()
+
+        assert exc_info.value.code == "ERR_JDK_UNSUPPORTED"
+        assert exc_info.value.context == {"detected_version": "11.0.24"}
 
 
 class TestFindJar:

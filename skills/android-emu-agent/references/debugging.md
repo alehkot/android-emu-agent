@@ -145,7 +145,8 @@ watchdog behavior. If you pause on `main`, inspect quickly and run `debug resume
 ## JDK Requirement
 
 Debugger requires JDK 17+. If you see `ERR_JDK_NOT_FOUND`, guide the user to install it and ensure
-`java` is available via `PATH` or `JAVA_HOME`.
+`java` is available via `PATH` or `JAVA_HOME`. `ERR_JDK_UNSUPPORTED` means the selected runtime is
+older than 17 or lacks the `jdk.jdi` module; point `JAVA_HOME` to a supported JDK.
 
 `debug ping <session-id>` is a transient health check before attachment. It stops the temporary
 bridge after responding; attached sessions keep their existing bridge.
