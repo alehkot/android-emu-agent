@@ -213,6 +213,90 @@ def test_tap_fallback_does_not_skip_ambiguous_match() -> None:
     unique.click.assert_not_called()
 
 
+def test_tap_fallback_executes_preferred_ref_branch() -> None:
+    """A valid ref in a fallback chain must not be silently skipped."""
+    device = MagicMock()
+    ref_element = MagicMock()
+    ref_element.count = 1
+    fallback_element = MagicMock()
+    fallback_element.count = 1
+
+    def _select(**kwargs: str) -> MagicMock:
+        if kwargs == {"resourceId": "com.example:id/preferred"}:
+            return ref_element
+        return fallback_element
+
+    device.side_effect = _select
+
+    with _client_with_core(device) as (client, ref_resolver):
+        ref_resolver.store_refs(
+            "s-abc123",
+            generation=2,
+            elements=[
+                {
+                    "ref": "^g2a1",
+                    "resource_id": "com.example:id/preferred",
+                    "class": "android.widget.Button",
+                    "bounds": [100, 100, 300, 200],
+                }
+            ],
+        )
+        resp = client.post(
+            "/actions/tap",
+            json={
+                "session_id": "s-abc123",
+                "ref": "^g2a1 || id:com.example:id/fallback",
+            },
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["matched_selector"] == "^g2a1"
+    ref_element.click.assert_called_once_with()
+    fallback_element.click.assert_not_called()
+
+
+def test_clear_fallback_executes_preferred_ref_branch() -> None:
+    """Ref branches should work for non-tap element actions too."""
+    device = MagicMock()
+    ref_element = MagicMock()
+    ref_element.count = 1
+    fallback_element = MagicMock()
+    fallback_element.count = 1
+
+    def _select(**kwargs: str) -> MagicMock:
+        if kwargs == {"resourceId": "com.example:id/preferred"}:
+            return ref_element
+        return fallback_element
+
+    device.side_effect = _select
+
+    with _client_with_core(device) as (client, ref_resolver):
+        ref_resolver.store_refs(
+            "s-abc123",
+            generation=2,
+            elements=[
+                {
+                    "ref": "^g2a1",
+                    "resource_id": "com.example:id/preferred",
+                    "class": "android.widget.EditText",
+                    "bounds": [100, 100, 500, 200],
+                }
+            ],
+        )
+        resp = client.post(
+            "/actions/clear",
+            json={
+                "session_id": "s-abc123",
+                "ref": "^g2a1 || id:com.example:id/fallback",
+            },
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["matched_selector"] == "^g2a1"
+    ref_element.clear_text.assert_called_once_with()
+    fallback_element.clear_text.assert_not_called()
+
+
 def test_set_text_accepts_unique_selector() -> None:
     """Set-text should honor the selector targets documented for task scripts."""
     device = MagicMock()

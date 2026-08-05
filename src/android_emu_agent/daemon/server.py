@@ -1590,23 +1590,17 @@ async def action_tap(req: ActionRequest) -> EndpointResponse:
 
     # Handle different selector types
     if isinstance(selector, RefSelector):
-        locator, warning = await _resolve_ref_target(
-            core, req.session_id, selector.ref, session.generation
+        result = await _execute_ref_action(
+            core,
+            device,
+            req.session_id,
+            session.generation,
+            selector.ref,
+            ActionType.TAP,
         )
-        if not locator:
+        if result is None:
             return _error_response(not_found_error(selector.ref), status_code=404)
-
-        if warning is None and locator.generation < session.generation:
-            return _error_response(
-                stale_ref_error(selector.ref, locator.generation, session.generation),
-                status_code=409,
-            )
-
-        result = await core.action_executor.execute(device, ActionType.TAP, locator)
-        payload = result.to_dict()
-        if warning and payload.get("status") == "done":
-            payload["warning"] = warning
-        return payload
+        return result
 
     elif isinstance(selector, CoordsSelector):
         # Direct coordinate tap without element lookup
@@ -1619,6 +1613,21 @@ async def action_tap(req: ActionRequest) -> EndpointResponse:
     elif isinstance(selector, FallbackSelector):
         try:
             for option in selector.options:
+                if isinstance(option, RefSelector):
+                    result = await _execute_ref_action(
+                        core,
+                        device,
+                        req.session_id,
+                        session.generation,
+                        option.ref,
+                        ActionType.TAP,
+                    )
+                    if result is None:
+                        continue
+                    if isinstance(result, dict) and result.get("status") == "done":
+                        result["selector"] = req.ref
+                        result["matched_selector"] = option.ref
+                    return result
                 matched = await _tap_selector_option(device, option)
                 if matched:
                     return {"status": "done", "selector": req.ref, "matched_selector": matched}
@@ -1713,6 +1722,22 @@ async def _action_with_locator(
         options = selector.options if isinstance(selector, FallbackSelector) else [selector]
         try:
             for option in options:
+                if isinstance(option, RefSelector):
+                    result = await _execute_ref_action(
+                        core,
+                        device,
+                        req.session_id,
+                        session.generation,
+                        option.ref,
+                        action,
+                        **kwargs,
+                    )
+                    if result is None:
+                        continue
+                    if isinstance(result, dict) and result.get("status") == "done":
+                        result["selector"] = req.ref
+                        result["matched_selector"] = option.ref
+                    return result
                 matched = await _selector_action_option(
                     device,
                     option,
@@ -1730,12 +1755,36 @@ async def _action_with_locator(
             return _action_failure_response(action, req.ref, exc)
         return _error_response(not_found_error(req.ref), status_code=404)
 
-    locator, warning = await _resolve_ref_target(core, req.session_id, req.ref, session.generation)
-    if not locator:
+    result = await _execute_ref_action(
+        core,
+        device,
+        req.session_id,
+        session.generation,
+        selector.ref,
+        action,
+        **kwargs,
+    )
+    if result is None:
         return _error_response(not_found_error(req.ref), status_code=404)
-    if warning is None and locator.generation < session.generation:
+    return result
+
+
+async def _execute_ref_action(
+    core: DaemonCore,
+    device: Any,
+    session_id: str,
+    generation: int,
+    ref: str,
+    action: ActionType,
+    **kwargs: Any,
+) -> EndpointResponse | None:
+    """Resolve and execute one ref action, returning None only when the ref is absent."""
+    locator, warning = await _resolve_ref_target(core, session_id, ref, generation)
+    if not locator:
+        return None
+    if warning is None and locator.generation < generation:
         return _error_response(
-            stale_ref_error(req.ref, locator.generation, session.generation),
+            stale_ref_error(ref, locator.generation, generation),
             status_code=409,
         )
 
