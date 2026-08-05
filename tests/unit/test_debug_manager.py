@@ -164,6 +164,37 @@ class TestDebugManagerLifecycle:
         await manager.stop_all()
 
     @pytest.mark.asyncio
+    async def test_start_bridge_offloads_host_runtime_discovery(self, tmp_path: Path) -> None:
+        """Java validation and JAR resolution must not block the daemon event loop."""
+        manager = DebugManager()
+        java_path = tmp_path / "java"
+        jar_path = tmp_path / "bridge.jar"
+        client = MagicMock()
+        client.start = AsyncMock()
+        offloaded: list[object] = []
+
+        async def _to_thread(function: object, *args: object) -> object:
+            offloaded.append(function)
+            assert callable(function)
+            return function(*args)
+
+        with (
+            patch.object(manager, "_find_java", return_value=java_path) as find_java,
+            patch.object(manager, "_find_jar", return_value=jar_path) as find_jar,
+            patch("asyncio.to_thread", side_effect=_to_thread),
+            patch(
+                "android_emu_agent.debugger.manager.BridgeClient",
+                return_value=client,
+            ) as bridge_client,
+        ):
+            result = await manager.start_bridge("s-test", verify=False)
+
+        assert result is client
+        assert offloaded == [find_java, find_jar]
+        bridge_client.assert_called_once_with(java_path, jar_path)
+        client.start.assert_awaited_once_with()
+
+    @pytest.mark.asyncio
     async def test_stop_all_removes_forward_and_stops_bridge(self) -> None:
         """Daemon shutdown should release device forwards as well as bridge processes."""
         manager = DebugManager()

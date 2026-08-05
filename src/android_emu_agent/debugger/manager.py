@@ -178,8 +178,8 @@ class DebugManager:
                 return client
             del self._bridges[session_id]
 
-        java_path = self._find_java()
-        jar_path = self._find_jar()
+        java_path = await asyncio.to_thread(self._find_java)
+        jar_path = await asyncio.to_thread(self._find_jar)
 
         client = BridgeClient(java_path, jar_path)
         await client.start()
