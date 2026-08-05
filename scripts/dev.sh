@@ -233,10 +233,18 @@ ensure_command() {
 }
 
 ensure_clean_worktree() {
-    if ! git diff --quiet || ! git diff --cached --quiet; then
-        echo "Working tree has uncommitted changes. Commit or stash them first."
+    local worktree_status
+    worktree_status="$(git status --porcelain=v1 --untracked-files=normal)"
+    if [ -n "$worktree_status" ]; then
+        echo "Working tree has tracked or untracked changes. Commit, stash, or remove them first."
+        printf "%s\n" "$worktree_status"
         return 1
     fi
+}
+
+run_release_checks() {
+    echo "Running canonical release checks..."
+    "$PROJECT_DIR/scripts/dev.sh" check
 }
 
 ensure_version_consistency() {
@@ -633,6 +641,7 @@ release_bump_version() {
     echo "Release bump: $current_version -> $new_version"
     apply_version_bump "$current_version" "$new_version" || return 1
     update_uv_lock || return 1
+    run_release_checks || return 1
     commit_and_tag_version_bump "$new_version"
 }
 
@@ -722,9 +731,11 @@ release_current_version() {
     local jar_path="$PROJECT_DIR/jdi-bridge/build/libs/jdi-bridge-$version-all.jar"
     local checksum_path="$jar_path.sha256"
 
-    ensure_release_tag_at_head "$tag" || return 1
+    run_release_checks || return 1
     build_python_release_artifacts "$version" || return 1
     build_bridge_release_artifacts "$version" || return 1
+    ensure_clean_worktree || return 1
+    ensure_release_tag_at_head "$tag" || return 1
     push_release_refs "$branch" "$tag" || return 1
 
     if gh release view "$tag" >/dev/null 2>&1; then
@@ -765,7 +776,9 @@ publish_current_python_version() {
     fi
 
     ensure_version_consistency "$version" || return 1
+    run_release_checks || return 1
     build_python_release_artifacts "$version" || return 1
+    ensure_clean_worktree || return 1
     publish_python_release_artifacts "$version"
 }
 
