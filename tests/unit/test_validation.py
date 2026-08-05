@@ -62,6 +62,21 @@ class TestValidateUri:
 
         validate_uri("myapp://deep/link")
 
+    @pytest.mark.parametrize(
+        "uri",
+        [
+            "mailto:user@example.com",
+            "tel:+15551234567",
+            "content:com.example.provider/items/1",
+            "market:details?id=com.example.app",
+        ],
+    )
+    def test_valid_opaque_android_uri(self, uri: str) -> None:
+        """Should accept Android intent URIs that do not use a double-slash authority."""
+        from android_emu_agent.validation import validate_uri
+
+        validate_uri(uri)
+
     def test_invalid_no_scheme(self) -> None:
         """Should reject URI without scheme."""
         from android_emu_agent.validation import validate_uri
@@ -77,6 +92,16 @@ class TestValidateUri:
 
         with pytest.raises(AgentError) as exc_info:
             validate_uri("")
+
+        assert exc_info.value.code == "ERR_INVALID_URI"
+
+    @pytest.mark.parametrize("uri", ["mailto:", "1app:value", "my app:value", "tel:+1 555"])
+    def test_invalid_uri_syntax(self, uri: str) -> None:
+        """Should reject missing values, invalid schemes, and raw whitespace."""
+        from android_emu_agent.validation import validate_uri
+
+        with pytest.raises(AgentError) as exc_info:
+            validate_uri(uri)
 
         assert exc_info.value.code == "ERR_INVALID_URI"
 

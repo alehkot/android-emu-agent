@@ -207,7 +207,8 @@ return `ERR_EXPECTATION_FAILED`; `current-app` without an expected package or ac
   without launching it.
 - `app force-stop <session_id> <package>` Force stop app.
 - `app reset <session_id> <package>` Clear app data.
-- `app deeplink <session_id> <uri>` Open a deep link.
+- `app deeplink <session_id> <uri>` Open a deep link, including opaque Android URIs such as
+  `mailto:`, `tel:`, `content:`, and `market:`.
 
 Use `--activity` to launch a specific screen directly. Use `--wait-debugger` when attaching a
 debugger to the app at startup:

@@ -8,6 +8,7 @@ from android_emu_agent.errors import invalid_package_error, invalid_uri_error, n
 
 # Package name: starts with letter, segments separated by dots, each segment alphanumeric/underscore
 PACKAGE_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$")
+URI_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:[^\s]+$")
 
 
 def validate_package(package: str) -> None:
@@ -32,7 +33,7 @@ def validate_uri(uri: str) -> None:
     Raises:
         AgentError: If URI is invalid
     """
-    if not uri or "://" not in uri:
+    if not URI_PATTERN.fullmatch(uri):
         raise invalid_uri_error(uri)
 
 

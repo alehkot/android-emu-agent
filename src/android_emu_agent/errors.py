@@ -231,7 +231,7 @@ def invalid_uri_error(uri: str) -> AgentError:
         code="ERR_INVALID_URI",
         message=f"Invalid URI: {uri}",
         context={"uri": uri},
-        remediation="URI must include scheme (e.g., https:// or myapp://).",
+        remediation="URI must include a scheme and value (e.g., https://, myapp://, or mailto:).",
     )
 
 

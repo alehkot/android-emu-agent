@@ -118,3 +118,28 @@ def test_app_intent_rejects_invalid_package() -> None:
     assert data["status"] == "error"
     assert data["error"]["code"] == "ERR_INVALID_PACKAGE"
     assert device_manager.intent_calls == []
+
+
+def test_app_intent_accepts_opaque_android_uri() -> None:
+    """Intent data should accept valid schemes that do not contain a double slash."""
+    with _client_with_core() as (client, device_manager):
+        resp = client.post(
+            "/app/intent",
+            json={
+                "session_id": "s-abc123",
+                "action": "android.intent.action.SENDTO",
+                "data_uri": "mailto:user@example.com",
+            },
+        )
+
+    assert resp.status_code == 200
+    assert device_manager.intent_calls == [
+        {
+            "serial": "emulator-5554",
+            "action": "android.intent.action.SENDTO",
+            "data_uri": "mailto:user@example.com",
+            "component": None,
+            "package": None,
+            "wait_for_debugger": False,
+        }
+    ]
