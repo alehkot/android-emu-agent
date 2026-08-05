@@ -195,7 +195,7 @@ class Database:
         session_id: str,
         ref: str,
     ) -> tuple[int, dict[str, Any]] | None:
-        """Get the most recent ref across generations."""
+        """Get a ref only when its token identifies one stored generation."""
         if not self._connection:
             return None
         cursor = await self._connection.execute(
@@ -204,14 +204,23 @@ class Database:
             FROM ref_maps
             WHERE session_id = ? AND ref = ?
             ORDER BY generation DESC
-            LIMIT 1
+            LIMIT 2
             """,
             (session_id, ref),
         )
-        row = await cursor.fetchone()
-        if row:
-            return row[0], cast(dict[str, Any], json.loads(row[1]))
-        return None
+        rows = list(await cursor.fetchall())
+        if not rows:
+            return None
+        if len(rows) > 1:
+            logger.warning(
+                "ambiguous_persisted_ref_rejected",
+                session_id=session_id,
+                ref=ref,
+                generations=[row[0] for row in rows],
+            )
+            return None
+        row = rows[0]
+        return row[0], cast(dict[str, Any], json.loads(row[1]))
 
     async def get_refs_for_generation(
         self,

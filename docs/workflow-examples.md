@@ -92,7 +92,7 @@ uv run android-emu-agent ui snapshot <session-id> --format text
 Tap a ref from the snapshot:
 
 ```bash
-uv run android-emu-agent action tap <session-id> ^a1
+uv run android-emu-agent action tap <session-id> ^g1a1
 ```
 
 Verify the new screen:
@@ -123,14 +123,14 @@ uv run android-emu-agent ui snapshot <session-id> --format text
 Set text on the email and password fields:
 
 ```bash
-uv run android-emu-agent action set-text <session-id> ^a2 "agent@example.com"
-uv run android-emu-agent action set-text <session-id> ^a3 "test-password"
+uv run android-emu-agent action set-text <session-id> ^g1a2 "agent@example.com"
+uv run android-emu-agent action set-text <session-id> ^g1a3 "test-password"
 ```
 
 Submit and verify the next state:
 
 ```bash
-uv run android-emu-agent action tap <session-id> ^a4
+uv run android-emu-agent action tap <session-id> ^g1a4
 uv run android-emu-agent expect exists <session-id> --text "Welcome" --timeout-ms 10000
 ```
 
@@ -321,7 +321,7 @@ matching.
 
 ```bash
 uv run android-emu-agent ui snapshot <session-id> --format text
-uv run android-emu-agent ui ground <session-id> --ref ^a1 --ref ^a4 --pull --output ./artifacts/grounding.json --json
+uv run android-emu-agent ui ground <session-id> --ref ^g1a1 --ref ^g1a4 --pull --output ./artifacts/grounding.json --json
 uv run android-emu-agent ui screenshot <session-id> --pull --output ./artifacts/screen.png --json
 ```
 

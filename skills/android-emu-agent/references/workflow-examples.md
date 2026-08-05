@@ -10,7 +10,7 @@ These examples assume an active session named `s-abc123` and app package `com.ex
 ```bash
 uv run android-emu-agent ui snapshot s-abc123 --format text
 uv run android-emu-agent ui snapshot s-abc123 --full
-uv run android-emu-agent ui ground s-abc123 --ref ^a1 --ref ^a4 --pull --output ./artifacts/grounding.json --json
+uv run android-emu-agent ui ground s-abc123 --ref ^g1a1 --ref ^g1a4 --pull --output ./artifacts/grounding.json --json
 uv run android-emu-agent ui screenshot s-abc123 --pull --output ./artifacts/screen.png --json
 ```
 

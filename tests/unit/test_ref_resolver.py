@@ -52,6 +52,46 @@ class TestRefResolver:
         assert bundle is None
         assert is_stale is False
 
+    def test_generation_qualified_ref_does_not_retarget_current_collision(self) -> None:
+        """A stale qualified ref should resolve only to its original generation."""
+        resolver = RefResolver()
+        resolver.store_refs(
+            "s-1",
+            generation=1,
+            elements=[{"ref": "^g1a1", "text": "Increment", "bounds": [0, 0, 100, 100]}],
+        )
+        resolver.store_refs(
+            "s-1",
+            generation=2,
+            elements=[{"ref": "^g2a1", "text": "Confirm", "bounds": [0, 0, 100, 100]}],
+        )
+
+        bundle, is_stale = resolver.resolve_ref("s-1", "^g1a1", current_generation=2)
+
+        assert bundle is not None
+        assert bundle.text == "Increment"
+        assert bundle.generation == 1
+        assert is_stale is True
+
+    def test_ambiguous_legacy_ref_is_rejected(self) -> None:
+        """Legacy tokens reused by multiple generations should fail closed."""
+        resolver = RefResolver()
+        resolver.store_refs(
+            "s-1",
+            generation=1,
+            elements=[{"ref": "^a1", "text": "Increment", "bounds": [0, 0, 100, 100]}],
+        )
+        resolver.store_refs(
+            "s-1",
+            generation=2,
+            elements=[{"ref": "^a1", "text": "Confirm", "bounds": [0, 0, 100, 100]}],
+        )
+
+        bundle, is_stale = resolver.resolve_ref("s-1", "^a1", current_generation=2)
+
+        assert bundle is None
+        assert is_stale is False
+
     def test_cleanup_old_generations(self) -> None:
         """Should cleanup generations older than current - 2."""
         resolver = RefResolver()

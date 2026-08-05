@@ -74,7 +74,7 @@ uv run android-emu-agent session start --device <serial>
 uv run android-emu-agent ui snapshot <session_id>
 
 # Act (one action)
-uv run android-emu-agent action tap <session_id> ^a1
+uv run android-emu-agent action tap <session_id> ^g1a1
 
 # Verify
 uv run android-emu-agent ui snapshot <session_id>
@@ -94,7 +94,8 @@ uv run android-emu-agent ui snapshot <session_id>
   emulator"), only ensure readiness (daemon up, device connected, session active). Do not tap,
   swipe, type, launch apps, or take any UI action until the user explicitly asks. See
   `references/behavioral-protocols.md` > Session Readiness Check.
-- One action per snapshot. Refs are generation-scoped.
+- One action per snapshot. Refs are generation-scoped: in `^g3a2`, `g3` is the snapshot generation
+  and `a2` is the element index. Always copy the complete ref from the latest snapshot.
 - Re-snapshot after any action or wait.
 - Verify state changes after each action.
 - If blocked by dialogs or loading, handle the blocker first.

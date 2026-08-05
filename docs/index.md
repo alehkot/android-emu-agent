@@ -20,7 +20,8 @@ Use this site to learn the workflow first, then use the generated command refere
 
 1. Start or connect to an emulator or rooted device.
 2. Start a session for that target.
-3. Capture a compact snapshot and choose a `^ref` or selector.
+3. Capture a compact snapshot and choose its generation-qualified `^g<generation>a<element>` ref or
+   a selector.
 4. Run one action.
 5. Verify the result with a fresh snapshot, wait, expectation, artifact, trace, or debugger read.
 
@@ -29,7 +30,7 @@ Example:
 ```bash
 uv run android-emu-agent session start --device emulator-5554 --json
 uv run android-emu-agent ui snapshot <session-id> --format text
-uv run android-emu-agent action tap <session-id> ^a1
+uv run android-emu-agent action tap <session-id> ^g1a1
 uv run android-emu-agent expect exists <session-id> --text "Welcome" --timeout-ms 5000
 ```
 

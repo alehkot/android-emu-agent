@@ -125,7 +125,7 @@ Notes:
 - `tap`, `long-tap`, and `clear` join the remaining line into one selector string. This allows
   fallback and compound selectors.
 - `set-text` treats the first value token as the selector and the rest of the line as text. Use a
-  single selector token such as `^a2`, `id:com.example:id/email`, or `text:"Email"`.
+  single selector token such as `^g1a2`, `id:com.example:id/email`, or `text:"Email"`.
 - `swipe` supports options such as `distance=0.8` and `duration_ms=300`.
 
 ### Wait Steps
@@ -179,10 +179,11 @@ A `verify` line before any step is invalid.
 ## Selector Values
 
 Script selectors pass through to the same selector parser used by action, wait, and expectation
-commands. Common forms:
+commands. Snapshot refs use `^g<generation>a<element>`; copy the complete token from the latest
+snapshot. Common forms:
 
 ```text
-^a1
+^g1a1
 text:"Sign in"
 text-contains:"Pay"
 id:com.example:id/login

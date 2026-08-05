@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from hashlib import md5
+from itertools import count
 from typing import TYPE_CHECKING, Any
 
 import structlog
 from lxml import etree
+
+from android_emu_agent.ui.refs import format_ref
 
 if TYPE_CHECKING:
     pass
@@ -117,9 +121,6 @@ class Snapshot:
 class UISnapshotter:
     """Generates actionable UI snapshots from device hierarchy."""
 
-    def __init__(self) -> None:
-        self._ref_counter = 0
-
     def parse_hierarchy(
         self,
         xml_content: bytes,
@@ -134,7 +135,11 @@ class UISnapshotter:
 
         start = time.time()
         tree = etree.fromstring(xml_content)
-        elements = self._extract_elements(tree, interactive_only=interactive_only)
+        elements = self._extract_elements(
+            tree,
+            generation=generation,
+            interactive_only=interactive_only,
+        )
         elapsed = (time.time() - start) * 1000
 
         logger.info(
@@ -144,7 +149,7 @@ class UISnapshotter:
         )
 
         return Snapshot(
-            schema_version=1,
+            schema_version=2,
             session_id=session_id,
             generation=generation,
             timestamp_ms=int(time.time() * 1000),
@@ -157,14 +162,17 @@ class UISnapshotter:
         self,
         tree: etree._Element,
         *,
+        generation: int,
         interactive_only: bool,
     ) -> list[ElementNode]:
         """Extract elements using traversal and compact actionable rules."""
         elements: list[ElementNode] = []
-        self._ref_counter = 0
+        ref_counter = count(1)
 
         self._collect_elements(
             node=tree,
+            generation=generation,
+            ref_counter=ref_counter,
             parent_path=[],
             interactive_only=interactive_only,
             interactive_ancestor=False,
@@ -178,6 +186,8 @@ class UISnapshotter:
         self,
         *,
         node: etree._Element,
+        generation: int,
+        ref_counter: Iterator[int],
         parent_path: list[str],
         interactive_only: bool,
         interactive_ancestor: bool,
@@ -198,6 +208,8 @@ class UISnapshotter:
         if include:
             element = self._node_to_element(
                 node,
+                generation=generation,
+                ref_counter=ref_counter,
                 sibling_index=sibling_index,
                 ancestry_path=ancestry_path,
                 proxy_label=self._proxy_label(node) if interactive_only else None,
@@ -210,6 +222,8 @@ class UISnapshotter:
         for index, child in enumerate(child_nodes):
             self._collect_elements(
                 node=child,
+                generation=generation,
+                ref_counter=ref_counter,
                 parent_path=[*parent_path, class_name],
                 interactive_only=interactive_only,
                 interactive_ancestor=next_interactive_ancestor,
@@ -221,13 +235,14 @@ class UISnapshotter:
         self,
         node: etree._Element,
         *,
+        generation: int,
+        ref_counter: Iterator[int],
         sibling_index: int,
         ancestry_path: str,
         proxy_label: str | None = None,
     ) -> ElementNode | None:
         """Convert XML node to ElementNode."""
-        self._ref_counter += 1
-        ref = f"^a{self._ref_counter}"
+        ref = format_ref(generation, next(ref_counter))
 
         # Parse bounds "[left,top][right,bottom]"
         bounds_str = node.get("bounds", "[0,0][0,0]")

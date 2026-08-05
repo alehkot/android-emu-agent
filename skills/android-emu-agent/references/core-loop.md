@@ -11,14 +11,17 @@ Request a UI snapshot to see interactive elements:
 uv run android-emu-agent ui snapshot <session_id>
 ```
 
-The snapshot returns context and actionable elements with generation-scoped `^ref` handles. Compact
-actionable filtering is intended to work across classic XML layouts and modern frameworks such as
-Compose and Litho by preferring semantic labels and hittable containers over layout noise.
+The snapshot returns context and actionable elements with generation-scoped refs in the form
+`^g<generation>a<element>`. For example, `^g3a2` is element 2 from generation 3. Compact actionable
+filtering is intended to work across classic XML layouts and modern frameworks such as Compose and
+Litho by preferring semantic labels and hittable containers over layout noise.
 
 Example snapshot output:
 
 ```json
 {
+  "schema_version": 2,
+  "generation": 1,
   "context": {
     "package": "com.example.app",
     "activity": ".MainActivity",
@@ -27,7 +30,7 @@ Example snapshot output:
   },
   "elements": [
     {
-      "ref": "^a1",
+      "ref": "^g1a1",
       "role": "button",
       "label": "Sign in",
       "resource_id": "com.example:id/login_btn",
@@ -67,8 +70,8 @@ Quick decision checklist (work through in order):
 Execute one action at a time using the `^ref` from the current snapshot:
 
 ```bash
-uv run android-emu-agent action tap <session_id> ^a1
-uv run android-emu-agent action set-text <session_id> ^a2 "username"
+uv run android-emu-agent action tap <session_id> ^g1a1
+uv run android-emu-agent action set-text <session_id> ^g1a2 "username"
 uv run android-emu-agent action back <session_id>
 ```
 

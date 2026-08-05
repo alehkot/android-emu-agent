@@ -218,7 +218,7 @@ An inquiry can transition to an action when the user explicitly bridges the gap:
 
 ```text
 Agent: "I found three buttons in the media transport bar. Based on the screenshot,
-       ^a2 appears to be a play button (triangle icon). Would you like me to tap it?"
+       ^g1a2 appears to be a play button (triangle icon). Would you like me to tap it?"
 User:  "Yes, tap it."
 ```
 
@@ -262,7 +262,7 @@ that is a state-modifying action used to answer an informational question.
 best match is an unlabeled element, state your confidence and ask before tapping:
 
 ```text
-Agent: "I found an unlabeled ImageButton at ^a2. Based on its position in the media
+Agent: "I found an unlabeled ImageButton at ^g1a2. Based on its position in the media
        transport bar and the triangle icon visible in the screenshot, I believe this is
        the play button (medium confidence). Should I tap it?"
 ```

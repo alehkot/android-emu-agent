@@ -935,7 +935,7 @@ android-emu-agent expect exists [OPTIONS] SESSION_ID
 
 **Options**:
 
-- `--ref TEXT`: Element ref (^a1)
+- `--ref TEXT`: Element ref (^g1a1)
 - `--text TEXT`: Text selector
 - `--text-contains TEXT`: Text contains selector
 - `--id TEXT`: Resource ID selector
@@ -963,7 +963,7 @@ android-emu-agent expect gone [OPTIONS] SESSION_ID
 
 **Options**:
 
-- `--ref TEXT`: Element ref (^a1)
+- `--ref TEXT`: Element ref (^g1a1)
 - `--text TEXT`: Text selector
 - `--text-contains TEXT`: Text contains selector
 - `--id TEXT`: Resource ID selector
@@ -1589,7 +1589,7 @@ android-emu-agent action tap [OPTIONS] SESSION_ID REF
 **Arguments**:
 
 - `SESSION_ID`: Session ID [required]
-- `REF`: Element ref (^a1) [required]
+- `REF`: Element ref (^g1a1) [required]
 
 **Options**:
 
@@ -1609,7 +1609,7 @@ android-emu-agent action long-tap [OPTIONS] SESSION_ID REF
 **Arguments**:
 
 - `SESSION_ID`: Session ID [required]
-- `REF`: Element ref (^a1) [required]
+- `REF`: Element ref (^g1a1) [required]
 
 **Options**:
 
@@ -1629,7 +1629,7 @@ android-emu-agent action set-text [OPTIONS] SESSION_ID REF TEXT
 **Arguments**:
 
 - `SESSION_ID`: Session ID [required]
-- `REF`: Element ref (^a1) [required]
+- `REF`: Element ref (^g1a1) [required]
 - `TEXT`: Text to set [required]
 
 **Options**:
@@ -1650,7 +1650,7 @@ android-emu-agent action clear [OPTIONS] SESSION_ID REF
 **Arguments**:
 
 - `SESSION_ID`: Session ID [required]
-- `REF`: Element ref (^a1) [required]
+- `REF`: Element ref (^g1a1) [required]
 
 **Options**:
 
@@ -1859,7 +1859,7 @@ android-emu-agent wait exists [OPTIONS] SESSION_ID
 
 **Options**:
 
-- `--ref TEXT`: Element ref (^a1)
+- `--ref TEXT`: Element ref (^g1a1)
 - `--text TEXT`: Text selector
 - `--text-contains TEXT`: Text contains selector
 - `--id TEXT`: Resource ID selector
@@ -1887,7 +1887,7 @@ android-emu-agent wait gone [OPTIONS] SESSION_ID
 
 **Options**:
 
-- `--ref TEXT`: Element ref (^a1)
+- `--ref TEXT`: Element ref (^g1a1)
 - `--text TEXT`: Text selector
 - `--text-contains TEXT`: Text contains selector
 - `--id TEXT`: Resource ID selector

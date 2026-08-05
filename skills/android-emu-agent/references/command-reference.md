@@ -156,8 +156,9 @@ vision mandatory for automation.
 - `action swipe <dir> -s <session_id>` Swipe gesture.
 - `action scroll <dir> -s <session_id>` Scroll gesture.
 
-If a stale `^ref` can be rebound against the latest snapshot generation, action responses may return
-`status=done` with a `warning`. Re-snapshot before the next action.
+Refs use `^g<generation>a<element>` and therefore identify their source snapshot unambiguously. If a
+stale ref can be confidently rebound against the latest snapshot generation, action responses may
+return `status=done` with a `warning`. Re-snapshot before the next action.
 
 ### Wait
 
@@ -409,7 +410,8 @@ evidence bundles.
 
 The `action tap` command accepts these selector formats:
 
-- `^a1`: element ref from snapshot (preferred).
+- `^g1a1`: generation-qualified element ref from snapshot (preferred; `g1` is generation 1 and `a1`
+  is element 1).
 - `text:"Sign in"`: match by visible text.
 - `id:com.example:id/btn`: match by resource ID.
 - `desc:"Open menu"`: match by content description.

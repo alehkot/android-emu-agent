@@ -103,7 +103,7 @@ async def test_task_run_executes_steps_and_verifiers() -> None:
             "steps": [
                 {
                     "action": "set_text",
-                    "ref": "^a1",
+                    "ref": "^g1a1",
                     "text": "alice@example.com",
                     "verify": [{"type": "exists", "text_contains": "alice"}],
                 }
@@ -123,7 +123,7 @@ async def test_task_run_executes_steps_and_verifiers() -> None:
     ]
     assert calls[0].payload == {
         "session_id": "s-abc123",
-        "ref": "^a1",
+        "ref": "^g1a1",
         "text": "alice@example.com",
     }
     assert calls[1].payload["selector"] == {"textContains": "alice"}
@@ -146,10 +146,10 @@ async def test_task_run_stops_on_failed_verifier() -> None:
             "steps": [
                 {
                     "action": "tap",
-                    "ref": "^a1",
+                    "ref": "^g1a1",
                     "verify": [{"type": "exists", "text": "Checkout"}],
                 },
-                {"action": "tap", "ref": "^a2"},
+                {"action": "tap", "ref": "^g1a2"},
             ]
         },
         session_id="s-abc123",
@@ -169,6 +169,6 @@ def test_task_validate_rejects_unsupported_operations() -> None:
     manager = TaskManager()
 
     with pytest.raises(AgentError) as exc_info:
-        manager.validate({"steps": [{"action": "pinch", "ref": "^a1"}]})
+        manager.validate({"steps": [{"action": "pinch", "ref": "^g1a1"}]})
 
     assert exc_info.value.code == "ERR_TASK_UNSUPPORTED_STEP"

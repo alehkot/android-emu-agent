@@ -32,8 +32,35 @@ class TestUISnapshotter:
 
         # Check refs are assigned
         refs = [e.ref for e in snapshot.elements]
-        assert "^a1" in refs
-        assert "^a2" in refs
+        assert "^g1a1" in refs
+        assert "^g1a2" in refs
+
+    def test_refs_include_snapshot_generation(
+        self,
+        sample_hierarchy_xml: bytes,
+        sample_device_info: dict[str, Any],
+        sample_context_info: dict[str, Any],
+    ) -> None:
+        """The same element index should remain distinct across snapshots."""
+        snapshotter = UISnapshotter()
+
+        first = snapshotter.parse_hierarchy(
+            sample_hierarchy_xml,
+            "s-test",
+            7,
+            sample_device_info,
+            sample_context_info,
+        )
+        second = snapshotter.parse_hierarchy(
+            sample_hierarchy_xml,
+            "s-test",
+            8,
+            sample_device_info,
+            sample_context_info,
+        )
+
+        assert first.elements[0].ref == "^g7a1"
+        assert second.elements[0].ref == "^g8a1"
 
     def test_parse_hierarchy_assigns_correct_roles(
         self,
@@ -86,7 +113,7 @@ class TestUISnapshotter:
 
         result = snapshot.to_dict()
 
-        assert result["schema_version"] == 1
+        assert result["schema_version"] == 2
         assert result["session_id"] == "s-test"
         assert result["generation"] == 1
         assert "elements" in result

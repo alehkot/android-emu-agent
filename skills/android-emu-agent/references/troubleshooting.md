@@ -131,7 +131,7 @@ uv run android-emu-agent ui screenshot <session_id>
 
 ```bash
 uv run android-emu-agent wait idle <session_id> --timeout-ms 3000
-uv run android-emu-agent action long-tap <session_id> ^a1
+uv run android-emu-agent action long-tap <session_id> ^g1a1
 ```
 
 ### Action Failure Recovery

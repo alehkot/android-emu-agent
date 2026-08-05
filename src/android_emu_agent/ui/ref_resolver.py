@@ -8,7 +8,19 @@ from typing import Any
 
 import structlog
 
+from android_emu_agent.ui.refs import ref_generation
+
 logger = structlog.get_logger()
+
+IDENTITY_SELECTOR_KINDS = {
+    "resource_id",
+    "normalized_resource_id",
+    "content_desc",
+    "text",
+    "label",
+    "element_hash",
+    "ancestry_path",
+}
 
 
 @dataclass
@@ -137,20 +149,30 @@ class RefResolver:
 
         session_refs = self._ref_maps[session_id]
 
-        # Check current generation first
-        if current_generation in session_refs and ref in session_refs[current_generation]:
-            return session_refs[current_generation][ref], False
+        encoded_generation = ref_generation(ref)
+        if encoded_generation is not None:
+            bundle = session_refs.get(encoded_generation, {}).get(ref)
+            if bundle is None:
+                return None, False
+            return bundle, encoded_generation < current_generation
 
-        # Check previous generations (stale but might work)
-        for gen in sorted(session_refs.keys(), reverse=True):
-            if gen < current_generation and ref in session_refs[gen]:
-                logger.warning(
-                    "stale_ref_resolved",
-                    ref=ref,
-                    ref_generation=gen,
-                    current_generation=current_generation,
-                )
-                return session_refs[gen][ref], True
+        # Legacy refs did not encode a generation. Resolve them only when unique,
+        # otherwise a stale token could silently target a different current element.
+        matches = [
+            (generation, refs[ref])
+            for generation, refs in session_refs.items()
+            if ref in refs and generation <= current_generation
+        ]
+        if len(matches) == 1:
+            generation, bundle = matches[0]
+            return bundle, generation < current_generation
+        if len(matches) > 1:
+            logger.warning(
+                "ambiguous_legacy_ref_rejected",
+                ref=ref,
+                generations=sorted(generation for generation, _bundle in matches),
+                current_generation=current_generation,
+            )
 
         return None, False
 
@@ -255,20 +277,28 @@ class RefResolver:
             return None
 
         filtered = candidates
-        narrowed = False
+        identity_narrowed = False
         for step in locator.selector_chain or self.build_selector_chain(locator):
+            if step.get("kind") not in IDENTITY_SELECTOR_KINDS:
+                continue
             matches = [candidate for candidate in filtered if self._matches_step(candidate, step)]
             if len(matches) == 1:
                 return matches[0]
             if matches:
                 filtered = matches
-                narrowed = True
+                identity_narrowed = True
 
-        if narrowed and len(filtered) == 1:
+        if identity_narrowed and len(filtered) == 1:
             return filtered[0]
 
+        identity_candidates = [
+            candidate for candidate in candidates if self._has_identity_match(locator, candidate)
+        ]
         ranked = sorted(
-            ((self._score_candidate(locator, candidate), candidate) for candidate in candidates),
+            (
+                (self._score_candidate(locator, candidate), candidate)
+                for candidate in identity_candidates
+            ),
             key=lambda item: item[0],
             reverse=True,
         )
@@ -277,6 +307,25 @@ class RefResolver:
         if len(ranked) > 1 and ranked[0][0] == ranked[1][0]:
             return None
         return ranked[0][1]
+
+    def _has_identity_match(self, locator: LocatorBundle, candidate: LocatorBundle) -> bool:
+        """Return whether a candidate shares a stable identity signal."""
+        return any(
+            (
+                bool(locator.resource_id)
+                and self.normalize_resource_id(locator.resource_id)
+                == self.normalize_resource_id(candidate.resource_id),
+                bool(self.normalize_text(locator.content_desc))
+                and self.normalize_text(locator.content_desc)
+                == self.normalize_text(candidate.content_desc),
+                bool(self.normalize_text(locator.text))
+                and self.normalize_text(locator.text) == self.normalize_text(candidate.text),
+                bool(self.normalize_text(locator.label))
+                and self.normalize_text(locator.label) == self.normalize_text(candidate.label),
+                bool(locator.element_hash) and locator.element_hash == candidate.element_hash,
+                bool(locator.ancestry_path) and locator.ancestry_path == candidate.ancestry_path,
+            )
+        )
 
     def _matches_step(self, candidate: LocatorBundle, step: dict[str, str]) -> bool:
         """Check whether a candidate satisfies a selector-chain step."""

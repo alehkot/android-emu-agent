@@ -93,7 +93,7 @@ def wait_text(
 @app.command("exists")
 def wait_exists(
     session_id: str = typer.Argument(..., help="Session ID"),
-    ref: str | None = typer.Option(None, "--ref", help="Element ref (^a1)"),
+    ref: str | None = typer.Option(None, "--ref", help="Element ref (^g1a1)"),
     text: str | None = typer.Option(None, "--text", help="Text selector"),
     text_contains: str | None = typer.Option(None, "--text-contains", help="Text contains selector"),
     resource_id: str | None = typer.Option(None, "--id", help="Resource ID selector"),
@@ -137,7 +137,7 @@ def wait_exists(
 @app.command("gone")
 def wait_gone(
     session_id: str = typer.Argument(..., help="Session ID"),
-    ref: str | None = typer.Option(None, "--ref", help="Element ref (^a1)"),
+    ref: str | None = typer.Option(None, "--ref", help="Element ref (^g1a1)"),
     text: str | None = typer.Option(None, "--text", help="Text selector"),
     text_contains: str | None = typer.Option(None, "--text-contains", help="Text contains selector"),
     resource_id: str | None = typer.Option(None, "--id", help="Resource ID selector"),

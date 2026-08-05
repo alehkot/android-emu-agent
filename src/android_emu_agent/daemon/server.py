@@ -1454,7 +1454,7 @@ async def action_tap(req: ActionRequest) -> EndpointResponse:
     """Tap an element.
 
     Supports multiple selector formats:
-    - ^ref (e.g., ^a1): Use element ref from snapshot
+    - ^ref (e.g., ^g1a1): Use generation-qualified element ref from snapshot
     - text:"..." : Find by text content
     - text-contains:"..." : Find by partial text content
     - text-matches:"..." : Find by text regex

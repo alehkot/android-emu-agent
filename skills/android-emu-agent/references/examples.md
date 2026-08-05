@@ -61,12 +61,12 @@ uv run android-emu-agent wait idle s-abc123 --timeout-ms 5000
 # 3. Take snapshot - might show permission dialog
 uv run android-emu-agent ui snapshot s-abc123
 # context.package = "com.google.android.permissioncontroller"
-# ^a1 = "While using the app"
-# ^a2 = "Only this time"
-# ^a3 = "Don't allow"
+# ^g1a1 = "While using the app"
+# ^g1a2 = "Only this time"
+# ^g1a3 = "Don't allow"
 
 # 4. Grant permission
-uv run android-emu-agent action tap s-abc123 ^a1
+uv run android-emu-agent action tap s-abc123 ^g1a1
 uv run android-emu-agent wait idle s-abc123
 
 # 5. Verify permission granted and app is ready
@@ -92,27 +92,27 @@ Patterns used: login flow (`references/ui-automation-patterns.md > Login and Aut
 
 ```bash
 uv run android-emu-agent ui snapshot s-abc123
-# ^a1 = "Email" text field
-# ^a2 = "Password" text field
-# ^a3 = "Sign In" button
+# ^g1a1 = "Email" text field
+# ^g1a2 = "Password" text field
+# ^g1a3 = "Sign In" button
 
 # Enter email
-uv run android-emu-agent action tap s-abc123 ^a1
+uv run android-emu-agent action tap s-abc123 ^g1a1
 uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action set-text s-abc123 ^a1 "user@example.com"
+uv run android-emu-agent action set-text s-abc123 ^g1a1 "user@example.com"
 
 # Enter password
 uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action tap s-abc123 ^a2
+uv run android-emu-agent action tap s-abc123 ^g1a2
 uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action set-text s-abc123 ^a2 "mySecurePassword123"
+uv run android-emu-agent action set-text s-abc123 ^g1a2 "mySecurePassword123"
 
 # Dismiss keyboard
 uv run android-emu-agent action back s-abc123
 
 # Submit login
 uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action tap s-abc123 ^a3
+uv run android-emu-agent action tap s-abc123 ^g1a3
 
 # Wait for success
 uv run android-emu-agent wait activity s-abc123 "HomeActivity" --timeout-ms 15000
@@ -129,28 +129,28 @@ Goal: Open navigation drawer, go to settings, and toggle a setting.
 ```bash
 # Open navigation drawer
 uv run android-emu-agent ui snapshot s-abc123
-# ^a1 = hamburger menu icon (desc: "Open navigation drawer")
+# ^g1a1 = hamburger menu icon (desc: "Open navigation drawer")
 
-uv run android-emu-agent action tap s-abc123 ^a1
+uv run android-emu-agent action tap s-abc123 ^g1a1
 uv run android-emu-agent wait idle s-abc123
 
 # Navigate to Settings
 uv run android-emu-agent ui snapshot s-abc123
-# ^a7 = "Settings"
+# ^g1a7 = "Settings"
 
-uv run android-emu-agent action tap s-abc123 ^a7
+uv run android-emu-agent action tap s-abc123 ^g1a7
 uv run android-emu-agent wait activity s-abc123 "SettingsActivity" --timeout-ms 5000
 
 # Toggle a setting
 uv run android-emu-agent ui snapshot s-abc123
-# ^a2 = "Dark Mode" switch, state: { checked: false }
+# ^g1a2 = "Dark Mode" switch, state: { checked: false }
 
-uv run android-emu-agent action tap s-abc123 ^a2
+uv run android-emu-agent action tap s-abc123 ^g1a2
 uv run android-emu-agent wait idle s-abc123
 
 # Verify
 uv run android-emu-agent ui snapshot s-abc123
-# ^a2 state: { checked: true }
+# ^g1a2 state: { checked: true }
 ```
 
 ## Example 4: Scroll to Find and Tap Element
@@ -168,9 +168,9 @@ uv run android-emu-agent ui snapshot s-abc123
 uv run android-emu-agent action scroll down -s s-abc123
 uv run android-emu-agent wait idle s-abc123
 uv run android-emu-agent ui snapshot s-abc123
-# ^a8 = "Privacy Policy"
+# ^g1a8 = "Privacy Policy"
 
-uv run android-emu-agent action tap s-abc123 ^a8
+uv run android-emu-agent action tap s-abc123 ^g1a8
 uv run android-emu-agent wait idle s-abc123
 ```
 
@@ -179,15 +179,15 @@ uv run android-emu-agent wait idle s-abc123
 Goal: Detect and recover from an app crash.
 
 ```bash
-uv run android-emu-agent action tap s-abc123 ^a5
+uv run android-emu-agent action tap s-abc123 ^g1a5
 uv run android-emu-agent wait idle s-abc123 --timeout-ms 3000
 
 uv run android-emu-agent ui snapshot s-abc123
 # context.package = "android"
 # Text: "MyApp has stopped"
-# ^a1 = "Close app"
+# ^g1a1 = "Close app"
 
-uv run android-emu-agent action tap s-abc123 ^a1
+uv run android-emu-agent action tap s-abc123 ^g1a1
 uv run android-emu-agent wait idle s-abc123
 
 uv run android-emu-agent app launch s-abc123 com.example.myapp
@@ -214,26 +214,26 @@ uv run android-emu-agent app launch s-test01 com.example.app
 uv run android-emu-agent wait idle s-test01 --timeout-ms 10000
 
 uv run android-emu-agent ui snapshot s-test01
-# ^a1 = "Skip"
+# ^g1a1 = "Skip"
 
-uv run android-emu-agent action tap s-test01 ^a1
+uv run android-emu-agent action tap s-test01 ^g1a1
 uv run android-emu-agent wait idle s-test01
 
 uv run android-emu-agent ui snapshot s-test01
-# ^a2 = "Email", ^a3 = "Password", ^a4 = "Login"
+# ^g1a2 = "Email", ^g1a3 = "Password", ^g1a4 = "Login"
 
-uv run android-emu-agent action tap s-test01 ^a2
+uv run android-emu-agent action tap s-test01 ^g1a2
 uv run android-emu-agent ui snapshot s-test01
-uv run android-emu-agent action set-text s-test01 ^a2 "test@example.com"
+uv run android-emu-agent action set-text s-test01 ^g1a2 "test@example.com"
 
 uv run android-emu-agent ui snapshot s-test01
-uv run android-emu-agent action tap s-test01 ^a3
+uv run android-emu-agent action tap s-test01 ^g1a3
 uv run android-emu-agent ui snapshot s-test01
-uv run android-emu-agent action set-text s-test01 ^a3 "testPassword123"
+uv run android-emu-agent action set-text s-test01 ^g1a3 "testPassword123"
 
 uv run android-emu-agent action back s-test01
 uv run android-emu-agent ui snapshot s-test01
-uv run android-emu-agent action tap s-test01 ^a4
+uv run android-emu-agent action tap s-test01 ^g1a4
 
 uv run android-emu-agent wait activity s-test01 "HomeActivity" --timeout-ms 15000
 
@@ -254,10 +254,10 @@ For the full recovery protocol (limits, decision flowchart), see `references/rec
 ```bash
 # Observe
 uv run android-emu-agent ui snapshot s-abc123
-# ^a5 = "Confirm Purchase" button
+# ^g1a5 = "Confirm Purchase" button
 
 # Act — stale ref may fail or auto-heal with a warning
-uv run android-emu-agent action tap s-abc123 ^a5
+uv run android-emu-agent action tap s-abc123 ^g1a5
 # Possible result: status=done with warning about stale ref healing
 
 # --- Level 1: Re-snapshot Recovery ---
@@ -285,10 +285,10 @@ uv run android-emu-agent wait idle s-abc123
 
 # Re-snapshot — target found
 uv run android-emu-agent ui snapshot s-abc123
-# ^a3 = "Confirm Purchase"
+# ^g1a3 = "Confirm Purchase"
 
 # Retry action — success
-uv run android-emu-agent action tap s-abc123 ^a3
+uv run android-emu-agent action tap s-abc123 ^g1a3
 uv run android-emu-agent wait idle s-abc123
 
 # Verify

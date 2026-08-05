@@ -20,7 +20,7 @@ class Selector(ABC):
 
 SUPPORTED_SELECTOR_SYNTAX = [
     "<selector> || <selector>",
-    "^ref",
+    "^g<generation>a<element>",
     "text:<value>",
     "text-contains:<value>",
     "text-matches:<regex>",
@@ -233,7 +233,7 @@ def parse_selector(target: str) -> Selector:
     Parse escape hatch selector or ref.
 
     Supported formats:
-    - ^ref (e.g., ^a1, ^b5) - RefSelector
+    - ^ref (e.g., ^g3a1) - RefSelector
     - text:"..." or text:'...' or text:value - TextSelector
     - text-contains:value - TextContainsSelector
     - text-matches:regex - TextMatchesSelector

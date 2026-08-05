@@ -86,6 +86,7 @@ def test_device_manager_capability_report_lists_selector_features() -> None:
 
     assert report["status"] == "done"
     assert "<selector> || <selector>" in report["selectors"]["target_syntax"]
+    assert "^g<generation>a<element>" in report["selectors"]["target_syntax"]
     assert "text-contains:<value>" in report["selectors"]["target_syntax"]
     assert "enabled" in report["selectors"]["selector_keys"]
     assert "resourceIdMatches" in report["selectors"]["selector_keys"]

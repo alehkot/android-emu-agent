@@ -3,7 +3,7 @@
 Android Emu Agent lets a coding agent inspect and control an Android emulator or device. It provides
 a command-line interface (CLI) backed by a local daemon.
 
-The daemon reads the current screen, assigns short refs such as `^a1` to UI elements, performs
+The daemon reads the current screen, assigns short refs such as `^g1a1` to UI elements, performs
 actions, and can check the result. This gives an agent a repeatable loop:
 
 ```text
@@ -22,7 +22,7 @@ failure evidence to Android automation.
 
 | Task                           | Support                                                                 |
 | ------------------------------ | ----------------------------------------------------------------------- |
-| Inspect the current screen     | Compact UI snapshots with refs such as `^a1`                            |
+| Inspect the current screen     | Compact UI snapshots with refs such as `^g1a1`                          |
 | Tap, type, swipe, and navigate | Refs, text and resource selectors, coordinates, and device capabilities |
 | Wait for a state change        | Wait commands and pass/fail expectations                                |
 | Repeat an app flow             | JSON task files and human-editable `.aea` scripts                       |
@@ -126,12 +126,12 @@ In the commands:
    uv run android-emu-agent ui snapshot <session-id> --format text
    ```
 
-   The snapshot lists actionable elements with refs such as `^a1`.
+   The snapshot lists actionable elements with refs such as `^g1a1`.
 
 7. Tap an element from the snapshot.
 
    ```bash
-   uv run android-emu-agent action tap <session-id> ^a1
+   uv run android-emu-agent action tap <session-id> ^g1a1
    ```
 
 8. Check the result with an expectation.
@@ -186,8 +186,10 @@ Important paths:
 
 ### Snapshots, Refs, and Selectors
 
-A UI snapshot describes the current screen. The snapshot assigns a ref, such as `^a1`, to each
-actionable element. Use a ref for the next action when possible.
+A UI snapshot describes the current screen. The snapshot assigns a ref, such as `^g1a1`, to each
+actionable element. In that token, `g1` identifies snapshot generation 1 and `a1` identifies the
+first actionable element. Copy the complete ref from the latest snapshot; the element number alone
+is not stable across snapshots.
 
 Refs belong to one snapshot generation. If the screen changes, take a new snapshot before you use
 another ref. The daemon can sometimes match a stale ref to the latest snapshot, but it returns a
@@ -197,7 +199,7 @@ You can also select an element by text, resource ID, content description, coordi
 selector:
 
 ```text
-^a1
+^g1a1
 text:"Sign in"
 text-contains:"Continue"
 id:com.example:id/login_btn

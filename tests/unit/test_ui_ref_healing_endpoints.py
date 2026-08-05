@@ -195,6 +195,43 @@ def test_action_tap_rebinds_stale_ref_without_forcing_coordinate_fallback(tmp_pa
     device.return_value.click.assert_called_once()
 
 
+def test_action_tap_does_not_retarget_generation_qualified_ref(tmp_path: Path) -> None:
+    """A stale token must not select the same element index from a newer full snapshot."""
+    device = MagicMock()
+
+    with _client_with_core(tmp_path, device) as (client, ref_resolver, _wait_engine):
+        ref_resolver.store_refs(
+            "s-abc123",
+            generation=1,
+            elements=[
+                {
+                    "ref": "^g1a1",
+                    "label": "Increment",
+                    "class": "android.widget.Button",
+                    "bounds": [20, 20, 120, 80],
+                }
+            ],
+        )
+        ref_resolver.store_refs(
+            "s-abc123",
+            generation=2,
+            elements=[
+                {
+                    "ref": "^g2a1",
+                    "label": "Root layout",
+                    "class": "android.widget.LinearLayout",
+                    "bounds": [0, 0, 1080, 2400],
+                }
+            ],
+        )
+
+        resp = client.post("/actions/tap", json={"session_id": "s-abc123", "ref": "^g1a1"})
+
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "ERR_STALE_REF"
+    device.return_value.click.assert_not_called()
+
+
 def test_wait_exists_rebinds_stale_ref_before_building_selector(tmp_path: Path) -> None:
     """Wait endpoints should heal stale refs instead of returning ERR_STALE_REF."""
     device = MagicMock()

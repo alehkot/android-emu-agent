@@ -29,13 +29,13 @@ class TestRefSelector:
 
     def test_parse_ref_selector(self) -> None:
         """Should parse ^ref syntax."""
-        result = parse_selector("^a1")
+        result = parse_selector("^g1a1")
         assert isinstance(result, RefSelector)
-        assert result.ref == "^a1"
+        assert result.ref == "^g1a1"
 
     def test_ref_to_u2_kwargs_returns_empty(self) -> None:
         """RefSelector returns empty kwargs (resolved elsewhere)."""
-        selector = RefSelector(ref="^a5")
+        selector = RefSelector(ref="^g1a5")
         assert selector.to_u2_kwargs() == {}
 
 
