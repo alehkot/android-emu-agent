@@ -227,13 +227,14 @@ class Inspector(
             }
         }
 
+        val length = value.length()
+        val shownCount = minOf(length, maxCollectionItems)
         val values: List<Value?> = try {
-            value.values
+            value.getValues(0, shownCount)
         } catch (_: Exception) {
             emptyList()
         }
-        val shown = values.take(maxCollectionItems)
-        if (values.size > shown.size) {
+        if (length > values.size) {
             budget.markTruncated()
         }
 
@@ -242,9 +243,9 @@ class Inspector(
                 put("object_id", objectId)
             }
             put("class", className)
-            put("length", values.size)
+            put("length", length)
             put("items", buildJsonArray {
-                for (item in shown) {
+                for (item in values) {
                     add(
                         serializeValue(
                             value = item,
@@ -379,14 +380,15 @@ class Inspector(
         }
         val backingArray = rawData as? ArrayReference ?: return null
 
-        val maxItems = if (length >= 0) minOf(length, maxCollectionItems) else maxCollectionItems
-        val allValues: List<Value?> = try {
-            backingArray.values
+        val backingLength = backingArray.length()
+        val logicalLength = if (length >= 0) minOf(length, backingLength) else backingLength
+        val shownCount = minOf(logicalLength, maxCollectionItems)
+        val shown: List<Value?> = try {
+            backingArray.getValues(0, shownCount)
         } catch (_: Exception) {
             emptyList()
         }
-        val shown = allValues.take(maxItems)
-        if (length > shown.size) {
+        if (logicalLength > shown.size) {
             budget.markTruncated()
         }
 
@@ -397,7 +399,7 @@ class Inspector(
             }
             val rawClassName = value.referenceType().name()
             put("class", mapping?.deobfuscateClass(rawClassName) ?: rawClassName)
-            put("length", if (length >= 0) length else allValues.size)
+            put("length", logicalLength)
             put("items", buildJsonArray {
                 for (item in shown) {
                     add(
