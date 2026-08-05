@@ -158,6 +158,19 @@ def log_follow_unsupported_error() -> AgentError:
     )
 
 
+def invalid_artifact_name_error(filename: str) -> AgentError:
+    """Create error for an unsafe managed artifact filename."""
+    return AgentError(
+        code="ERR_INVALID_ARTIFACT_NAME",
+        message=f"Invalid artifact filename: {filename!r}",
+        context={"filename": filename},
+        remediation=(
+            "Use a plain filename of at most 200 UTF-8 bytes without directories, path separators, "
+            "or control characters."
+        ),
+    )
+
+
 def snapshot_failed_error(name: str, reason: str) -> AgentError:
     """Create error for snapshot operation failure."""
     return AgentError(

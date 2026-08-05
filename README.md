@@ -348,6 +348,7 @@ uv run android-emu-agent daemon status --json
 | `ERR_INVALID_EMULATOR_PORT`  | Emulator console port is unsupported         | Use an even port from 5554 through 5584                   |
 | `ERR_CONSOLE_AUTH`           | Emulator console authentication failed       | Check `.emulator_console_auth_token` permissions/content  |
 | `ERR_LOG_FOLLOW_UNSUPPORTED` | Artifact logs cannot stream over this API    | Omit `--follow` or use `adb -s <serial> logcat`           |
+| `ERR_INVALID_ARTIFACT_NAME`  | Managed artifact filename is unsafe          | Use a plain filename without directories                  |
 | `ERR_DAEMON_IDENTITY`        | A live PID does not own the daemon socket    | Inspect the daemon log and process before manual cleanup  |
 | `ERR_TASK_INVALID`           | A JSON task file is invalid                  | Fix the task and rerun `task validate`                    |
 | `ERR_TASK_SCRIPT_INVALID`    | A `.aea` script is invalid                   | Fix the reported line and rerun `task validate`           |

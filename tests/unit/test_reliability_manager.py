@@ -438,3 +438,50 @@ class TestNativePerformanceArtifacts:
             )
 
         assert exc_info.value.code == "ERR_INVALID_DURATION"
+
+    @pytest.mark.parametrize(
+        "filename",
+        [
+            "../escape",
+            "/tmp/escape",
+            "nested/trace",
+            r"nested\trace",
+            "bad\nname",
+            "x" * 201,
+        ],
+    )
+    def test_artifact_name_rejects_paths_and_controls(self, filename: str) -> None:
+        """Managed reliability outputs must remain inside their artifact directory."""
+        from android_emu_agent.errors import AgentError
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        with pytest.raises(AgentError) as exc_info:
+            ReliabilityManager._artifact_name(filename, "default", ".data")
+
+        assert exc_info.value.code == "ERR_INVALID_ARTIFACT_NAME"
+
+    @pytest.mark.asyncio
+    async def test_simpleperf_rejects_unsafe_filename_before_device_access(
+        self, tmp_path: Path
+    ) -> None:
+        """An invalid local filename must not start profiling or touch the device."""
+        from android_emu_agent.errors import AgentError
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        manager = ReliabilityManager(output_dir=tmp_path)
+        device = MagicMock()
+
+        with (
+            patch.object(manager, "_pidof", AsyncMock()) as pidof,
+            pytest.raises(AgentError) as exc_info,
+        ):
+            await manager.simpleperf_record(
+                device,
+                "emulator-5554",
+                "com.example.app",
+                duration_seconds=1,
+                filename="../../escape",
+            )
+
+        assert exc_info.value.code == "ERR_INVALID_ARTIFACT_NAME"
+        pidof.assert_not_awaited()

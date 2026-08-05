@@ -123,6 +123,14 @@ class TestErrorConstructors:
         assert error.code == "ERR_LOG_FOLLOW_UNSUPPORTED"
         assert "adb" in error.remediation
 
+    def test_invalid_artifact_name_error(self) -> None:
+        """Should keep the rejected artifact filename visible for remediation."""
+        from android_emu_agent.errors import invalid_artifact_name_error
+
+        error = invalid_artifact_name_error("../escape")
+        assert error.code == "ERR_INVALID_ARTIFACT_NAME"
+        assert error.context == {"filename": "../escape"}
+
     def test_invalid_package_error(self) -> None:
         """Should create invalid package error."""
         from android_emu_agent.errors import invalid_package_error

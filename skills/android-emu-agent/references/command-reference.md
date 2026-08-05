@@ -406,10 +406,13 @@ snapshot commands use the token from `~/.emulator_console_auth_token` automatica
 - `reliability pull tombstones --device <serial>` Pull /data/tombstones (root).
 - `reliability pull dropbox --device <serial>` Pull /data/system/dropbox (root).
 
+Reliability `--output` values are managed artifact filenames, not paths. Directory components, path
+separators, control characters, and names over 200 UTF-8 bytes are rejected.
+
 Use `--output` to control bugreport destination, `--since` to limit events by time, `--keep-remote`
 to preserve heap files on-device after pulling:
 
-- `reliability bugreport --device <serial> --output <path>` Choose output filename.
+- `reliability bugreport --device <serial> --output <name>` Choose output filename.
 - `reliability events --device <serial> --since <timestamp>` Limit events by time.
 - `reliability dumpheap <package> --device <serial> --keep-remote` Keep heap on device.
 - `reliability perfetto --session <session_id> --duration 10 --output trace.perfetto-trace`

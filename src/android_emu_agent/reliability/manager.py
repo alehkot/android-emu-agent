@@ -19,6 +19,7 @@ from android_emu_agent.errors import (
     AgentError,
     adb_command_error,
     adb_not_found_error,
+    invalid_artifact_name_error,
     permission_error,
     process_not_found_error,
 )
@@ -81,9 +82,7 @@ class ReliabilityManager:
 
     async def bugreport(self, serial: str, filename: str | None = None) -> Path:
         timestamp = self._timestamp()
-        name = filename or f"bugreport_{serial}_{timestamp}.zip"
-        if not name.endswith(".zip"):
-            name = f"{name}.zip"
+        name = self._artifact_name(filename, f"bugreport_{serial}_{timestamp}", ".zip")
         output_path = self.output_dir / name
         await self._run_adb(serial, ["bugreport", str(output_path)])
         logger.info("bugreport_saved", serial=serial, path=str(output_path))
@@ -373,7 +372,6 @@ class ReliabilityManager:
     ) -> dict[str, Any]:
         """Capture a bounded simpleperf CPU profile and pull data plus report artifacts."""
         self._validate_duration(duration_seconds)
-        pid = await self._pidof(device, package)
         timestamp = self._timestamp()
         safe_pkg = package.replace(".", "_")
         base_name = self._artifact_name(filename, f"simpleperf_{safe_pkg}_{timestamp}", ".data")
@@ -382,6 +380,7 @@ class ReliabilityManager:
         else:
             stem = base_name
             base_name = f"{stem}.data"
+        pid = await self._pidof(device, package)
         remote_data = f"/data/local/tmp/{base_name}"
         local_data = self.output_dir / base_name
         local_report = self.output_dir / f"{stem}.txt"
@@ -750,7 +749,17 @@ class ReliabilityManager:
     @staticmethod
     def _artifact_name(filename: str | None, default_stem: str, suffix: str) -> str:
         name = filename or f"{default_stem}{suffix}"
-        return name if name.endswith(suffix) else f"{name}{suffix}"
+        normalized = name if name.endswith(suffix) else f"{name}{suffix}"
+        if (
+            normalized in {".", ".."}
+            or len(normalized.encode("utf-8")) > 200
+            or Path(normalized).name != normalized
+            or "/" in normalized
+            or "\\" in normalized
+            or any(ord(character) < 32 for character in normalized)
+        ):
+            raise invalid_artifact_name_error(name)
+        return normalized
 
     @staticmethod
     def _validate_duration(duration_seconds: int, *, max_seconds: int = 120) -> None:
