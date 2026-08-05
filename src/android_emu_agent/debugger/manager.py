@@ -87,6 +87,7 @@ class DebugManager:
         self._jar_path: Path | None = None
         self._java_path: Path | None = None
         self._downloader = BridgeDownloader()
+        self._bridge_start_lock = asyncio.Lock()
 
     def _find_java(self) -> Path:
         """Locate the java binary, checking JAVA_HOME first, then PATH."""
@@ -172,30 +173,31 @@ class DebugManager:
 
     async def start_bridge(self, session_id: str, *, verify: bool = True) -> BridgeClient:
         """Start a new bridge for a debug session. Returns the client."""
-        if session_id in self._bridges:
-            client = self._bridges[session_id]
-            if client.is_alive:
-                return client
-            del self._bridges[session_id]
+        async with self._bridge_start_lock:
+            if session_id in self._bridges:
+                client = self._bridges[session_id]
+                if client.is_alive:
+                    return client
+                del self._bridges[session_id]
 
-        java_path = await asyncio.to_thread(self._find_java)
-        jar_path = await asyncio.to_thread(self._find_jar)
+            java_path = await asyncio.to_thread(self._find_java)
+            jar_path = await asyncio.to_thread(self._find_jar)
 
-        client = BridgeClient(java_path, jar_path)
-        await client.start()
+            client = BridgeClient(java_path, jar_path)
+            await client.start()
 
-        if verify:
-            try:
-                result = await client.ping()
-                logger.info("bridge_ping_ok", session_id=session_id, result=result)
-            except Exception as exc:
-                await client.stop()
-                if isinstance(exc, AgentError):
-                    raise
-                raise bridge_not_running_error("bridge started but ping failed") from None
+            if verify:
+                try:
+                    result = await client.ping()
+                    logger.info("bridge_ping_ok", session_id=session_id, result=result)
+                except Exception as exc:
+                    await client.stop()
+                    if isinstance(exc, AgentError):
+                        raise
+                    raise bridge_not_running_error("bridge started but ping failed") from None
 
-        self._bridges[session_id] = client
-        return client
+            self._bridges[session_id] = client
+            return client
 
     async def stop_bridge(self, session_id: str) -> None:
         """Stop the bridge for a debug session."""

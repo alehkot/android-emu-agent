@@ -195,6 +195,36 @@ class TestDebugManagerLifecycle:
         client.start.assert_awaited_once_with()
 
     @pytest.mark.asyncio
+    async def test_concurrent_start_bridge_reuses_one_process(self, tmp_path: Path) -> None:
+        """Concurrent requests for one session must not orphan a duplicate bridge JVM."""
+        manager = DebugManager()
+        client = MagicMock()
+        client.is_alive = True
+
+        async def _start() -> None:
+            await asyncio.sleep(0.01)
+
+        client.start = AsyncMock(side_effect=_start)
+
+        with (
+            patch.object(manager, "_find_java", return_value=tmp_path / "java"),
+            patch.object(manager, "_find_jar", return_value=tmp_path / "bridge.jar"),
+            patch(
+                "android_emu_agent.debugger.manager.BridgeClient",
+                return_value=client,
+            ) as bridge_client,
+        ):
+            first, second = await asyncio.gather(
+                manager.start_bridge("s-test", verify=False),
+                manager.start_bridge("s-test", verify=False),
+            )
+
+        assert first is client
+        assert second is client
+        bridge_client.assert_called_once_with(tmp_path / "java", tmp_path / "bridge.jar")
+        client.start.assert_awaited_once_with()
+
+    @pytest.mark.asyncio
     async def test_stop_all_removes_forward_and_stops_bridge(self) -> None:
         """Daemon shutdown should release device forwards as well as bridge processes."""
         manager = DebugManager()
