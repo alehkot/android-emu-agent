@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any, cast
+from unittest.mock import AsyncMock, patch
 
 from android_emu_agent.actions.wait import WaitEngine
 
@@ -65,4 +66,21 @@ def test_wait_idle_times_out_when_hierarchy_never_stabilizes() -> None:
     assert result.success is False
     assert result.error is not None
     assert result.error.code == "ERR_TIMEOUT"
+    assert result.error.context == {"timeout_ms": 10.0}
+
+
+def test_wait_idle_normalizes_asyncio_deadline_timeout() -> None:
+    """The wait_for deadline race should produce the standard timeout payload."""
+    engine = WaitEngine()
+
+    with patch.object(
+        engine,
+        "_wait_for_stable_hierarchy",
+        AsyncMock(side_effect=TimeoutError),
+    ):
+        result = asyncio.run(engine.wait_idle(cast(Any, object()), timeout=0.01))
+
+    assert result.success is False
+    assert result.error is not None
+    assert result.error.message == "UI did not become idle before the timeout"
     assert result.error.context == {"timeout_ms": 10.0}

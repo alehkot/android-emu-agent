@@ -83,6 +83,9 @@ class WaitEngine:
             if success:
                 return WaitResult(success=True, elapsed_ms=elapsed)
             return self._idle_timeout_result(timeout, elapsed)
+        except TimeoutError:
+            elapsed = (time.monotonic() - start) * 1000
+            return self._idle_timeout_result(timeout, elapsed)
         except Exception as e:
             elapsed = (time.monotonic() - start) * 1000
             return WaitResult(
@@ -91,7 +94,7 @@ class WaitEngine:
                 error=AgentError(
                     code="ERR_TIMEOUT",
                     message=f"Wait idle timed out: {e}",
-                    context={},
+                    context={"timeout_ms": timeout * 1000},
                     remediation="UI may still be loading; try again or check for dialogs",
                 ),
             )
