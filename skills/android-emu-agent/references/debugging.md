@@ -119,6 +119,7 @@ On hit, `debug events` returns `exception_hit` with throw/catch locations and st
 - `logpoint_hit`
 - `exception_breakpoint_resolved`, `exception_hit`
 - `vm_disconnected`
+- `bridge_disconnected` when the local debugger bridge exits unexpectedly
 
 ## Token Budget Controls
 

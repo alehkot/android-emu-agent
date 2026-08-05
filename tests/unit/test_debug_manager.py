@@ -599,6 +599,42 @@ class TestDisconnectEvents:
         assert ds.disconnect_reason == "device_disconnected"
         stop_bridge.assert_awaited_once_with("s-test")
 
+    @pytest.mark.asyncio
+    async def test_monitor_event_marks_bridge_exit_disconnected(self) -> None:
+        manager = DebugManager()
+        manager._debug_sessions["s-test"] = DebugSessionState(
+            session_id="s-test",
+            package="com.example.app",
+            process_name="com.example.app",
+            pid=12345,
+            jdwp_port=12345,
+            local_forward_port=54321,
+            device_serial="emulator-5554",
+            state="attached",
+        )
+        bridge = MagicMock()
+        bridge.next_event = AsyncMock(
+            return_value={
+                "jsonrpc": "2.0",
+                "method": "event",
+                "params": {
+                    "type": "bridge_disconnected",
+                    "reason": "bridge_crashed",
+                    "detail": "bridge stdout closed",
+                },
+            }
+        )
+        mock_adb = MagicMock()
+
+        with patch.object(manager, "stop_bridge", AsyncMock()) as stop_bridge:
+            await manager._monitor_events("s-test", bridge, mock_adb)
+
+        ds = manager._debug_sessions["s-test"]
+        assert ds.state == "disconnected"
+        assert ds.disconnect_reason == "bridge_crashed"
+        assert manager._event_queues["s-test"][0]["type"] == "bridge_disconnected"
+        stop_bridge.assert_awaited_once_with("s-test")
+
 
 class TestMilestone2DebugMethods:
     """Tests for breakpoint/thread/event manager APIs."""

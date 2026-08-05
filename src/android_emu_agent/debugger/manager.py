@@ -931,12 +931,18 @@ class DebugManager:
                     )
                     continue
 
-                is_disconnect = method == "vm_disconnected" or (
-                    method == "event" and params_obj.get("type") == "vm_disconnected"
+                is_disconnect = method in {"vm_disconnected", "bridge_disconnected"} or (
+                    method == "event"
+                    and params_obj.get("type") in {"vm_disconnected", "bridge_disconnected"}
                 )
                 if not is_disconnect:
                     continue
 
+                disconnect_event_type = (
+                    "bridge_disconnected"
+                    if event_type == "bridge_disconnected"
+                    else "vm_disconnected"
+                )
                 raw_reason = str(params_obj.get("detail", params_obj.get("reason", "unknown")))
                 normalized_reason = self._normalize_disconnect_reason(
                     str(params_obj.get("reason", raw_reason))
@@ -950,7 +956,7 @@ class DebugManager:
                 self._queue_event(
                     session_id,
                     {"reason": normalized_reason, "detail": raw_reason},
-                    event_type="vm_disconnected",
+                    event_type=disconnect_event_type,
                 )
 
                 ds = self._debug_sessions.get(session_id)
@@ -1008,7 +1014,7 @@ class DebugManager:
     @staticmethod
     def _normalize_disconnect_reason(reason: str) -> str:
         lowered = reason.lower()
-        if reason in {"app_crashed", "app_killed", "device_disconnected"}:
+        if reason in {"app_crashed", "app_killed", "device_disconnected", "bridge_crashed"}:
             return reason
         if any(token in lowered for token in ("transport", "device offline", "connection reset")):
             return "device_disconnected"
@@ -1024,6 +1030,8 @@ class DebugManager:
             return "The app process exited. Relaunch it and attach again."
         if reason == "device_disconnected":
             return "Reconnect the device/emulator, relaunch the app, then attach again."
+        if reason == "bridge_crashed":
+            return "The debugger bridge exited. Attach again to start a new bridge."
         return "Reattach with 'debug attach --session <id> --package <pkg>'."
 
     @staticmethod

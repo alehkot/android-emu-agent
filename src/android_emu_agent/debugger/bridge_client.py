@@ -28,6 +28,7 @@ class BridgeClient:
         self._stderr_task: asyncio.Task[None] | None = None
         self._stdout_task: asyncio.Task[None] | None = None
         self._event_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        self._stopping = False
 
     @property
     def is_alive(self) -> bool:
@@ -39,6 +40,7 @@ class BridgeClient:
         if self.is_alive:
             return
 
+        self._stopping = False
         self._process = await asyncio.create_subprocess_exec(
             str(self._java_path),
             "--add-modules",
@@ -61,6 +63,8 @@ class BridgeClient:
         """Gracefully stop the bridge subprocess."""
         if not self.is_alive or self._process is None:
             return
+
+        self._stopping = True
 
         # Try graceful shutdown first
         with contextlib.suppress(Exception):
@@ -186,6 +190,20 @@ class BridgeClient:
                 if not future.done():
                     future.set_exception(bridge_crashed_error("bridge stdout closed"))
             self._pending.clear()
+            if not self._stopping:
+                returncode = self._process.returncode if self._process is not None else None
+                await self._event_queue.put(
+                    {
+                        "jsonrpc": "2.0",
+                        "method": "event",
+                        "params": {
+                            "type": "bridge_disconnected",
+                            "reason": "bridge_crashed",
+                            "detail": "bridge stdout closed",
+                            "returncode": returncode,
+                        },
+                    }
+                )
 
     async def _read_stderr_loop(self) -> None:
         """Read log lines from bridge stderr and forward to structlog."""

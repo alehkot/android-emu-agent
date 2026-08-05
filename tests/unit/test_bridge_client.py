@@ -101,3 +101,23 @@ class TestBridgeClientLifecycle:
         client = BridgeClient(Path("/usr/bin/java"), Path("/tmp/fake.jar"))
         await client.stop()  # Should not raise
         assert not client.is_alive
+
+    @pytest.mark.asyncio
+    async def test_unexpected_stdout_eof_emits_disconnect_event(self) -> None:
+        """An exited bridge should wake the manager's lifecycle monitor."""
+        client = BridgeClient(Path("/usr/bin/java"), Path("/tmp/fake.jar"))
+        mock_proc = MagicMock(returncode=17)
+        mock_proc.stdout = MagicMock()
+        mock_proc.stdout.readline = AsyncMock(return_value=b"")
+        client._process = mock_proc
+
+        await client._read_stdout_loop()
+
+        event = await client.next_event()
+        assert event["method"] == "event"
+        assert event["params"] == {
+            "type": "bridge_disconnected",
+            "reason": "bridge_crashed",
+            "detail": "bridge stdout closed",
+            "returncode": 17,
+        }
