@@ -371,7 +371,7 @@ Use `./scripts/dev.sh` as the main entry point for local development.
 | Command                             | Purpose                                                              |
 | ----------------------------------- | -------------------------------------------------------------------- |
 | `./scripts/dev.sh setup`            | Install dependencies                                                 |
-| `./scripts/dev.sh check`            | Run lint, type checks, unit tests, docs checks, and skill validation |
+| `./scripts/dev.sh check`            | Run format/lint, typing, Python/Kotlin tests, docs, and skill checks |
 | `./scripts/dev.sh test-unit`        | Run unit tests                                                       |
 | `./scripts/dev.sh test-integration` | Run tests that require an emulator or device                         |
 | `./scripts/dev.sh build-bridge`     | Build the JDI Bridge JAR                                             |

@@ -938,6 +938,7 @@ case "${1:-help}" in
 
     lint)
         echo "Running linter..."
+        uv run ruff format --check .
         uv run ruff check .
         ;;
 
@@ -983,6 +984,7 @@ case "${1:-help}" in
 
     check)
         echo "Running all checks..."
+        uv run ruff format --check .
         uv run ruff check .
         uv run mypy src/
         uv run pyright
