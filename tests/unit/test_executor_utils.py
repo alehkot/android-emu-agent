@@ -6,7 +6,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from android_emu_agent.actions.executor import ActionExecutor, RetryPolicy, SwipeDirection
+from android_emu_agent.actions.executor import (
+    ActionExecutor,
+    ActionType,
+    RetryPolicy,
+    SwipeDirection,
+)
 from android_emu_agent.ui.ref_resolver import LocatorBundle
 
 
@@ -222,9 +227,9 @@ class TestFrameworkFriendlyLookup:
         executor = ActionExecutor()
         device = MagicMock()
         label_element = MagicMock()
-        label_element.exists.return_value = True
+        label_element.count = 1
         coordinate_element = MagicMock()
-        coordinate_element.exists.return_value = False
+        coordinate_element.count = 0
 
         def _select(**kwargs: str) -> MagicMock:
             if kwargs == {"description": "Settings"}:
@@ -261,9 +266,9 @@ class TestFrameworkFriendlyLookup:
         executor = ActionExecutor()
         device = MagicMock()
         resource_element = MagicMock()
-        resource_element.exists.return_value = True
+        resource_element.count = 1
         label_element = MagicMock()
-        label_element.exists.return_value = True
+        label_element.count = 1
 
         def _select(**kwargs: str) -> MagicMock:
             if kwargs == {"resourceId": "compose_login_button"}:
@@ -293,3 +298,91 @@ class TestFrameworkFriendlyLookup:
 
         assert element is resource_element
         device.assert_called_with(resourceId="compose_login_button")
+
+    @pytest.mark.asyncio
+    async def test_find_element_continues_after_ambiguous_resource_id(self) -> None:
+        """A unique later identity signal should win over an ambiguous resource ID."""
+        executor = ActionExecutor()
+        device = MagicMock()
+        resource_element = MagicMock()
+        resource_element.count = 2
+        description_element = MagicMock()
+        description_element.count = 1
+
+        def _select(**kwargs: str) -> MagicMock:
+            if kwargs == {"resourceId": "com.example:id/row"}:
+                return resource_element
+            return description_element
+
+        device.side_effect = _select
+        locator = LocatorBundle(
+            ref="^g2a1",
+            generation=2,
+            resource_id="com.example:id/row",
+            content_desc="Second row",
+            text=None,
+            class_name="android.widget.Button",
+            bounds=[10, 50, 200, 100],
+            ancestry_hash="abc123",
+            index=1,
+        )
+
+        element = await executor._find_element(device, locator)
+
+        assert element is description_element
+        assert device.call_args_list[0].kwargs == {"resourceId": "com.example:id/row"}
+        assert device.call_args_list[1].kwargs == {"description": "Second row"}
+
+    @pytest.mark.asyncio
+    async def test_tap_uses_ref_bounds_instead_of_ambiguous_first_match(self) -> None:
+        """Ref actions should never mutate uiautomator2's arbitrary first match."""
+        executor = ActionExecutor()
+        device = MagicMock()
+        ambiguous_element = MagicMock()
+        ambiguous_element.count = 2
+        device.return_value = ambiguous_element
+        locator = LocatorBundle(
+            ref="^g2a2",
+            generation=2,
+            resource_id="com.example:id/row",
+            content_desc=None,
+            text=None,
+            class_name="android.widget.Button",
+            bounds=[100, 200, 300, 400],
+            ancestry_hash="abc123",
+            index=1,
+        )
+
+        result = await executor.execute(device, ActionType.TAP, locator)
+
+        assert result.success is True
+        ambiguous_element.click.assert_not_called()
+        device.click.assert_called_once_with(200, 300)
+
+    @pytest.mark.asyncio
+    async def test_ambiguous_ref_without_usable_bounds_returns_error(self) -> None:
+        """Ambiguous ref lookup should fail when no deterministic bounds fallback exists."""
+        executor = ActionExecutor()
+        device = MagicMock()
+        ambiguous_element = MagicMock()
+        ambiguous_element.count = 2
+        device.return_value = ambiguous_element
+        locator = LocatorBundle(
+            ref="^g2a3",
+            generation=2,
+            resource_id="com.example:id/row",
+            content_desc=None,
+            text=None,
+            class_name="android.widget.Button",
+            bounds=[0, 0, 0, 0],
+            ancestry_hash="abc123",
+            index=1,
+        )
+
+        result = await executor.execute(device, ActionType.TAP, locator)
+
+        assert result.success is False
+        assert result.error is not None
+        assert result.error.code == "ERR_AMBIGUOUS_SELECTOR"
+        ambiguous_element.click.assert_not_called()
+        device.click.assert_not_called()

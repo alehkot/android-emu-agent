@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from android_emu_agent.errors import AgentError
+from android_emu_agent.errors import AgentError, ambiguous_selector_error
 from android_emu_agent.ui.ref_resolver import LocatorBundle
 
 if TYPE_CHECKING:
@@ -225,33 +225,42 @@ class ActionExecutor:
 
     async def _find_element(self, device: u2.Device, locator: LocatorBundle) -> Any:
         """Find element using locator bundle strategies."""
+        selector_candidates: list[dict[str, str]] = []
+
         # Strategy 1: resource-id (most reliable)
         if locator.resource_id:
-            element = device(resourceId=locator.resource_id)
-            if await asyncio.to_thread(element.exists):
-                return element
+            selector_candidates.append({"resourceId": locator.resource_id})
 
         # Strategy 2: content-desc
         if locator.content_desc:
-            element = device(description=locator.content_desc)
-            if await asyncio.to_thread(element.exists):
-                return element
+            selector_candidates.append({"description": locator.content_desc})
 
         # Strategy 3: text match
         if locator.text:
-            element = device(text=locator.text)
-            if await asyncio.to_thread(element.exists):
-                return element
+            selector_candidates.append({"text": locator.text})
 
         # Strategy 4: semantic label fallback for Compose/Litho host views
         if locator.label and locator.label not in {locator.text, locator.content_desc}:
-            for kwargs in ({"description": locator.label}, {"text": locator.label}):
-                element = device(**kwargs)
-                if await asyncio.to_thread(element.exists):
-                    return element
+            selector_candidates.extend(({"description": locator.label}, {"text": locator.label}))
+
+        ambiguous_match: tuple[str, int] | None = None
+        for kwargs in selector_candidates:
+            element = device(**kwargs)
+            match_count = int(await asyncio.to_thread(getattr, element, "count"))
+            if match_count == 1:
+                return element
+            if match_count > 1:
+                selector_label = " ".join(f"{key}:{value}" for key, value in kwargs.items())
+                ambiguous_match = ambiguous_match or (selector_label, match_count)
+                logger.warning(
+                    "ambiguous_ref_selector_skipped",
+                    ref=locator.ref,
+                    selector=selector_label,
+                    match_count=match_count,
+                )
 
         # Strategy 5: bounds (coordinate fallback)
-        if locator.bounds and len(locator.bounds) == 4:
+        if self._bounds_are_usable(locator.bounds):
             # Calculate center point
             x = (locator.bounds[0] + locator.bounds[2]) // 2
             y = (locator.bounds[1] + locator.bounds[3]) // 2
@@ -259,11 +268,25 @@ class ActionExecutor:
             # Return a coordinate-based "element" proxy
             return _CoordinateProxy(device, x, y)
 
+        if ambiguous_match:
+            selector_label, match_count = ambiguous_match
+            raise ambiguous_selector_error(selector_label, match_count)
+
         raise AgentError(
             code="ERR_NOT_FOUND",
             message=f"Element not found: {locator.ref}",
             context={"ref": locator.ref, "locator": locator.to_dict()},
             remediation="Take a new snapshot and use a fresh ^ref",
+        )
+
+    @staticmethod
+    def _bounds_are_usable(bounds: list[int]) -> bool:
+        """Return whether stored ref bounds identify a non-empty rectangle."""
+        return (
+            len(bounds) == 4
+            and all(isinstance(value, int) for value in bounds)
+            and bounds[2] > bounds[0]
+            and bounds[3] > bounds[1]
         )
 
 
