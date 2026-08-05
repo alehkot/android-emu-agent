@@ -12,6 +12,13 @@ device_set_app = typer.Typer(help="Determinism controls")
 app.add_typer(device_set_app, name="set")
 
 
+def _parse_on_off(state: str) -> tuple[str, bool]:
+    normalized = state.lower()
+    if normalized not in {"on", "off"}:
+        raise typer.BadParameter("Expected 'on' or 'off'", param_hint="STATE")
+    return normalized, normalized == "on"
+
+
 @app.command("list")
 def device_list(json_output: bool = typer.Option(False, "--json", help="Output JSON")) -> None:
     """List connected devices."""
@@ -52,9 +59,10 @@ def device_set_animations(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Enable or disable system animations."""
+    normalized, _enabled = _parse_on_off(state)
     client = DaemonClient()
     resp = client.request(
-        "POST", "/devices/animations", json_body={"serial": device, "state": state}
+        "POST", "/devices/animations", json_body={"serial": device, "state": normalized}
     )
     client.close()
     handle_response(resp, json_output=json_output)
@@ -67,9 +75,10 @@ def device_set_stay_awake(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Enable or disable stay-awake."""
+    normalized, _enabled = _parse_on_off(state)
     client = DaemonClient()
     resp = client.request(
-        "POST", "/devices/stay_awake", json_body={"serial": device, "state": state}
+        "POST", "/devices/stay_awake", json_body={"serial": device, "state": normalized}
     )
     client.close()
     handle_response(resp, json_output=json_output)
@@ -99,8 +108,8 @@ def device_set_wifi(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Enable or disable WiFi."""
+    _normalized, enabled = _parse_on_off(state)
     client = DaemonClient()
-    enabled = state.lower() == "on"
     resp = client.request("POST", "/devices/wifi", json_body={"serial": device, "enabled": enabled})
     client.close()
     handle_response(resp, json_output=json_output)
@@ -113,8 +122,8 @@ def device_set_mobile(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Enable or disable mobile data."""
+    _normalized, enabled = _parse_on_off(state)
     client = DaemonClient()
-    enabled = state.lower() == "on"
     resp = client.request(
         "POST", "/devices/mobile", json_body={"serial": device, "enabled": enabled}
     )
@@ -129,8 +138,8 @@ def device_set_doze(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Force device into or out of doze mode."""
+    _normalized, enabled = _parse_on_off(state)
     client = DaemonClient()
-    enabled = state.lower() == "on"
     resp = client.request("POST", "/devices/doze", json_body={"serial": device, "enabled": enabled})
     client.close()
     handle_response(resp, json_output=json_output)
