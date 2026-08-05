@@ -300,7 +300,9 @@ missing local/field or invalid operand types), the bridge emits `breakpoint_cond
 auto-resumes.
 
 `--log-message` makes a logpoint (non-suspending). Use `{hitCount}` and frame expressions like
-`{user.id}` in the template; resolved output arrives as `logpoint_hit`.
+`{user.id}` in the template; resolved output arrives as `logpoint_hit`. Interpolated messages and
+`debug eval ...toString()` results are capped at 16,000 characters and set `truncated=true` when
+shortened.
 
 `--capture-stack` adds stack frames to each `logpoint_hit`. Use `--stack-max-frames` to limit
 capture cost. Buffered logpoint history is retained per session and can be queried later with

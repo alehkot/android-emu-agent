@@ -2,6 +2,7 @@ package dev.androidemu.jdibridge
 
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -157,7 +158,7 @@ class JdiSessionConditionTest {
             session.setBreakpoint(
                 MAIN_CLASS,
                 MAIN_LOOP_LINE,
-                logMessage = "hit={hitCount} seed={helper.seed}",
+                logMessage = "hit={hitCount} longText={longText}",
                 captureStack = true,
                 stackMaxFrames = 2,
             ).jsonObject
@@ -171,7 +172,8 @@ class JdiSessionConditionTest {
         val event = waitForEvent("logpoint_hit", timeoutMs = 10_000)
         val message = event["message"]?.jsonPrimitive?.content ?: ""
         assertTrue(message.contains("hit=1"), "Expected hit count interpolation in: $message")
-        assertTrue(message.contains("seed="), "Expected field interpolation in: $message")
+        assertEquals(JdiFrameValueService.MAX_RENDERED_TEXT_CHARS, message.length)
+        assertTrue(event["truncated"]?.jsonPrimitive?.boolean == true)
 
         val stack = event["stack"]?.jsonObject
             ?: throw AssertionError("Expected stack payload in logpoint event")
@@ -218,17 +220,17 @@ class JdiSessionConditionTest {
     private fun assertMainNotSuspended(timeoutMs: Long = 2_000) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
-            val error =
-                assertThrows<RpcException> {
-                    session.inspectVariable(
-                        threadName = "main",
-                        frameIndex = 0,
-                        variablePath = "helper",
-                        depth = 1,
-                    )
+            try {
+                session.inspectVariable(
+                    threadName = "main",
+                    frameIndex = 0,
+                    variablePath = "helper",
+                    depth = 1,
+                )
+            } catch (error: RpcException) {
+                if ((error.message ?: "").contains("ERR_NOT_SUSPENDED")) {
+                    return
                 }
-            if ((error.message ?: "").contains("ERR_NOT_SUSPENDED")) {
-                return
             }
             Thread.sleep(25)
         }

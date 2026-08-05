@@ -23,11 +23,17 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
+internal data class RenderedText(
+    val value: String,
+    val truncated: Boolean,
+)
+
 internal class JdiFrameValueService(
     private val state: JdiSessionState,
     private val inspector: Inspector,
 ) {
     companion object {
+        internal const val MAX_RENDERED_TEXT_CHARS = 16_000
         private const val ERR_NOT_SUSPENDED = "ERR_NOT_SUSPENDED"
         private const val ERR_OBJECT_COLLECTED = "ERR_OBJECT_COLLECTED"
         private const val ERR_EVAL_UNSUPPORTED = "ERR_EVAL_UNSUPPORTED"
@@ -157,11 +163,14 @@ internal class JdiFrameValueService(
                     throw RpcException(INVALID_PARAMS, "toString() target must not be empty")
                 }
                 val value = resolveValuePath(frame, targetPath)
-                val text = renderToString(thread, value)
+                val rendered = boundRenderedText(renderToString(thread, value))
                 buildJsonObject {
-                    put("value", JsonPrimitive(text))
-                    put("token_usage_estimate", JsonPrimitive(estimateTokenUsage(text.length)))
-                    put("truncated", JsonPrimitive(false))
+                    put("value", JsonPrimitive(rendered.value))
+                    put(
+                        "token_usage_estimate",
+                        JsonPrimitive(estimateTokenUsage(rendered.value.length)),
+                    )
+                    put("truncated", JsonPrimitive(rendered.truncated))
                 }
             } else {
                 if (trimmedExpression.contains("(") || trimmedExpression.contains(")")) {
@@ -312,23 +321,25 @@ internal class JdiFrameValueService(
         }
     }
 
-    fun evaluateLogMessage(thread: ThreadReference, template: String, hitCount: Long): String {
+    fun evaluateLogMessage(thread: ThreadReference, template: String, hitCount: Long): RenderedText {
         val pattern = Regex("""\{([^}]+)}""")
-        return pattern.replace(template) { match ->
-            val expr = match.groupValues[1].trim()
-            when (expr) {
-                "hitCount" -> hitCount.toString()
-                else -> {
-                    try {
-                        val frame = thread.frame(0)
-                        val value = resolveValuePath(frame, expr)
-                        renderToString(thread, value)
-                    } catch (e: Exception) {
-                        "<error: ${e.message ?: "unknown"}>"
+        val rendered =
+            pattern.replace(template) { match ->
+                val expr = match.groupValues[1].trim()
+                when (expr) {
+                    "hitCount" -> hitCount.toString()
+                    else -> {
+                        try {
+                            val frame = thread.frame(0)
+                            val value = resolveValuePath(frame, expr)
+                            renderToString(thread, value)
+                        } catch (e: Exception) {
+                            "<error: ${e.message ?: "unknown"}>"
+                        }
                     }
                 }
             }
-        }
+        return boundRenderedText(rendered)
     }
 
     fun resolveValuePath(frame: StackFrame, variablePath: String): Value? {
@@ -484,6 +495,12 @@ internal class JdiFrameValueService(
             throw RpcException(INTERNAL_ERROR, "Failed to invoke toString(): ${e.message ?: "unknown"}")
         }
     }
+
+    private fun boundRenderedText(value: String): RenderedText =
+        RenderedText(
+            value = value.take(MAX_RENDERED_TEXT_CHARS),
+            truncated = value.length > MAX_RENDERED_TEXT_CHARS,
+        )
 
     private fun cacheObjectId(objectRef: ObjectReference): String {
         val uniqueId = objectRef.uniqueID()

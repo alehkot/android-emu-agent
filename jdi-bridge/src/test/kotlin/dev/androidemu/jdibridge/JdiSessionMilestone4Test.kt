@@ -140,10 +140,11 @@ class JdiSessionMilestone4Test {
         val toStringEval = session.evaluate(
             threadName = "main",
             frameIndex = 0,
-            expression = "${context.localName}.toString()",
+            expression = "longText.toString()",
         ).jsonObject
         val toStringResult = toStringEval["result"]?.jsonPrimitive?.content ?: ""
-        assertTrue(toStringResult.isNotBlank())
+        assertEquals(JdiFrameValueService.MAX_RENDERED_TEXT_CHARS, toStringResult.length)
+        assertTrue(toStringEval["truncated"]?.jsonPrimitive?.boolean == true)
 
         val unsupported = assertThrows<RpcException> {
             session.evaluate(

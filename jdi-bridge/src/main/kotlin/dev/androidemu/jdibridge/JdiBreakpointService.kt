@@ -718,7 +718,8 @@ internal class JdiBreakpointService(
                     if (requestId != null) {
                         put("breakpoint_id", requestId)
                     }
-                    put("message", resolvedMessage)
+                    put("message", resolvedMessage.value)
+                    put("truncated", resolvedMessage.truncated)
                     put("hit_count", hitCount)
                     put("location", locationText)
                     put("thread", thread.name())

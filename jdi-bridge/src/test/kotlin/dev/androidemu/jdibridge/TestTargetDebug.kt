@@ -24,7 +24,7 @@ object TestTargetDebug {
 
     @JvmStatic
     fun main(args: Array<String>) {
-        System.err.println("TestTargetDebug ready")
+        val longText = "x".repeat(20_000).also { System.err.println("ready ${it.length}") }
         val helper = Helper()
         while (true) {
             helper.tick()
