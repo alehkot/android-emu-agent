@@ -16,6 +16,7 @@ from android_emu_agent.errors import (
 PACKAGE_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$")
 URI_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:[^\s]+$")
 SNAPSHOT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
+EMULATOR_SERIAL_PATTERN = re.compile(r"^emulator-([0-9]+)$")
 EMULATOR_CONSOLE_PORT_MIN = 5554
 EMULATOR_CONSOLE_PORT_MAX = 5584
 
@@ -75,12 +76,7 @@ def get_console_port(serial: str) -> int:
     Raises:
         AgentError: If serial is not an emulator
     """
-    if not serial.startswith("emulator-"):
+    match = EMULATOR_SERIAL_PATTERN.fullmatch(serial)
+    if not match:
         raise not_emulator_error(serial)
-
-    try:
-        port = int(serial.split("-")[1])
-    except (IndexError, ValueError) as err:
-        raise not_emulator_error(serial) from err
-
-    return port
+    return int(match.group(1))

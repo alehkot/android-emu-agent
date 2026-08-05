@@ -159,11 +159,15 @@ class TestGetConsolePort:
 
         assert exc_info.value.code == "ERR_NOT_EMULATOR"
 
-    def test_invalid_format(self) -> None:
+    @pytest.mark.parametrize(
+        "serial",
+        ["emulator-abc", "emulator-5554-extra", "emulator-5554 ", "emulator-"],
+    )
+    def test_invalid_format(self, serial: str) -> None:
         """Should raise for malformed serial."""
         from android_emu_agent.validation import get_console_port
 
         with pytest.raises(AgentError) as exc_info:
-            get_console_port("emulator-abc")
+            get_console_port(serial)
 
         assert exc_info.value.code == "ERR_NOT_EMULATOR"
