@@ -145,6 +145,24 @@ class TestInteractiveFilter:
 
         assert len(snapshot.elements) == 1
 
+    def test_infers_editable_state_from_edittext_class(self) -> None:
+        """Compact snapshots should retain EditText nodes with unreliable editable flags."""
+        xml = b"""<hierarchy>
+            <node class="android.widget.EditText"
+                  editable="false"
+                  focusable="false"
+                  clickable="false"
+                  enabled="true"
+                  bounds="[0,0][300,100]" />
+        </hierarchy>"""
+
+        snapshotter = UISnapshotter()
+        snapshot = snapshotter.parse_hierarchy(xml, "s-1", 1, {}, {})
+
+        assert len(snapshot.elements) == 1
+        assert snapshot.elements[0].role == "textfield"
+        assert snapshot.elements[0].state["editable"] is True
+
     def test_includes_elements_with_text(self) -> None:
         """Should include elements with text content."""
         xml = b"""<hierarchy>

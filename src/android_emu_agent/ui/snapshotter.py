@@ -264,7 +264,7 @@ class UISnapshotter:
             "checked": node.get("checked") == "true",
             "selected": node.get("selected") == "true",
             "scrollable": node.get("scrollable") == "true",
-            "editable": node.get("editable") == "true",
+            "editable": self._is_editable(node),
         }
         element_hash = self._compute_element_hash(
             class_name=class_name,
@@ -318,7 +318,7 @@ class UISnapshotter:
 
         if "button" in class_lower:
             return "button"
-        if "edittext" in class_lower:
+        if self._is_editable(node):
             return "textfield"
         if "textview" in class_lower:
             return "text"
@@ -342,9 +342,6 @@ class UISnapshotter:
             return "scrollable"
         if node.get("clickable") == "true":
             return "clickable"
-        if node.get("editable") == "true":
-            return "textfield"
-
         return "element"
 
     def _should_include(
@@ -384,10 +381,19 @@ class UISnapshotter:
             "focusable",
             "scrollable",
             "checkable",
-            "editable",
             "long-clickable",
         )
-        return any(node.get(attr) == "true" for attr in interactive_attrs)
+        return self._is_editable(node) or any(
+            node.get(attr) == "true" for attr in interactive_attrs
+        )
+
+    def _is_editable(self, node: etree._Element) -> bool:
+        """Infer editable semantics when hierarchy flags contradict the widget class."""
+        if node.get("editable") == "true":
+            return True
+
+        class_name = node.get("class", "").lower()
+        return class_name.endswith("edittext")
 
     def _is_structural(self, node: etree._Element) -> bool:
         """Return whether the node is likely layout-only noise."""
