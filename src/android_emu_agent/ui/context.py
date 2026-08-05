@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, TypeVar, cast
 
 import structlog
 
+from android_emu_agent.device.dumpsys import parse_activity_component
+
 if TYPE_CHECKING:
     from adbutils import AdbDevice
 
@@ -48,9 +50,16 @@ class ContextResolver:
         window_info = self._unwrap_result(results[1], default={})
         ime_info = self._unwrap_result(results[2], default={})
 
+        package = activity_info.get("package") or self._string_or_none(
+            window_info.get("package")
+        )
+        activity = activity_info.get("activity") or self._string_or_none(
+            window_info.get("activity")
+        )
+
         return UIContext(
-            package=activity_info.get("package"),
-            activity=activity_info.get("activity"),
+            package=package,
+            activity=activity,
             top_resumed_activity=activity_info.get("top_resumed"),
             top_window=self._string_or_none(window_info.get("top_window")),
             orientation=self._string_value(window_info.get("orientation"), "PORTRAIT"),
@@ -67,7 +76,8 @@ class ContextResolver:
             return cast(
                 str,
                 device.shell(
-                    "dumpsys activity activities | grep -E 'mResumedActivity|mFocusedActivity'"
+                    "dumpsys activity activities | grep -E "
+                    "'topResumedActivity|mResumedActivity|mFocusedActivity|mFocusedApp'"
                 ),
             )
 
@@ -75,19 +85,16 @@ class ContextResolver:
         if not output.strip():
             logger.warning(
                 "focused_activity_empty",
-                hint="grep returned no match for mResumedActivity/mFocusedActivity — field name may have changed in this Android version",
+                hint="dumpsys returned no recognized resumed or focused activity field",
             )
         result: dict[str, str] = {}
 
-        # Parse mResumedActivity: ActivityRecord{... com.foo/.MainActivity ...}
-        resumed_match = re.search(r"mResumedActivity.*?(\S+/\S+)", output)
-        if resumed_match:
-            full = resumed_match.group(1)
+        component = parse_activity_component(output)
+        if component is not None:
+            package, activity, full = component
             result["top_resumed"] = full
-            if "/" in full:
-                pkg, activity = full.split("/", 1)
-                result["package"] = pkg
-                result["activity"] = activity
+            result["package"] = package
+            result["activity"] = activity
 
         return result
 
@@ -110,6 +117,13 @@ class ContextResolver:
         focus_match = re.search(r"mCurrentFocus=Window\{([^}]+)\}", output)
         if focus_match:
             result["top_window"] = focus_match.group(1)
+
+        component = parse_activity_component(output)
+        if component is not None:
+            package, activity, full = component
+            result["package"] = package
+            result["activity"] = activity
+            result["component"] = full
 
         orientation = "PORTRAIT"
         orientation_match = re.search(r"SurfaceOrientation:\s*(\d)", output)

@@ -816,16 +816,15 @@ class TestAppCurrent:
     """Tests for app_current."""
 
     @pytest.mark.asyncio
-    async def test_app_current_parses_component(self) -> None:
-        """Should parse foreground package/activity from dumpsys line."""
+    async def test_app_current_parses_android_36_top_resumed_activity(self) -> None:
+        """Should parse Android 36's topResumedActivity field."""
         from android_emu_agent.device.manager import DeviceManager
 
         manager = DeviceManager()
         mock_device = MagicMock()
-        mock_device.shell.side_effect = [
-            "mResumedActivity: ActivityRecord{123 u0 com.example.app/.MainActivity t77}",
-            "",
-        ]
+        mock_device.shell.return_value = (
+            "topResumedActivity=ActivityRecord{123 u0 com.example.app/.MainActivity t77}"
+        )
 
         with patch.object(manager, "get_adb_device", return_value=mock_device):
             result = await manager.app_current("emulator-5554")
@@ -833,6 +832,47 @@ class TestAppCurrent:
         assert result["package"] == "com.example.app"
         assert result["activity"] == ".MainActivity"
         assert result["component"] == "com.example.app/.MainActivity"
+        assert "-m 1" not in mock_device.shell.call_args.args[0]
+
+    @pytest.mark.asyncio
+    async def test_app_current_returns_one_clean_line(self) -> None:
+        """Should select one component line from multi-field dumpsys output."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        mock_device = MagicMock()
+        mock_device.shell.return_value = "\n".join(
+            [
+                "topResumedActivity=ActivityRecord{123 u0 com.example.app/.MainActivity t77}",
+                "mFocusedApp=ActivityRecord{123 u0 com.example.app/.MainActivity t77}",
+            ]
+        )
+
+        with patch.object(manager, "get_adb_device", return_value=mock_device):
+            result = await manager.app_current("emulator-5554")
+
+        assert result["line"] == (
+            "topResumedActivity=ActivityRecord{123 u0 com.example.app/.MainActivity t77}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_app_current_falls_back_to_window_focus(self) -> None:
+        """Should use the focused window when activity fields are unavailable."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        mock_device = MagicMock()
+        mock_device.shell.side_effect = [
+            "",
+            "mCurrentFocus=Window{abc u0 com.example.app/com.example.app.MainActivity}",
+        ]
+
+        with patch.object(manager, "get_adb_device", return_value=mock_device):
+            result = await manager.app_current("emulator-5554")
+
+        assert result["package"] == "com.example.app"
+        assert result["activity"] == "com.example.app.MainActivity"
+        assert result["component"] == "com.example.app/com.example.app.MainActivity"
 
 
 class TestAppTaskStack:

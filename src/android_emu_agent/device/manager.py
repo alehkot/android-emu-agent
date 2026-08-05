@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
-import re
 import shlex
 import shutil
 import subprocess
@@ -17,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 from android_emu_agent.actions.selector import SUPPORTED_SELECTOR_KEYS, SUPPORTED_SELECTOR_SYNTAX
+from android_emu_agent.device.dumpsys import parse_activity_component
 from android_emu_agent.errors import (
     AgentError,
     adb_command_error,
@@ -518,23 +518,38 @@ class DeviceManager:
             raise RuntimeError(f"Device not found: {serial}")
 
         def _current() -> dict[str, str | None]:
-            resumed = str(device.shell("dumpsys activity activities | grep -m 1 mResumedActivity"))
-            focused = str(device.shell("dumpsys activity activities | grep -m 1 mFocusedApp"))
-            raw = resumed.strip() or focused.strip()
+            activity_dump = str(
+                device.shell(
+                    "dumpsys activity activities | grep -E "
+                    "'topResumedActivity|mResumedActivity|mFocusedActivity|mFocusedApp'"
+                )
+            )
+            window_dump = ""
+            if not activity_dump.strip():
+                window_dump = str(
+                    device.shell("dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'")
+                )
+            dump = activity_dump if activity_dump.strip() else window_dump
+            raw = next(
+                (
+                    line.strip()
+                    for line in dump.splitlines()
+                    if parse_activity_component(line) is not None
+                ),
+                "",
+            )
             if not raw:
                 logger.warning(
                     "current_activity_empty",
-                    hint="grep returned no match for mResumedActivity/mFocusedApp — field name may have changed in this Android version",
+                    hint="dumpsys returned no recognized resumed or focused activity field",
                 )
 
-            component_match = re.search(r"([A-Za-z0-9._$]+/[A-Za-z0-9._$/$]+)", raw)
             package: str | None = None
             activity: str | None = None
             component: str | None = None
-            if component_match:
-                component_value = component_match.group(1)
-                component = component_value
-                package, activity = component_value.split("/", maxsplit=1)
+            parsed = parse_activity_component(raw)
+            if parsed is not None:
+                package, activity, component = parsed
 
             return {
                 "package": package,
