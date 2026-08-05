@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -90,6 +91,25 @@ class TestBridgeClientRequestFormat:
         assert "75s" in exc_info.value.message
         assert wait_for.await_args is not None
         assert wait_for.await_args.kwargs["timeout"] == 75.0
+
+    @pytest.mark.asyncio
+    async def test_cancelled_request_releases_pending_future(self) -> None:
+        """Caller cancellation should not retain a request that may never receive a response."""
+        client = BridgeClient(Path("/usr/bin/java"), Path("/tmp/fake.jar"))
+        mock_proc = MagicMock(returncode=None)
+        mock_proc.stdin = MagicMock()
+        mock_proc.stdin.drain = AsyncMock()
+        client._process = mock_proc
+
+        request = asyncio.create_task(client.request("inspect"))
+        await asyncio.sleep(0)
+        assert len(client._pending) == 1
+
+        request.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await request
+
+        assert client._pending == {}
 
 
 class TestBridgeClientLifecycle:

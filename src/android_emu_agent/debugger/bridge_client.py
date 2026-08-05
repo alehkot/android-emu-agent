@@ -125,23 +125,26 @@ class BridgeClient:
             "params": params or {},
         }
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         future: asyncio.Future[dict[str, Any]] = loop.create_future()
         self._pending[req_id] = future
 
         line = json.dumps(msg, ensure_ascii=True) + "\n"
         try:
-            self._process.stdin.write(line.encode())
-            await self._process.stdin.drain()
-        except (BrokenPipeError, ConnectionResetError, RuntimeError) as exc:
-            self._pending.pop(req_id, None)
-            raise bridge_crashed_error(f"bridge write failed: {exc}") from None
+            try:
+                self._process.stdin.write(line.encode())
+                await self._process.stdin.drain()
+            except (BrokenPipeError, ConnectionResetError, RuntimeError) as exc:
+                raise bridge_crashed_error(f"bridge write failed: {exc}") from None
 
-        try:
-            return await asyncio.wait_for(future, timeout=timeout_seconds)
-        except TimeoutError:
+            try:
+                return await asyncio.wait_for(future, timeout=timeout_seconds)
+            except TimeoutError:
+                raise bridge_crashed_error(
+                    f"request timed out after {timeout_seconds:g}s"
+                ) from None
+        finally:
             self._pending.pop(req_id, None)
-            raise bridge_crashed_error(f"request timed out after {timeout_seconds:g}s") from None
 
     async def ping(self) -> dict[str, Any]:
         """Send a ping request to verify the bridge is responsive."""
