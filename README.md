@@ -1,76 +1,56 @@
 # Android Emu Agent
 
-Android Emu Agent turns an Android emulator or device into a reliable control plane for coding
-agents.
+Android Emu Agent lets a coding agent inspect and control an Android emulator or device. It provides
+a command-line interface (CLI) backed by a local daemon.
 
-It gives agents what raw `adb`, brittle coordinate taps, and one-off test scripts do not: a current
-screen model, generation-scoped action targets, explicit verification, reusable flows, and evidence
-when something fails.
+The daemon reads the current screen, assigns short refs such as `^a1` to UI elements, performs
+actions, and can check the result. This gives an agent a repeatable loop:
+
+```text
+observe the screen -> act on a known element -> verify the result -> save evidence
+```
 
 [Documentation](https://alehkot.github.io/android-emu-agent/) |
 [CLI reference](https://alehkot.github.io/android-emu-agent/reference/) |
 [Source](https://github.com/alehkot/android-emu-agent)
 
-## What You Get
+## Why Use Android Emu Agent?
 
-If a coding agent needs to use Android like a developer would, Android Emu Agent provides the loop:
+Raw `adb` commands and coordinate taps do not describe the current screen. They also do not confirm
+that an action produced the expected result. Android Emu Agent adds observable targets, checks, and
+failure evidence to Android automation.
 
-```text
-observe the screen -> act on a known target -> verify the result -> keep evidence
-```
-
-| Need                                  | What Android Emu Agent gives you                                      |
-| ------------------------------------- | --------------------------------------------------------------------- |
-| Understand the current screen         | Compact UI snapshots with actionable refs such as `^a1`               |
-| Tap, type, swipe, and navigate safely | Refs, semantic selectors, fallback selectors, and capability reports  |
-| Avoid blind sleeps                    | Waits and expectations with structured pass/fail results              |
-| Repeat an app flow                    | JSON task specs and human-editable `.aea` scripts                     |
-| Debug failures instead of guessing    | Screenshots, logs, trace archives, artifact bundles, reliability data |
-| Go below the UI when needed           | Kotlin JDI Bridge flows for debuggable apps                           |
-| Fit into an agent toolchain           | Thin CLI, daemon-backed sessions, JSON output, bundled agent skills   |
-
-## First Useful Loop
-
-After install, run this once you have an emulator or device visible to `adb`:
-
-```bash
-uv run android-emu-agent daemon start
-uv run android-emu-agent session start --device emulator-5554 --json
-uv run android-emu-agent ui snapshot <session-id> --format text
-uv run android-emu-agent action tap <session-id> ^a1
-uv run android-emu-agent expect exists <session-id> --text "Welcome" --timeout-ms 5000
-```
-
-The important part is the contract: every action starts from observed state and ends with an
-explicit check, not an assumption.
-
-## Start by Goal
-
-| Goal                                                    | Start here                                                                                |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| See complete workflow examples                          | [Workflow examples](https://alehkot.github.io/android-emu-agent/workflow-examples/)       |
-| Write a reusable Android flow                           | [Task script guide](https://alehkot.github.io/android-emu-agent/tasks/)                   |
-| Look up `.aea` syntax                                   | [`.aea` task script specification](https://alehkot.github.io/android-emu-agent/aea-spec/) |
-| Find exact CLI flags                                    | [Generated CLI reference](https://alehkot.github.io/android-emu-agent/reference/)         |
-| Install the bundled agent skill                         | [Agent Skill](#agent-skill)                                                               |
-| Understand daemon sessions, refs, selectors, and traces | [Core Concepts](#core-concepts)                                                           |
+| Task                           | Support                                                                 |
+| ------------------------------ | ----------------------------------------------------------------------- |
+| Inspect the current screen     | Compact UI snapshots with refs such as `^a1`                            |
+| Tap, type, swipe, and navigate | Refs, text and resource selectors, coordinates, and device capabilities |
+| Wait for a state change        | Wait commands and pass/fail expectations                                |
+| Repeat an app flow             | JSON task files and human-editable `.aea` scripts                       |
+| Investigate a failure          | Screenshots, logs, trace archives, and artifact bundles                 |
+| Debug an app below the UI      | Kotlin bridge for Java Debug Interface (JDI) commands                   |
+| Integrate with an agent        | JSON output, daemon-backed sessions, and a bundled agent skill          |
 
 ## Requirements
 
-| Requirement                  | Needed for                                        |
-| ---------------------------- | ------------------------------------------------- |
-| Python 3.11+                 | Running the Python CLI and daemon                 |
-| `uv`                         | Installing and running the project in this repo   |
-| Android SDK `platform-tools` | `adb` device discovery and most device operations |
-| Android SDK `emulator`       | Starting and stopping Android Virtual Devices     |
-| Android SDK `cmdline-tools`  | `avdmanager` and `sdkmanager` workflows           |
-| Emulator or rooted device    | Primary automation and diagnostics target         |
-| JDK 17+                      | Debugger bridge commands only                     |
+Install these tools before you start:
 
-If you only control an already-running device, `adb` is enough. If you want this tool to start AVDs,
-ensure `emulator` is also on `PATH`.
+| Requirement                          | Purpose                                          |
+| ------------------------------------ | ------------------------------------------------ |
+| Python 3.11 or later                 | Run the CLI and daemon                           |
+| `uv`                                 | Install and run the project from this repository |
+| Android SDK `platform-tools`         | Provide `adb` device access                      |
+| Connected Android emulator or device | Provide the automation target                    |
 
-Recommended macOS Android SDK setup:
+Some workflows need more tools or access:
+
+| Optional requirement        | Needed for                                          |
+| --------------------------- | --------------------------------------------------- |
+| Android SDK `emulator`      | Start and stop Android Virtual Devices (AVDs)       |
+| Android SDK `cmdline-tools` | Use `avdmanager` and `sdkmanager`                   |
+| Root access                 | Read private app files and collect some diagnostics |
+| JDK 17 or later             | Use debugger commands                               |
+
+On macOS, you can add the Android SDK tools to `PATH` with these commands:
 
 ```bash
 export ANDROID_SDK_ROOT="$HOME/Library/Android/sdk"
@@ -81,7 +61,9 @@ emulator -list-avds
 avdmanager list avd
 ```
 
-## Install
+## Install From Source
+
+Clone the repository and install all project dependencies:
 
 ```bash
 git clone https://github.com/alehkot/android-emu-agent.git
@@ -89,90 +71,130 @@ cd android-emu-agent
 uv sync --all-extras
 ```
 
-Inside the repo, run commands as:
+In this repository, run the CLI through `uv`:
 
 ```bash
 uv run android-emu-agent <command>
 ```
 
-## Quick Start
+## Complete the First Automation Loop
 
-Use this flow to verify that the CLI, daemon, and target device are working.
+Use this procedure to confirm that the CLI, daemon, and target device work together.
 
-1. Optional: list and boot an emulator.
+In the commands:
+
+- Replace `<avd-name>` with an AVD name.
+- Replace `<device-serial>` with the serial shown by `device list`.
+- Replace `<session-id>` with the ID returned by `session start`.
+
+1. Connect an Android device or start an emulator.
+
+   Optional: start an existing AVD with Android Emu Agent:
 
    ```bash
    uv run android-emu-agent emulator list-avds
    uv run android-emu-agent emulator start <avd-name> --wait-boot
    ```
 
-2. Start the daemon. The CLI can auto-start it, but starting it explicitly makes setup easier to
-   debug.
+2. Start the daemon.
 
    ```bash
    uv run android-emu-agent daemon start
+   ```
+
+3. Verify that the daemon is running.
+
+   ```bash
    uv run android-emu-agent daemon status --json
    ```
 
-3. Confirm that a device is visible.
+4. Verify that `adb` can see the target device.
 
    ```bash
    uv run android-emu-agent device list
    ```
 
-4. Start a session and copy the returned `session_id`.
+5. Start a session and copy the returned `session_id`.
 
    ```bash
-   uv run android-emu-agent session start --device emulator-5554 --json
+   uv run android-emu-agent session start --device <device-serial> --json
    ```
 
-5. Capture an actionable snapshot.
+6. Capture the current screen.
 
    ```bash
    uv run android-emu-agent ui snapshot <session-id> --format text
    ```
 
-6. Tap an element by ref, then verify the screen again.
+   The snapshot lists actionable elements with refs such as `^a1`.
+
+7. Tap an element from the snapshot.
 
    ```bash
    uv run android-emu-agent action tap <session-id> ^a1
-   uv run android-emu-agent ui snapshot <session-id> --format text
    ```
 
-7. Stop the session when you are done.
+8. Check the result with an expectation.
+
+   ```bash
+   uv run android-emu-agent expect exists <session-id> --text "<expected-text>" --timeout-ms 5000
+   ```
+
+   Replace `<expected-text>` with text that must appear after the tap. The expectation fails if the
+   text does not appear before the timeout.
+
+9. Stop the session when the task is complete.
 
    ```bash
    uv run android-emu-agent session stop <session-id>
    ```
 
-Most commands support `--json` for machine-readable output. JSON responses include a `diagnostic_id`
-that also appears as the daemon `x-diagnostic-id` response header.
+Most commands support `--json` for machine-readable output. JSON responses include a
+`diagnostic_id`. The daemon also returns this value in the `x-diagnostic-id` response header.
+
+## Choose the Next Task
+
+| Goal                                             | Start here                                                                                |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| Follow complete workflow examples                | [Workflow examples](https://alehkot.github.io/android-emu-agent/workflow-examples/)       |
+| Write a reusable Android flow                    | [Task script guide](https://alehkot.github.io/android-emu-agent/tasks/)                   |
+| Look up `.aea` syntax                            | [`.aea` task script specification](https://alehkot.github.io/android-emu-agent/aea-spec/) |
+| Find an exact CLI option                         | [Generated CLI reference](https://alehkot.github.io/android-emu-agent/reference/)         |
+| Install the bundled agent skill                  | [Agent Skill](#install-the-agent-skill)                                                   |
+| Understand sessions, refs, selectors, and traces | [Core Concepts](#core-concepts)                                                           |
 
 ## Core Concepts
 
 ### Daemon and Sessions
 
-The daemon owns device connections and session state. The CLI sends requests over the Unix socket at
-`/tmp/android-emu-agent.sock`.
+The daemon owns device connections and session state. The CLI sends requests to the daemon through
+the Unix socket at `/tmp/android-emu-agent.sock`.
+
+Each session connects commands to one target device. Start a session before you inspect or control
+the device, and stop the session when the task is complete.
 
 Important paths:
 
-| Path                                               | Purpose                           |
-| -------------------------------------------------- | --------------------------------- |
-| `/tmp/android-emu-agent.sock`                      | Daemon socket                     |
-| `~/.android-emu-agent/daemon.log`                  | Daemon log                        |
-| `~/.android-emu-agent/daemon.pid`                  | Daemon PID file                   |
-| `~/.android-emu-agent/diagnostics/requests.ndjson` | Request diagnostics               |
-| `~/.android-emu-agent/artifacts`                   | Default artifact output root      |
-| `~/.android-emu-agent/traces`                      | Default trace archive output root |
+| Path                                               | Purpose                         |
+| -------------------------------------------------- | ------------------------------- |
+| `/tmp/android-emu-agent.sock`                      | Daemon socket                   |
+| `~/.android-emu-agent/daemon.log`                  | Daemon log                      |
+| `~/.android-emu-agent/daemon.pid`                  | Daemon process ID file          |
+| `~/.android-emu-agent/diagnostics/requests.ndjson` | Request diagnostics             |
+| `~/.android-emu-agent/artifacts`                   | Default artifact directory      |
+| `~/.android-emu-agent/traces`                      | Default trace archive directory |
 
 ### Snapshots, Refs, and Selectors
 
-`ui snapshot` returns generation-scoped refs such as `^a1`. Use refs for the next action whenever
-possible. If a ref becomes stale, the daemon may heal it against the latest snapshot and return a
-warning; take a fresh snapshot before continuing.
+A UI snapshot describes the current screen. The snapshot assigns a ref, such as `^a1`, to each
+actionable element. Use a ref for the next action when possible.
 
-Common target forms:
+Refs belong to one snapshot generation. If the screen changes, take a new snapshot before you use
+another ref. The daemon can sometimes match a stale ref to the latest snapshot, but it returns a
+warning when it does this.
+
+You can also select an element by text, resource ID, content description, coordinates, or a combined
+selector:
 
 ```text
 ^a1
@@ -185,24 +207,23 @@ text:"Sign in" || id:com.example:id/login_btn
 text:"Continue" enabled:true clickable:true
 ```
 
-Run this command when an automation planner needs to know which selector forms and device features
-are available:
+To see the selector forms and device features available to an automation planner, run:
 
 ```bash
 uv run android-emu-agent device capabilities --session <session-id> --json
 ```
 
-### Tasks and Evidence
+### Tasks, Traces, and Evidence
 
-Use `.aea` task scripts or JSON task specs for repeatable flows. Validate task files before running
-them:
+Use a `.aea` script or JSON task file to repeat a flow. Validate the task before you run it:
 
 ```bash
 uv run android-emu-agent task validate examples/tasks/checkout-smoke.aea
 uv run android-emu-agent task run examples/tasks/checkout-smoke.aea --session <session-id> --json
 ```
 
-Use traces and artifact bundles when a failure needs evidence:
+A trace records the actions and observations in a session. Use a trace or artifact bundle when you
+need to reproduce or investigate a failure:
 
 ```bash
 uv run android-emu-agent trace start <session-id> --label checkout-repro
@@ -211,24 +232,13 @@ uv run android-emu-agent trace replay ./artifacts/checkout-repro.aea-trace.zip -
 uv run android-emu-agent artifact bundle <session-id> --json
 ```
 
-## Common Workflows
+## Install the Agent Skill
 
-| Goal                                                    | Start here                                                                          |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Inspect and act on a screen                             | [Workflow examples](https://alehkot.github.io/android-emu-agent/workflow-examples/) |
-| Write a reusable `.aea` flow                            | [Task script guide](https://alehkot.github.io/android-emu-agent/tasks/)             |
-| Look up exact `.aea` grammar                            | [`.aea` specification](https://alehkot.github.io/android-emu-agent/aea-spec/)       |
-| Look up a command option                                | [Generated CLI reference](https://alehkot.github.io/android-emu-agent/reference/)   |
-| Diagnose stale refs, missing elements, or blocked input | `skills/android-emu-agent/references/troubleshooting.md`                            |
-| Use debugger breakpoints, stack, inspect, or logpoints  | `skills/android-emu-agent/references/debugging.md`                                  |
+The repository includes an `android-emu-agent` skill in `skills/android-emu-agent/`. The skill helps
+coding agents select commands, follow the observe-act-verify loop, recover from errors, and apply
+safety rules.
 
-## Agent Skill
-
-This repo includes an `android-emu-agent` skill under `skills/android-emu-agent/` for agents that
-support skill directories. The skill contains command lookup material, workflow templates, recovery
-protocols, and safety guidance.
-
-Install or refresh skill symlinks:
+Install or refresh the skill links for a supported agent:
 
 ```bash
 ./scripts/dev.sh skills          # all supported local agent targets
@@ -238,32 +248,31 @@ Install or refresh skill symlinks:
 ./scripts/dev.sh skills-validate
 ```
 
-After installation, prime the agent with a concrete target request, for example:
+After installation, give the agent a specific target and task. For example:
 
 ```text
-I want to interact with my connected Android emulator.
+Use Android Emu Agent to open Settings on emulator-5554 and verify that Wi-Fi is enabled.
 ```
 
-If symlinks are not usable in your environment, copy `skills/android-emu-agent/` into the target
-agent skill directory instead.
+If your environment cannot use symbolic links, copy `skills/android-emu-agent/` into the agent's
+skill directory.
 
-## Device Support and Safety
+## Check Device Support and Safety
 
-The primary target is an emulator or rooted device. Many UI operations also work on non-root devices
-when `adb` is connected and `uiautomator2` can attach.
+An emulator or rooted device provides the most features. Many UI operations also work on a non-root
+device when `adb` is connected and `uiautomator2` can attach.
 
-Usually safe on non-root devices:
+These operations usually work without root access:
 
-- UI snapshots, screenshots, and visual grounding.
-- Tap, long tap, set text, clear, swipe, scroll, back, home, and recents.
-- Wait and expect commands.
-- App install, uninstall, launch, force stop, reset, deep link, and intent commands.
-- Runtime permission list, grant, and revoke commands.
-- Shared-storage file push and pull.
-- Reliability profile, events, process, meminfo, gfxinfo, and native perf captures when supported by
-  the target.
+- Capture UI snapshots, screenshots, and visual grounding data.
+- Tap, long-tap, enter text, clear text, swipe, scroll, and press system navigation buttons.
+- Run wait and expectation commands.
+- Install, uninstall, launch, stop, reset, or open a link in an app.
+- List, grant, and revoke runtime permissions.
+- Push and pull files in shared storage.
+- Collect supported reliability, process, memory, graphics, and performance data.
 
-Root or emulator access is required for:
+These operations require root or emulator access:
 
 - `reliability oom-adj`
 - `reliability pull anr`
@@ -277,12 +286,13 @@ Root or emulator access is required for:
 Emulator snapshot save and restore commands require an emulator serial such as `emulator-5554`. A
 non-emulator serial returns `ERR_NOT_EMULATOR`.
 
-## Debugger Bridge
+## Debug an App
 
-Debugger commands attach a JDI Bridge sidecar to a debuggable Android app. They require JDK 17+ and
-an app built with `android:debuggable=true`, or a userdebug/eng target that allows debugging.
+Debugger commands use a Kotlin bridge to connect the Java Debug Interface (JDI) to a debuggable
+Android app. These commands require JDK 17 or later. They also require an app built with
+`android:debuggable=true`, or a `userdebug` or `eng` target that permits debugging.
 
-Minimal debugger flow:
+Use this minimal debugger flow:
 
 ```bash
 uv run android-emu-agent debug ping <session-id>
@@ -294,14 +304,14 @@ uv run android-emu-agent debug events --session <session-id>
 uv run android-emu-agent debug detach --session <session-id>
 ```
 
-Build and test the bridge during development:
+During bridge development, build and test the bridge with these commands:
 
 ```bash
 ./scripts/dev.sh build-bridge
 ./scripts/dev.sh test-bridge
 ```
 
-## Troubleshooting
+## Troubleshoot a Connection or Action
 
 Start with these checks:
 
@@ -311,68 +321,57 @@ adb devices
 uv run android-emu-agent daemon status --json
 ```
 
-Common errors:
+| Error code                | Meaning                                      | Next action                                               |
+| ------------------------- | -------------------------------------------- | --------------------------------------------------------- |
+| `ERR_STALE_REF`           | The ref came from an old snapshot            | Take a new snapshot and use a current ref or selector     |
+| `ERR_NOT_FOUND`           | The target element was not found             | Inspect the screen with `--full` or use another selector  |
+| `ERR_BLOCKED_INPUT`       | A dialog, keyboard, or overlay blocked input | Dismiss the blocker or wait for the device to become idle |
+| `ERR_TIMEOUT`             | A wait or expectation did not complete       | Check the condition or increase `--timeout-ms`            |
+| `ERR_SESSION_EXPIRED`     | The session no longer exists                 | Start a new session                                       |
+| `ERR_DEVICE_OFFLINE`      | The device disconnected                      | Reconnect the device and rerun `device list`              |
+| `ERR_PERMISSION`          | The operation requires root access           | Use a rooted target or skip the operation                 |
+| `ERR_ADB_NOT_FOUND`       | `adb` is not on `PATH`                       | Install Android SDK platform-tools and update `PATH`      |
+| `ERR_SDK_TOOL_NOT_FOUND`  | An Android SDK command is missing            | Add `emulator` or `avdmanager` to `PATH`                  |
+| `ERR_JDK_NOT_FOUND`       | A Java runtime is missing                    | Install JDK 17 or later, or set `JAVA_HOME`               |
+| `ERR_TASK_INVALID`        | A JSON task file is invalid                  | Fix the task and rerun `task validate`                    |
+| `ERR_TASK_SCRIPT_INVALID` | A `.aea` script is invalid                   | Fix the reported line and rerun `task validate`           |
+| `ERR_EXPECTATION_FAILED`  | The expected state was not observed          | Inspect the state, selector, and timeout                  |
 
-| Error code                | Meaning                               | Next action                                                  |
-| ------------------------- | ------------------------------------- | ------------------------------------------------------------ |
-| `ERR_STALE_REF`           | Ref came from an old snapshot         | Re-snapshot and retry with a current ref or selector         |
-| `ERR_NOT_FOUND`           | Target element was not found          | Verify the screen, use `--full`, or use another selector     |
-| `ERR_BLOCKED_INPUT`       | Dialog, IME, or overlay blocked input | Dismiss the blocker or wait for idle                         |
-| `ERR_TIMEOUT`             | Wait or expectation did not complete  | Check the condition or increase `--timeout-ms`               |
-| `ERR_SESSION_EXPIRED`     | Session no longer exists              | Start a new session                                          |
-| `ERR_DEVICE_OFFLINE`      | Device disconnected                   | Reconnect and rerun `device list`                            |
-| `ERR_PERMISSION`          | Operation requires root               | Use a rooted target or skip the root-only command            |
-| `ERR_ADB_NOT_FOUND`       | `adb` is not on `PATH`                | Install Android SDK platform-tools and update `PATH`         |
-| `ERR_SDK_TOOL_NOT_FOUND`  | Android SDK CLI tool is missing       | Add `emulator` or `avdmanager` to `PATH`                     |
-| `ERR_JDK_NOT_FOUND`       | Java runtime is missing               | Install JDK 17+ or set `JAVA_HOME`                           |
-| `ERR_TASK_INVALID`        | JSON task spec is invalid             | Fix the task and rerun `task validate`                       |
-| `ERR_TASK_SCRIPT_INVALID` | `.aea` script syntax is invalid       | Fix the line reported by the error and rerun `task validate` |
-| `ERR_EXPECTATION_FAILED`  | Expected state was not observed       | Inspect actual state, selector, and timeout                  |
+For more recovery guidance, see the
+[troubleshooting reference](https://github.com/alehkot/android-emu-agent/blob/main/skills/android-emu-agent/references/troubleshooting.md).
 
-For deeper recovery guidance, see `skills/android-emu-agent/references/troubleshooting.md`.
-
-## Documentation
-
-`docs/reference.md` is generated from the live Typer CLI. Regenerate it instead of hand-editing
-command tables:
-
-```bash
-./scripts/dev.sh docs-gen
-./scripts/dev.sh docs
-./scripts/dev.sh docs-serve
-```
-
-The docs site navigation is defined in `mkdocs.yml`.
-
-## Architecture
+## Understand the Architecture
 
 ```text
 CLI client
   -> FastAPI daemon over /tmp/android-emu-agent.sock
-    -> session manager, UI snapshotter, actions, waits, expectations, tasks, traces, artifacts
-    -> adbutils and uiautomator2 for device I/O
-    -> Kotlin JDI Bridge subprocess for debugger flows
+    -> sessions, snapshots, actions, waits, expectations, tasks, traces, and artifacts
+    -> adbutils and uiautomator2 for device communication
+    -> Kotlin JDI Bridge process for debugger commands
       -> Android emulator or device
 ```
 
-## Development
+The CLI is a thin client. The daemon keeps device connections and session state, then sends device
+commands through `adbutils` and `uiautomator2`. Debugger commands use a separate Kotlin process.
 
-The `./scripts/dev.sh` helper is the canonical entry point for local development.
+## Develop Android Emu Agent
+
+Use `./scripts/dev.sh` as the main entry point for local development.
 
 | Command                             | Purpose                                                              |
 | ----------------------------------- | -------------------------------------------------------------------- |
 | `./scripts/dev.sh setup`            | Install dependencies                                                 |
 | `./scripts/dev.sh check`            | Run lint, type checks, unit tests, docs checks, and skill validation |
 | `./scripts/dev.sh test-unit`        | Run unit tests                                                       |
-| `./scripts/dev.sh test-integration` | Run emulator/device-dependent tests                                  |
-| `./scripts/dev.sh build-bridge`     | Build the JDI Bridge fat JAR                                         |
+| `./scripts/dev.sh test-integration` | Run tests that require an emulator or device                         |
+| `./scripts/dev.sh build-bridge`     | Build the JDI Bridge JAR                                             |
 | `./scripts/dev.sh test-bridge`      | Run Kotlin bridge tests                                              |
 | `./scripts/dev.sh docs-gen`         | Regenerate `docs/reference.md`                                       |
-| `./scripts/dev.sh docs`             | Build the MkDocs site into `site/`                                   |
+| `./scripts/dev.sh docs`             | Build the documentation site in `site/`                              |
 | `./scripts/dev.sh md`               | Format and lint Markdown                                             |
-| `./scripts/dev.sh skills-validate`  | Validate bundled agent skill metadata and references                 |
+| `./scripts/dev.sh skills-validate`  | Validate the bundled skill metadata and references                   |
 
-Useful raw commands:
+Useful direct commands:
 
 ```bash
 uv run android-emu-agent --help
@@ -382,6 +381,10 @@ uv run ruff check .
 uv run mypy src/
 ```
 
+`docs/reference.md` is generated from the CLI. Run `./scripts/dev.sh docs-gen` instead of editing
+its command tables by hand. The documentation site navigation is defined in `mkdocs.yml`.
+
 ## License
 
-MIT. See `LICENSE`.
+Android Emu Agent uses the MIT License. See the
+[license](https://github.com/alehkot/android-emu-agent/blob/main/LICENSE).
