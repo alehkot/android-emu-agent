@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 import structlog
 
 from android_emu_agent.errors import AgentError, log_follow_unsupported_error
+from android_emu_agent.security import ensure_private_directory, ensure_private_file
 from android_emu_agent.utils.time_parser import parse_datetime
 
 if TYPE_CHECKING:
@@ -105,7 +106,10 @@ class ArtifactManager:
     def __init__(self, output_dir: Path | None = None) -> None:
         default_dir = Path.home() / ".android-emu-agent" / "artifacts"
         self.output_dir = output_dir or default_dir
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        if output_dir is None:
+            ensure_private_directory(self.output_dir)
+        else:
+            self.output_dir.mkdir(parents=True, exist_ok=True)
 
     async def screenshot(
         self,
@@ -125,6 +129,7 @@ class ArtifactManager:
         if image is None:
             raise RuntimeError("Failed to capture screenshot from device")
         await asyncio.to_thread(image.save, str(output_path))
+        ensure_private_file(output_path)
 
         logger.info("screenshot_captured", path=str(output_path))
         return output_path
@@ -194,7 +199,8 @@ class ArtifactManager:
             return raw_output
 
         logs = await asyncio.to_thread(_pull)
-        output_path.write_text(logs)
+        output_path.write_text(logs, encoding="utf-8")
+        ensure_private_file(output_path)
 
         logger.info("logs_pulled", path=str(output_path), size=len(logs))
         return output_path
@@ -214,7 +220,8 @@ class ArtifactManager:
         filename = f"{session_id}_gen{generation}_{timestamp}.json"
         output_path = self.output_dir / filename
 
-        output_path.write_text(snapshot_json)
+        output_path.write_text(snapshot_json, encoding="utf-8")
+        ensure_private_file(output_path)
         logger.info("snapshot_saved", path=str(output_path))
         return output_path
 
@@ -245,6 +252,7 @@ class ArtifactManager:
                 zf.writestr("metadata.txt", metadata)
 
         await asyncio.to_thread(_create_zip)
+        ensure_private_file(bundle_path)
 
         # Cleanup temp files
         screenshot_path.unlink(missing_ok=True)

@@ -23,6 +23,7 @@ from android_emu_agent.errors import (
     permission_error,
     process_not_found_error,
 )
+from android_emu_agent.security import ensure_private_directory, ensure_private_file
 
 if TYPE_CHECKING:
     from adbutils import AdbDevice
@@ -75,7 +76,10 @@ class ReliabilityManager:
     def __init__(self, output_dir: Path | None = None) -> None:
         default_dir = Path.home() / ".android-emu-agent" / "artifacts" / "reliability"
         self.output_dir = output_dir or default_dir
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        if output_dir is None:
+            ensure_private_directory(self.output_dir)
+        else:
+            self.output_dir.mkdir(parents=True, exist_ok=True)
 
     async def exit_info(self, device: AdbDevice, package: str) -> str:
         return await self._shell(device, f"dumpsys activity exit-info {shlex.quote(package)}")
@@ -85,6 +89,7 @@ class ReliabilityManager:
         name = self._artifact_name(filename, f"bugreport_{serial}_{timestamp}", ".zip")
         output_path = self.output_dir / name
         await self._run_adb(serial, ["bugreport", str(output_path)])
+        ensure_private_file(output_path)
         logger.info("bugreport_saved", serial=serial, path=str(output_path))
         return output_path
 
@@ -317,6 +322,7 @@ class ReliabilityManager:
 
         local_path = self.output_dir / f"heap_{safe_pkg}_{timestamp}.hprof"
         await self._run_adb(serial, ["pull", remote_path, str(local_path)])
+        ensure_private_file(local_path)
 
         if not keep_remote:
             await self._shell(device, f"rm -f {shlex.quote(remote_path)}")
@@ -352,6 +358,7 @@ class ReliabilityManager:
         )
         await self._shell(device, command)
         await self._run_adb(serial, ["pull", remote_path, str(local_path)])
+        ensure_private_file(local_path)
         await self._shell(device, f"rm -f {shlex.quote(remote_path)}")
         logger.info("perfetto_trace_saved", serial=serial, path=str(local_path))
         return {
@@ -394,7 +401,9 @@ class ReliabilityManager:
         )
         report = await self._shell(device, f"simpleperf report -i {shlex.quote(remote_data)}")
         local_report.write_text(report, encoding="utf-8")
+        ensure_private_file(local_report)
         await self._run_adb(serial, ["pull", remote_data, str(local_data)])
+        ensure_private_file(local_data)
         await self._shell(device, f"rm -f {shlex.quote(remote_data)}")
         logger.info("simpleperf_saved", serial=serial, package=package, path=str(local_data))
         return {
@@ -427,6 +436,7 @@ class ReliabilityManager:
         command_parts.append(remote_path)
         await self._shell(device, " ".join(shlex.quote(part) for part in command_parts))
         await self._run_adb(serial, ["pull", remote_path, str(local_path)])
+        ensure_private_file(local_path)
         await self._shell(device, f"rm -f {shlex.quote(remote_path)}")
         logger.info("screenrecord_saved", serial=serial, path=str(local_path))
         return {

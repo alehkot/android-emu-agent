@@ -20,6 +20,7 @@ from android_emu_agent.errors import (
     adb_not_found_error,
     file_not_found_error,
 )
+from android_emu_agent.security import ensure_private_directory
 
 if TYPE_CHECKING:
     from adbutils import AdbDevice
@@ -49,7 +50,10 @@ class FileManager:
     def __init__(self, output_dir: Path | None = None) -> None:
         default_dir = Path.home() / ".android-emu-agent" / "artifacts" / "files"
         self.output_dir = output_dir or default_dir
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        if output_dir is None:
+            ensure_private_directory(self.output_dir)
+        else:
+            self.output_dir.mkdir(parents=True, exist_ok=True)
 
     async def push(self, serial: str, local_path: str, remote_path: str | None) -> str:
         local = Path(local_path).expanduser()

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from android_emu_agent.errors import AgentError
+from android_emu_agent.security import ensure_private_directory, ensure_private_file
 
 
 class VisualGroundingManager:
@@ -16,7 +17,10 @@ class VisualGroundingManager:
     def __init__(self, output_dir: Path | None = None) -> None:
         default_dir = Path.home() / ".android-emu-agent" / "artifacts" / "visual"
         self.output_dir = output_dir or default_dir
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        if output_dir is None:
+            ensure_private_directory(self.output_dir)
+        else:
+            self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def create_grounding(
         self,
@@ -96,6 +100,7 @@ class VisualGroundingManager:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         path = self.output_dir / f"{session_id}_gen{generation}_{timestamp}_grounding.json"
         path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
+        ensure_private_file(path)
         return path
 
     @staticmethod

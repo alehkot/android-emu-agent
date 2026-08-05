@@ -101,3 +101,27 @@ async def test_database_creates_private_state(tmp_path: Path) -> None:
         assert _mode(db_path) == 0o600
     finally:
         await database.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_artifact_managers_create_owner_only_storage(tmp_path: Path) -> None:
+    """Artifact privacy must not depend on the daemon process umask."""
+    from android_emu_agent.artifacts.manager import ArtifactManager
+    from android_emu_agent.files.manager import FileManager
+    from android_emu_agent.reliability.manager import ReliabilityManager
+    from android_emu_agent.visual.manager import VisualGroundingManager
+
+    with patch("pathlib.Path.home", return_value=tmp_path):
+        artifact_manager = ArtifactManager()
+        ReliabilityManager()
+        FileManager()
+        VisualGroundingManager()
+
+    snapshot_path = await artifact_manager.save_snapshot("{}", "s-abc123", 1)
+
+    artifact_dir = tmp_path / ".android-emu-agent" / "artifacts"
+    assert _mode(artifact_dir) == 0o700
+    assert _mode(artifact_dir / "reliability") == 0o700
+    assert _mode(artifact_dir / "files") == 0o700
+    assert _mode(artifact_dir / "visual") == 0o700
+    assert _mode(snapshot_path) == 0o600
