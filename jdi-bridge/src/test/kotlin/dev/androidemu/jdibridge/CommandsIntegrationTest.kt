@@ -62,11 +62,11 @@ class CommandsIntegrationTest {
             )
         val status = set["status"]?.jsonPrimitive?.content ?: "unknown"
         assertTrue(status == "set" || status == "pending")
+
+        rpcResult("resume", "{}")
         if (status == "pending") {
             waitForEvent("breakpoint_resolved", timeoutMs = 10_000)
         }
-
-        rpcResult("resume", "{}")
         waitForEvent("breakpoint_hit", timeoutMs = 10_000)
 
         val stepInto = rpcResult("step_into", """{"thread_name":"main","timeout_seconds":10.0}""")

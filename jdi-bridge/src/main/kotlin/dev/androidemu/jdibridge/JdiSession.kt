@@ -81,12 +81,21 @@ class JdiSession(
             frameValueService.invalidateObjectCacheLocked()
         }
 
-        if (!keepSuspended && machine.allThreads().all { it.isSuspended }) {
-            log("vm fully suspended, resuming")
-            machine.resume()
+        if (keepSuspended) {
+            // Hold an explicit suspension count so consuming the initial VMStart event cannot
+            // accidentally resume a target launched with JDWP suspend=y.
+            machine.suspend()
         }
 
         eventLoopService.startEventLoop(machine)
+
+        if (!keepSuspended) {
+            // A suspend=y launch can transiently report a mixture of suspended and running JVM
+            // service threads. Resume unconditionally instead of using that racy snapshot to
+            // decide whether the target may start.
+            log("resuming vm after attach")
+            machine.resume()
+        }
 
         return buildJsonObject {
             put("status", "attached")

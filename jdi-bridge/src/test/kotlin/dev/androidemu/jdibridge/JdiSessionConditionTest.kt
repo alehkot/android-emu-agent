@@ -84,7 +84,7 @@ class JdiSessionConditionTest {
 
     @Test
     fun `set breakpoint rejects malformed condition syntax`() {
-        session.attach("localhost", targetPort)
+        session.attach("localhost", targetPort, keepSuspended = true)
 
         val error =
             assertThrows<RpcException> {
@@ -97,7 +97,7 @@ class JdiSessionConditionTest {
 
     @Test
     fun `condition metadata is preserved in breakpoint list`() {
-        session.attach("localhost", targetPort)
+        session.attach("localhost", targetPort, keepSuspended = true)
 
         setConditionBreakpoint("helper.seed >= 7")
 
@@ -109,11 +109,14 @@ class JdiSessionConditionTest {
 
     @Test
     fun `true condition suspends and emits breakpoint hit`() {
-        session.attach("localhost", targetPort)
+        session.attach("localhost", targetPort, keepSuspended = true)
         notifications.clear()
 
-        setConditionBreakpoint("helper.seed >= 7")
+        val status = setConditionBreakpoint("helper.seed >= 7")
         session.resume(null)
+        if (status == "pending") {
+            waitForEvent("breakpoint_resolved", timeoutMs = 10_000)
+        }
         waitForMainSuspended(timeoutMs = 10_000)
 
         val event = waitForEvent("breakpoint_hit", timeoutMs = 10_000)
@@ -122,11 +125,14 @@ class JdiSessionConditionTest {
 
     @Test
     fun `false condition auto resumes without breakpoint hit`() {
-        session.attach("localhost", targetPort)
+        session.attach("localhost", targetPort, keepSuspended = true)
         notifications.clear()
 
-        setConditionBreakpoint("helper.seed < 0")
+        val status = setConditionBreakpoint("helper.seed < 0")
         session.resume(null)
+        if (status == "pending") {
+            waitForEvent("breakpoint_resolved", timeoutMs = 10_000)
+        }
 
         Thread.sleep(500)
         assertMainNotSuspended()
@@ -138,11 +144,14 @@ class JdiSessionConditionTest {
 
     @Test
     fun `condition runtime errors emit event and continue running`() {
-        session.attach("localhost", targetPort)
+        session.attach("localhost", targetPort, keepSuspended = true)
         notifications.clear()
 
-        setConditionBreakpoint("missingVar > 0")
+        val status = setConditionBreakpoint("missingVar > 0")
         session.resume(null)
+        if (status == "pending") {
+            waitForEvent("breakpoint_resolved", timeoutMs = 10_000)
+        }
 
         val event = waitForEvent("breakpoint_condition_error", timeoutMs = 10_000)
         assertTrue((event["error"]?.jsonPrimitive?.content ?: "").contains("missingVar"))
@@ -151,7 +160,7 @@ class JdiSessionConditionTest {
 
     @Test
     fun `logpoint emits templated message with captured stack`() {
-        session.attach("localhost", targetPort)
+        session.attach("localhost", targetPort, keepSuspended = true)
         notifications.clear()
 
         val set =
@@ -164,11 +173,10 @@ class JdiSessionConditionTest {
             ).jsonObject
         val status = set["status"]?.jsonPrimitive?.content ?: "unknown"
         assertTrue(status == "set" || status == "pending")
+        session.resume(null)
         if (status == "pending") {
             waitForEvent("breakpoint_resolved", timeoutMs = 10_000)
         }
-
-        session.resume(null)
         val event = waitForEvent("logpoint_hit", timeoutMs = 10_000)
         val message = event["message"]?.jsonPrimitive?.content ?: ""
         assertTrue(message.contains("hit=1"), "Expected hit count interpolation in: $message")
@@ -203,7 +211,7 @@ class JdiSessionConditionTest {
         throw AssertionError("Timed out waiting for main thread suspension")
     }
 
-    private fun setConditionBreakpoint(condition: String) {
+    private fun setConditionBreakpoint(condition: String): String {
         val set =
             session.setBreakpoint(
                 MAIN_CLASS,
@@ -212,9 +220,7 @@ class JdiSessionConditionTest {
             ).jsonObject
         val status = set["status"]?.jsonPrimitive?.content ?: "unknown"
         assertTrue(status == "set" || status == "pending")
-        if (status == "pending") {
-            waitForEvent("breakpoint_resolved", timeoutMs = 10_000)
-        }
+        return status
     }
 
     private fun assertMainNotSuspended(timeoutMs: Long = 2_000) {

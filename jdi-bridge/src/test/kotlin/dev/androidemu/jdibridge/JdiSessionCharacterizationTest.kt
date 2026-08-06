@@ -30,7 +30,7 @@ class JdiSessionCharacterizationTest {
         val (process, port) = startTarget(EXCEPTION_TARGET_CLASS)
 
         try {
-            session.attach("localhost", port)
+            session.attach("localhost", port, keepSuspended = true)
             val set =
                 session.setExceptionBreakpoint(
                     classPattern = "java.lang.IllegalStateException",
@@ -39,6 +39,7 @@ class JdiSessionCharacterizationTest {
                 ).jsonObject
             val status = set["status"]?.jsonPrimitive?.content ?: "unknown"
             assertTrue(status == "set" || status == "pending")
+            session.resume(null)
 
             val event = waitForEvent(notifications, "exception_hit", timeoutMs = 10_000)
             assertEquals("exception_hit", event["type"]?.jsonPrimitive?.content)

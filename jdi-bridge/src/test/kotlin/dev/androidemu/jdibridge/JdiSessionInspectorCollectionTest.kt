@@ -75,7 +75,7 @@ class JdiSessionInspectorCollectionTest {
 
     @Test
     fun `inspect variable serializes list-like objects with items`() {
-        session.attach("localhost", targetPort)
+        session.attach("localhost", targetPort, keepSuspended = true)
         val set = session.setBreakpoint(MAIN_CLASS, MAIN_LOOP_LINE).jsonObject
         val status = set["status"]?.jsonPrimitive?.content ?: "unknown"
         assertTrue(status == "set" || status == "pending")

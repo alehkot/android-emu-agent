@@ -95,6 +95,7 @@ class JdiSessionTest {
         val result = session.attach("localhost", targetPort).jsonObject
         val keepSuspended = result["keep_suspended"]?.jsonPrimitive?.booleanOrNull
         assertEquals(false, keepSuspended)
+        assertEquals(false, result["suspended"]?.jsonPrimitive?.booleanOrNull)
     }
 
     @Test
@@ -102,6 +103,9 @@ class JdiSessionTest {
         val result = session.attach("localhost", targetPort, keepSuspended = true).jsonObject
         val keepSuspended = result["keep_suspended"]?.jsonPrimitive?.booleanOrNull
         assertEquals(true, keepSuspended)
+        Thread.sleep(100)
+        val status = session.status().jsonObject
+        assertEquals(true, status["suspended"]?.jsonPrimitive?.booleanOrNull)
     }
 
     @Test
