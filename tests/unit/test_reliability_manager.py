@@ -306,6 +306,7 @@ class TestShellFailures:
         device.shell.side_effect = [
             "1234\n__AEA_EXIT_CODE__:0",
             "simpleperf: permission denied\n__AEA_EXIT_CODE__:1",
+            "\n__AEA_EXIT_CODE__:0",
         ]
 
         with (
