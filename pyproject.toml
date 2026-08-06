@@ -30,6 +30,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1.0",
+    "pytest-timeout>=2.2.0",
     "ruff>=0.2.0",
     "mypy>=1.8.0",
     "pyright>=1.1.0",
@@ -104,6 +105,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+timeout = 30
 markers = [
     "integration: requires Android emulator (deselect with '-m \"not integration\"')",
     "slow: marks tests as slow",
