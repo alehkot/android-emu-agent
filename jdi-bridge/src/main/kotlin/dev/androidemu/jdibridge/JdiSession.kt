@@ -73,6 +73,7 @@ class JdiSession(
         state.vm = machine
         state.disconnected = false
         state.disconnectReason = null
+        state.keepSuspended = keepSuspended
         synchronized(state.lock) {
             state.breakpoints.clear()
             state.nextBreakpointId = 1
@@ -81,18 +82,9 @@ class JdiSession(
             frameValueService.invalidateObjectCacheLocked()
         }
 
-        if (keepSuspended) {
-            // Hold an explicit suspension count so consuming the initial VMStart event cannot
-            // accidentally resume a target launched with JDWP suspend=y.
-            machine.suspend()
-        }
-
         eventLoopService.startEventLoop(machine)
 
         if (!keepSuspended) {
-            // A suspend=y launch can transiently report a mixture of suspended and running JVM
-            // service threads. Resume unconditionally instead of using that racy snapshot to
-            // decide whether the target may start.
             log("resuming vm after attach")
             machine.resume()
         }
@@ -121,6 +113,7 @@ class JdiSession(
         state.vm = null
         state.disconnected = false
         state.disconnectReason = null
+        state.keepSuspended = false
         synchronized(state.lock) {
             state.activeStep = null
             state.suspendedAtMs.clear()

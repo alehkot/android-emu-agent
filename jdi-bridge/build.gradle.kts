@@ -43,4 +43,5 @@ tasks.test {
     jvmArgs("--add-modules", "jdk.jdi")
     // Prevent infinite hangs from JDI event loop tests
     systemProperty("junit.jupiter.execution.timeout.default", "30s")
+    systemProperty("junit.jupiter.execution.timeout.mode", "enabled")
 }

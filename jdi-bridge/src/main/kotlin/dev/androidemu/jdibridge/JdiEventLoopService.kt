@@ -62,6 +62,11 @@ internal class JdiEventLoopService(
                                                 shouldResumeSet = false
                                             }
                                         }
+                                        is com.sun.jdi.event.VMStartEvent -> {
+                                            if (state.keepSuspended) {
+                                                shouldResumeSet = false
+                                            }
+                                        }
                                         is VMDisconnectEvent -> {
                                             handleDisconnect("VM disconnected")
                                             shouldStop = true

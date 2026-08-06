@@ -48,6 +48,7 @@ internal class JdiSessionState {
     @Volatile var disconnected = false
     @Volatile var disconnectReason: String? = null
     @Volatile var mapping: ProguardMapping? = null
+    @Volatile var keepSuspended = false
 
     val lock = Any()
     val breakpoints = linkedMapOf<Int, BreakpointState>()

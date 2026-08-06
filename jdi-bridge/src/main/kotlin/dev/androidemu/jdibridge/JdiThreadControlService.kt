@@ -107,7 +107,14 @@ internal class JdiThreadControlService(
     fun resume(machine: VirtualMachine, threadName: String?): JsonElement {
         if (threadName == null) {
             try {
-                machine.resume()
+                var attempts = 0
+                while (machine.allThreads().any { it.isSuspended } && attempts < 32) {
+                    machine.resume()
+                    attempts += 1
+                }
+                if (attempts == 0) {
+                    machine.resume()
+                }
             } catch (e: Exception) {
                 throw RpcException(INTERNAL_ERROR, "Failed to resume VM: ${e.message ?: "unknown"}")
             }
