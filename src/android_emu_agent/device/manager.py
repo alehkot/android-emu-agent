@@ -64,6 +64,12 @@ EMULATOR_CONSOLE_MAX_RESPONSE_BYTES = 64 * 1024
 EMULATOR_CONSOLE_AUTH_TOKEN_PATH = Path.home() / ".emulator_console_auth_token"
 EMULATOR_CONSOLE_AUTH_TOKEN_MAX_LENGTH = 1024
 
+# adbutils defaults `shell(timeout=...)` to 600s, which is unbounded for our purposes.
+# Discovery probes run against devices that may be wedged or prompting for root, so
+# they get explicit short budgets that let the worker thread unblock itself.
+DEVICE_PROP_TIMEOUT_S = 10.0
+DEVICE_ROOT_CHECK_TIMEOUT_S = 5.0
+
 
 @dataclass
 class DeviceInfo:
@@ -760,28 +766,51 @@ class DeviceManager:
         """Discover connected ADB devices."""
         from adbutils import adb
 
+        def _list() -> list[AdbDevice]:
+            return list(adb.device_list())
+
+        devices = await asyncio.to_thread(_list)
+        discovered: dict[str, AdbDevice] = {}
+        for dev in devices:
+            serial = dev.serial
+            if not serial:
+                logger.warning("device_missing_serial")
+                continue
+            discovered[serial] = dev
+
         async with self._lock:
+            unknown = [serial for serial in discovered if serial not in self._devices]
 
-            def _list() -> list[AdbDevice]:
-                return list(adb.device_list())
+        # Probing a new device shells out to it for props and root detection. Those calls
+        # can stall on a wedged device or one that prompts for root, so they must not run
+        # under the state lock: every endpoint reaches this method, and holding the lock
+        # across a probe stalls requests for every other device too. Probe concurrently so
+        # one slow device cannot delay its peers either.
+        probed: dict[str, DeviceInfo] = {}
+        if unknown:
+            results = await asyncio.gather(
+                *(self._build_device_info(discovered[serial]) for serial in unknown),
+                return_exceptions=True,
+            )
+            for serial, result in zip(unknown, results, strict=True):
+                if isinstance(result, DeviceInfo):
+                    probed[serial] = result
+                else:
+                    logger.warning("device_probe_failed", serial=serial, error=str(result))
 
-            devices = await asyncio.to_thread(_list)
-            seen: set[str] = set()
-
-            for dev in devices:
-                serial = dev.serial
-                if not serial:
-                    logger.warning("device_missing_serial")
-                    continue
-                seen.add(serial)
-                self._adb_devices[serial] = dev
+        async with self._lock:
+            for serial, dev in discovered.items():
                 if serial not in self._devices:
-                    info = await self._build_device_info(dev)
+                    info = probed.get(serial)
+                    if info is None:
+                        # Probe failed; leave the device unregistered and retry next pass.
+                        continue
                     self._devices[serial] = info
                     logger.info("device_discovered", serial=serial, model=info.model)
+                self._adb_devices[serial] = dev
 
             # Remove disconnected devices
-            disconnected = set(self._devices.keys()) - seen
+            disconnected = set(self._devices.keys()) - set(discovered)
             for serial in disconnected:
                 self._devices.pop(serial, None)
                 self._adb_devices.pop(serial, None)
@@ -792,11 +821,15 @@ class DeviceManager:
         """Build DeviceInfo from adb device."""
 
         def _props() -> dict[str, str]:
-            props = device.prop
+            # Read props directly rather than via `device.prop`, which has no way to pass
+            # a timeout and would inherit adbutils' 600s default.
+            def _getprop(name: str) -> str:
+                return str(device.shell(["getprop", name], timeout=DEVICE_PROP_TIMEOUT_S)).strip()
+
             return {
-                "model": props.model or props.get("ro.product.model") or "unknown",
-                "sdk": props.get("ro.build.version.sdk") or "0",
-                "is_emulator": props.get("ro.kernel.qemu") or "0",
+                "model": _getprop("ro.product.model") or "unknown",
+                "sdk": _getprop("ro.build.version.sdk") or "0",
+                "is_emulator": _getprop("ro.kernel.qemu") or "0",
             }
 
         props = await asyncio.to_thread(_props)
@@ -822,8 +855,9 @@ class DeviceManager:
 
         def _run() -> str:
             try:
-                return str(device.shell("su -c id"))
+                return str(device.shell("su -c id", timeout=DEVICE_ROOT_CHECK_TIMEOUT_S))
             except Exception:
+                # Devices that prompt for root (or are wedged) hang here without a timeout.
                 return ""
 
         output = await asyncio.to_thread(_run)

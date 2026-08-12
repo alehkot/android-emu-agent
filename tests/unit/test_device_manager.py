@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import subprocess
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, call, patch
@@ -1256,3 +1257,171 @@ class TestAppResolveIntent:
             )
 
         assert result.component is None
+
+
+class TestDiscoverDevices:
+    """Tests for device discovery orchestration."""
+
+    @staticmethod
+    def _fake_adb(serials: list[str]) -> MagicMock:
+        """Build a fake adbutils client listing the given serials."""
+        devices = []
+        for serial in serials:
+            device = MagicMock()
+            device.serial = serial
+            devices.append(device)
+        adb = MagicMock()
+        adb.device_list.return_value = devices
+        return adb
+
+    @staticmethod
+    def _info(serial: str) -> object:
+        from android_emu_agent.device.manager import DeviceInfo
+
+        return DeviceInfo(
+            serial=serial,
+            model="Pixel",
+            sdk_version=34,
+            is_rooted=False,
+            is_emulator=True,
+        )
+
+    @pytest.mark.asyncio
+    async def test_probe_does_not_hold_state_lock(self) -> None:
+        """A slow probe must leave the state lock free for other callers."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        probing = asyncio.Event()
+        release = asyncio.Event()
+
+        async def _slow_probe(device: MagicMock) -> object:
+            probing.set()
+            await release.wait()
+            return self._info(device.serial)
+
+        with (
+            patch("adbutils.adb", self._fake_adb(["emulator-5556"])),
+            patch.object(manager, "_build_device_info", side_effect=_slow_probe),
+        ):
+            task = asyncio.create_task(manager._discover_devices())
+            await asyncio.wait_for(probing.wait(), timeout=2)
+
+            # The probe is in flight; the state lock must still be acquirable.
+            await asyncio.wait_for(manager._lock.acquire(), timeout=2)
+            manager._lock.release()
+
+            release.set()
+            await asyncio.wait_for(task, timeout=2)
+
+        assert "emulator-5556" in manager._devices
+
+    @pytest.mark.asyncio
+    async def test_probes_run_concurrently(self) -> None:
+        """One slow device must not delay probing of its peers."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        started: list[str] = []
+        both_started = asyncio.Event()
+
+        async def _probe(device: MagicMock) -> object:
+            started.append(device.serial)
+            if len(started) == 2:
+                both_started.set()
+            # Deadlocks unless both probes are in flight at the same time.
+            await asyncio.wait_for(both_started.wait(), timeout=2)
+            return self._info(device.serial)
+
+        with (
+            patch("adbutils.adb", self._fake_adb(["emulator-5554", "emulator-5556"])),
+            patch.object(manager, "_build_device_info", side_effect=_probe),
+        ):
+            await asyncio.wait_for(manager._discover_devices(), timeout=3)
+
+        assert sorted(started) == ["emulator-5554", "emulator-5556"]
+        assert sorted(manager._devices) == ["emulator-5554", "emulator-5556"]
+
+    @pytest.mark.asyncio
+    async def test_failed_probe_skips_only_that_device(self) -> None:
+        """A device that fails probing must not block registration of the others."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+
+        async def _probe(device: MagicMock) -> object:
+            if device.serial == "emulator-5556":
+                raise RuntimeError("device wedged")
+            return self._info(device.serial)
+
+        with (
+            patch("adbutils.adb", self._fake_adb(["emulator-5554", "emulator-5556"])),
+            patch.object(manager, "_build_device_info", side_effect=_probe),
+        ):
+            await manager._discover_devices()
+
+        assert "emulator-5554" in manager._devices
+        assert "emulator-5556" not in manager._devices
+        assert "emulator-5556" not in manager._adb_devices
+
+    @pytest.mark.asyncio
+    async def test_disconnected_devices_are_evicted(self) -> None:
+        """Devices missing from the listing must be dropped from all caches."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        manager._devices["emulator-9999"] = self._info("emulator-9999")  # type: ignore[assignment]
+        manager._adb_devices["emulator-9999"] = MagicMock()
+        manager._u2_devices["emulator-9999"] = MagicMock()
+
+        with (
+            patch("adbutils.adb", self._fake_adb(["emulator-5554"])),
+            patch.object(manager, "_build_device_info", side_effect=lambda d: self._info(d.serial)),
+        ):
+            await manager._discover_devices()
+
+        assert "emulator-9999" not in manager._devices
+        assert "emulator-9999" not in manager._adb_devices
+        assert "emulator-9999" not in manager._u2_devices
+
+    @pytest.mark.asyncio
+    async def test_root_check_uses_bounded_timeout(self) -> None:
+        """Root detection must bound the shell call so a prompting device cannot hang."""
+        from android_emu_agent.device.manager import DEVICE_ROOT_CHECK_TIMEOUT_S, DeviceManager
+
+        manager = DeviceManager()
+        device = MagicMock()
+        device.shell.return_value = "uid=0(root) gid=0(root)"
+
+        assert await manager._check_root(device) is True
+        assert device.shell.call_args.kwargs["timeout"] == DEVICE_ROOT_CHECK_TIMEOUT_S
+
+    @pytest.mark.asyncio
+    async def test_root_check_survives_timeout(self) -> None:
+        """A timing-out root check reports unrooted instead of propagating."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        device = MagicMock()
+        device.shell.side_effect = TimeoutError("su timed out")
+
+        assert await manager._check_root(device) is False
+
+    @pytest.mark.asyncio
+    async def test_props_use_bounded_timeout(self) -> None:
+        """Property reads must bound the shell call rather than inherit adbutils' 600s."""
+        from android_emu_agent.device.manager import DEVICE_PROP_TIMEOUT_S, DeviceManager
+
+        manager = DeviceManager()
+        device = MagicMock()
+        device.serial = "emulator-5554"
+        device.shell.return_value = "34"
+
+        with patch.object(manager, "_check_root", return_value=False):
+            info = await manager._build_device_info(device)
+
+        assert info.sdk_version == 34
+        assert device.shell.call_args.kwargs["timeout"] == DEVICE_PROP_TIMEOUT_S
+        assert all(
+            c.kwargs.get("timeout") == DEVICE_PROP_TIMEOUT_S for c in device.shell.call_args_list
+        )
