@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -66,7 +67,7 @@ async def test_close_session_waits_for_in_flight_snapshot() -> None:
     assert await manager.get_session(session.session_id) is None
 
 
-def _row(session_id: str, *, last_activity: str, created_at: str | None = None) -> dict[str, str]:
+def _row(session_id: str, *, last_activity: str, created_at: str | None = None) -> dict[str, Any]:
     stamp = created_at or last_activity
     return {
         "session_id": session_id,

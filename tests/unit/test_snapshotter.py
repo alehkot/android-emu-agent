@@ -6,7 +6,7 @@ import json
 from typing import Any
 from unittest.mock import patch
 
-from android_emu_agent.ui.snapshotter import UISnapshotter
+from android_emu_agent.ui.snapshotter import ElementNode, Snapshot, UISnapshotter
 
 
 class TestUISnapshotter:
@@ -315,9 +315,7 @@ class TestSnapshotJsonPayload:
     """Tests for single-pass snapshot serialization."""
 
     @staticmethod
-    def _snapshot(element_count: int) -> object:
-        from android_emu_agent.ui.snapshotter import ElementNode, Snapshot
-
+    def _snapshot(element_count: int) -> Snapshot:
         return Snapshot(
             schema_version=2,
             session_id="s-1",

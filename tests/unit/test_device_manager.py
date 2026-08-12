@@ -9,6 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
+from android_emu_agent.device.manager import DeviceInfo
+
 
 class TestSetRotation:
     """Tests for set_rotation."""
@@ -1278,9 +1280,7 @@ class TestDiscoverDevices:
         return adb
 
     @staticmethod
-    def _info(serial: str) -> object:
-        from android_emu_agent.device.manager import DeviceInfo
-
+    def _info(serial: str) -> DeviceInfo:
         return DeviceInfo(
             serial=serial,
             model="Pixel",
@@ -1373,7 +1373,7 @@ class TestDiscoverDevices:
         from android_emu_agent.device.manager import DeviceManager
 
         manager = DeviceManager()
-        manager._devices["emulator-9999"] = self._info("emulator-9999")  # type: ignore[assignment]
+        manager._devices["emulator-9999"] = self._info("emulator-9999")
         manager._adb_devices["emulator-9999"] = MagicMock()
         manager._u2_devices["emulator-9999"] = MagicMock()
 
@@ -1434,9 +1434,7 @@ class TestConnectionCaching:
     """Tests for cache-first device accessors."""
 
     @staticmethod
-    def _info(serial: str) -> object:
-        from android_emu_agent.device.manager import DeviceInfo
-
+    def _info(serial: str) -> DeviceInfo:
         return DeviceInfo(
             serial=serial,
             model="Pixel",
@@ -1451,7 +1449,7 @@ class TestConnectionCaching:
         from android_emu_agent.device.manager import DeviceManager
 
         manager = DeviceManager()
-        manager._devices["emulator-5554"] = self._info("emulator-5554")  # type: ignore[assignment]
+        manager._devices["emulator-5554"] = self._info("emulator-5554")
         connection = MagicMock()
         manager._u2_devices["emulator-5554"] = connection
 
@@ -1480,7 +1478,7 @@ class TestConnectionCaching:
         from android_emu_agent.device.manager import DeviceManager
 
         manager = DeviceManager()
-        manager._devices["emulator-5554"] = self._info("emulator-5554")  # type: ignore[assignment]
+        manager._devices["emulator-5554"] = self._info("emulator-5554")
         connects = 0
 
         def _connect(_serial: str) -> MagicMock:
@@ -1508,7 +1506,7 @@ class TestConnectionCaching:
         from android_emu_agent.device.manager import DeviceManager
 
         manager = DeviceManager()
-        manager._devices["emulator-5554"] = self._info("emulator-5554")  # type: ignore[assignment]
+        manager._devices["emulator-5554"] = self._info("emulator-5554")
 
         def _connect(_serial: str) -> MagicMock:
             manager._devices.pop("emulator-5554", None)
