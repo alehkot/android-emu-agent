@@ -80,7 +80,10 @@ class TestCheckDevice:
         with (
             pytest.MonkeyPatch.context() as mp,
         ):
-            mp.setattr("asyncio.to_thread", AsyncMock(return_value="ok"))
+            mp.setattr(
+                "android_emu_agent.daemon.health.run_device_io",
+                AsyncMock(return_value="ok"),
+            )
 
             health = await monitor.check_device("emulator-5554", timeout=1.0)
 
@@ -101,7 +104,10 @@ class TestCheckDevice:
         monitor = HealthMonitor(device_manager, session_manager)
 
         with pytest.MonkeyPatch.context() as mp:
-            mp.setattr("asyncio.to_thread", AsyncMock(side_effect=TimeoutError()))
+            mp.setattr(
+                "android_emu_agent.daemon.health.run_device_io",
+                AsyncMock(side_effect=TimeoutError()),
+            )
 
             health = await monitor.check_device("emulator-5554", timeout=1.0)
 
@@ -128,14 +134,14 @@ class TestCheckDevice:
         # Mock to_thread to call function directly for ADB, raise for u2
         call_count = [0]
 
-        async def mock_to_thread(_func, *_args):
+        async def mock_run_device_io(_device, _func, *_args, **_kwargs):
             call_count[0] += 1
             if call_count[0] == 1:  # ADB check
                 return "ok"
             raise Exception("ATX timeout")
 
         with pytest.MonkeyPatch.context() as mp:
-            mp.setattr("asyncio.to_thread", mock_to_thread)
+            mp.setattr("android_emu_agent.daemon.health.run_device_io", mock_run_device_io)
 
             health = await monitor.check_device("emulator-5554", timeout=1.0)
 
@@ -158,7 +164,10 @@ class TestCheckDevice:
         monitor = HealthMonitor(device_manager, session_manager)
 
         with pytest.MonkeyPatch.context() as mp:
-            mp.setattr("asyncio.to_thread", AsyncMock(return_value="ok"))
+            mp.setattr(
+                "android_emu_agent.daemon.health.run_device_io",
+                AsyncMock(return_value="ok"),
+            )
 
             health = await monitor.check_device("emulator-5554", timeout=1.0)
 

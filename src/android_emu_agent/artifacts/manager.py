@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import structlog
 
+from android_emu_agent.device.io import run_device_io
 from android_emu_agent.errors import AgentError, log_follow_unsupported_error
 from android_emu_agent.security import ensure_private_directory, ensure_private_file
 from android_emu_agent.utils.time_parser import parse_datetime
@@ -125,7 +126,7 @@ class ArtifactManager:
         output_path = self.output_dir / filename
 
         # uiautomator2 returns PIL Image
-        image = await asyncio.to_thread(device.screenshot)
+        image = await run_device_io(device, device.screenshot)
         if image is None:
             raise RuntimeError("Failed to capture screenshot from device")
         await asyncio.to_thread(image.save, str(output_path))
@@ -198,7 +199,7 @@ class ArtifactManager:
 
             return raw_output
 
-        logs = await asyncio.to_thread(_pull)
+        logs = await run_device_io(device, _pull)
         output_path.write_text(logs, encoding="utf-8")
         ensure_private_file(output_path)
 

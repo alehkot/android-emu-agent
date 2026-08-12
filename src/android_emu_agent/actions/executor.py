@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -10,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from android_emu_agent.device.io import run_device_io
 from android_emu_agent.errors import AgentError, ambiguous_selector_error
 from android_emu_agent.ui.ref_resolver import LocatorBundle
 
@@ -194,34 +194,34 @@ class ActionExecutor:
     async def _tap(self, device: u2.Device, locator: LocatorBundle) -> None:
         """Tap an element using locator strategies."""
         element = await self._find_element(device, locator)
-        await asyncio.to_thread(element.click)
+        await run_device_io(device, element.click)
 
     async def _long_tap(self, device: u2.Device, locator: LocatorBundle) -> None:
         """Long tap an element."""
         element = await self._find_element(device, locator)
-        await asyncio.to_thread(element.long_click)
+        await run_device_io(device, element.long_click)
 
     async def _set_text(self, device: u2.Device, locator: LocatorBundle, text: str) -> None:
         """Set text on an element."""
         element = await self._find_element(device, locator)
-        await asyncio.to_thread(element.set_text, text)
+        await run_device_io(device, element.set_text, text)
 
     async def _clear(self, device: u2.Device, locator: LocatorBundle) -> None:
         """Clear text from an element."""
         element = await self._find_element(device, locator)
-        await asyncio.to_thread(element.clear_text)
+        await run_device_io(device, element.clear_text)
 
     async def _press_back(self, device: u2.Device) -> None:
         """Press back button."""
-        await asyncio.to_thread(device.press, "back")
+        await run_device_io(device, device.press, "back")
 
     async def _press_home(self, device: u2.Device) -> None:
         """Press home button."""
-        await asyncio.to_thread(device.press, "home")
+        await run_device_io(device, device.press, "home")
 
     async def _press_recents(self, device: u2.Device) -> None:
         """Press recents button."""
-        await asyncio.to_thread(device.press, "recent")
+        await run_device_io(device, device.press, "recent")
 
     async def _find_element(self, device: u2.Device, locator: LocatorBundle) -> Any:
         """Find element using locator bundle strategies."""
@@ -246,7 +246,7 @@ class ActionExecutor:
         ambiguous_match: tuple[str, int] | None = None
         for kwargs in selector_candidates:
             element = device(**kwargs)
-            match_count = int(await asyncio.to_thread(getattr, element, "count"))
+            match_count = int(await run_device_io(device, getattr, element, "count"))
             if match_count == 1:
                 return element
             if match_count > 1:

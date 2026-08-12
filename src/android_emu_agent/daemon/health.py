@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from android_emu_agent.device.io import run_device_io
+
 if TYPE_CHECKING:
     from android_emu_agent.device.manager import DeviceManager
     from android_emu_agent.device.session import SessionManager
@@ -85,9 +87,15 @@ class HealthMonitor:
         if not device:
             return False
         try:
-            result = await asyncio.wait_for(
-                asyncio.to_thread(device.shell, "echo ok"),
+            # The adb-level timeout is what actually releases the worker thread; the
+            # io_timeout only bounds this await. Probing a wedged device every heartbeat
+            # is exactly how the shared executor used to be drained.
+            result = await run_device_io(
+                device,
+                device.shell,
+                "echo ok",
                 timeout=timeout,
+                io_timeout=timeout,
             )
             return "ok" in str(result)
         except Exception:
@@ -100,10 +108,7 @@ class HealthMonitor:
             # No cached u2 connection = nothing to verify, will connect fresh
             return True, None
         try:
-            await asyncio.wait_for(
-                asyncio.to_thread(lambda: device.info),
-                timeout=timeout,
-            )
+            await run_device_io(device, lambda: device.info, io_timeout=timeout)
             return True, None
         except Exception as e:
             return False, f"ATX server unresponsive: {e}"

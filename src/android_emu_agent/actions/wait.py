@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from android_emu_agent.device.io import run_device_io
 from android_emu_agent.errors import AgentError
 
 if TYPE_CHECKING:
@@ -71,10 +72,7 @@ class WaitEngine:
         try:
             wait_fn = getattr(device, "wait_idle", None)
             if callable(wait_fn):
-                result = await asyncio.wait_for(
-                    asyncio.to_thread(wait_fn, timeout=timeout),
-                    timeout=timeout,
-                )
+                result = await run_device_io(device, wait_fn, timeout=timeout, io_timeout=timeout)
                 success = result is not False
             else:
                 success = await self._wait_for_stable_hierarchy(device, deadline)
@@ -108,9 +106,8 @@ class WaitEngine:
             if remaining <= 0:
                 return False
 
-            hierarchy = await asyncio.wait_for(
-                asyncio.to_thread(device.dump_hierarchy, compressed=True),
-                timeout=remaining,
+            hierarchy = await run_device_io(
+                device, device.dump_hierarchy, compressed=True, io_timeout=remaining
             )
             if hierarchy == previous:
                 return True
@@ -143,6 +140,7 @@ class WaitEngine:
     ) -> WaitResult:
         """Wait for a specific activity to appear."""
         return await self._poll_condition(
+            device,
             predicate=lambda: self._check_activity(device, activity_pattern),
             timeout=timeout,
             error_message=f"Activity '{activity_pattern}' not found",
@@ -157,6 +155,7 @@ class WaitEngine:
     ) -> WaitResult:
         """Wait for an element to exist."""
         return await self._poll_condition(
+            device,
             predicate=lambda: self._check_exists(device, selector),
             timeout=timeout,
             error_message=f"Element not found: {selector}",
@@ -171,6 +170,7 @@ class WaitEngine:
     ) -> WaitResult:
         """Wait for an element to disappear."""
         return await self._poll_condition(
+            device,
             predicate=lambda: not self._check_exists(device, selector),
             timeout=timeout,
             error_message=f"Element still present: {selector}",
@@ -185,6 +185,7 @@ class WaitEngine:
     ) -> WaitResult:
         """Wait for text to appear on screen."""
         return await self._poll_condition(
+            device,
             predicate=lambda: self._check_text(device, text),
             timeout=timeout,
             error_message=f"Text not found: '{text}'",
@@ -193,6 +194,7 @@ class WaitEngine:
 
     async def _poll_condition(
         self,
+        device: u2.Device,
         predicate: Callable[[], bool],
         timeout: float | None,
         error_message: str,
@@ -204,7 +206,7 @@ class WaitEngine:
 
         while time.time() - start < timeout:
             try:
-                if await asyncio.to_thread(predicate):
+                if await run_device_io(device, predicate):
                     elapsed = (time.time() - start) * 1000
                     return WaitResult(success=True, elapsed_ms=elapsed)
             except Exception:

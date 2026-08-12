@@ -18,6 +18,11 @@ import structlog
 
 from android_emu_agent.actions.selector import SUPPORTED_SELECTOR_KEYS, SUPPORTED_SELECTOR_SYNTAX
 from android_emu_agent.device.dumpsys import parse_activity_component
+from android_emu_agent.device.io import (
+    run_device_io,
+    shutdown_all_device_io,
+    shutdown_device_io,
+)
 from android_emu_agent.errors import (
     AgentError,
     adb_command_error,
@@ -126,6 +131,7 @@ class DeviceManager:
         self._adb_devices.clear()
         self._u2_devices.clear()
         self._devices.clear()
+        shutdown_all_device_io()
         logger.info("device_manager_stopped")
 
     async def list_devices(self) -> list[dict[str, str]]:
@@ -199,7 +205,7 @@ class DeviceManager:
                     return cached
 
             # Connect off the state lock: u2.connect performs an ATX handshake.
-            connection = await asyncio.to_thread(connect)
+            connection = await run_device_io(serial, connect)
 
             async with self._lock:
                 if serial not in self._devices:
@@ -279,7 +285,7 @@ class DeviceManager:
             device.shell(f"settings put global transition_animation_scale {scale}")
             device.shell(f"settings put global animator_duration_scale {scale}")
 
-        await asyncio.to_thread(_apply)
+        await run_device_io(device, _apply)
 
     async def set_stay_awake(self, serial: str, enabled: bool) -> None:
         """Keep device awake while plugged in."""
@@ -292,7 +298,7 @@ class DeviceManager:
         def _apply() -> None:
             device.shell(f"settings put global stay_on_while_plugged_in {value}")
 
-        await asyncio.to_thread(_apply)
+        await run_device_io(device, _apply)
 
     async def app_reset(self, serial: str, package: str) -> None:
         """Clear app data for a package."""
@@ -303,7 +309,7 @@ class DeviceManager:
         def _apply() -> None:
             device.shell(f"pm clear {shlex.quote(package)}")
 
-        await asyncio.to_thread(_apply)
+        await run_device_io(device, _apply)
 
     async def app_install(
         self,
@@ -378,7 +384,7 @@ class DeviceManager:
                 device.shell("settings put system accelerometer_rotation 0")
                 device.shell(f"settings put system user_rotation {orientation.value}")
 
-        await asyncio.to_thread(_apply)
+        await run_device_io(device, _apply)
 
     async def set_wifi(self, serial: str, enabled: bool) -> None:
         """Enable or disable WiFi.
@@ -396,7 +402,7 @@ class DeviceManager:
         def _apply() -> None:
             device.shell(f"svc wifi {state}")
 
-        await asyncio.to_thread(_apply)
+        await run_device_io(device, _apply)
 
     async def set_mobile(self, serial: str, enabled: bool) -> None:
         """Enable or disable mobile data.
@@ -414,7 +420,7 @@ class DeviceManager:
         def _apply() -> None:
             device.shell(f"svc data {state}")
 
-        await asyncio.to_thread(_apply)
+        await run_device_io(device, _apply)
 
     async def set_doze(self, serial: str, enabled: bool) -> None:
         """Force device into or out of doze mode.
@@ -433,7 +439,7 @@ class DeviceManager:
             else:
                 device.shell("dumpsys deviceidle unforce")
 
-        await asyncio.to_thread(_apply)
+        await run_device_io(device, _apply)
 
     async def app_launch(
         self,
@@ -493,7 +499,7 @@ class DeviceManager:
             device.shell(" ".join(shlex.quote(part) for part in command_parts))
             return target_activity
 
-        return await asyncio.to_thread(_launch)
+        return await run_device_io(device, _launch)
 
     async def app_force_stop(self, serial: str, package: str) -> None:
         """Force stop an app.
@@ -509,7 +515,7 @@ class DeviceManager:
         def _stop() -> None:
             device.shell(f"am force-stop {shlex.quote(package)}")
 
-        await asyncio.to_thread(_stop)
+        await run_device_io(device, _stop)
 
     async def app_deeplink(self, serial: str, uri: str, *, wait_for_debugger: bool = False) -> None:
         """Open a deeplink URI.
@@ -556,7 +562,7 @@ class DeviceManager:
             command = " ".join(shlex.quote(part) for part in command_parts)
             device.shell(command)
 
-        await asyncio.to_thread(_start)
+        await run_device_io(device, _start)
 
     async def app_current(self, serial: str) -> dict[str, str | None]:
         """Get the current foreground app/activity."""
@@ -605,7 +611,7 @@ class DeviceManager:
                 "line": raw or None,
             }
 
-        return await asyncio.to_thread(_current)
+        return await run_device_io(device, _current)
 
     async def app_task_stack(self, serial: str) -> str:
         """Return current task stack dump."""
@@ -616,7 +622,7 @@ class DeviceManager:
         def _stack() -> str:
             return str(device.shell("dumpsys activity activities"))
 
-        return await asyncio.to_thread(_stack)
+        return await run_device_io(device, _stack)
 
     async def app_resolve_intent(
         self,
@@ -654,7 +660,7 @@ class DeviceManager:
 
             return IntentResolution(output=output, component=resolved_component)
 
-        return await asyncio.to_thread(_resolve)
+        return await run_device_io(device, _resolve)
 
     async def list_packages(self, serial: str, scope: str = "all") -> list[str]:
         """List installed packages.
@@ -679,7 +685,7 @@ class DeviceManager:
                 args.append("-3")
             return str(device.shell(" ".join(args)))
 
-        output = await asyncio.to_thread(_list)
+        output = await run_device_io(device, _list)
         packages: list[str] = []
         for line in output.splitlines():
             line = line.strip()
@@ -878,7 +884,7 @@ class DeviceManager:
                 "is_emulator": _getprop("ro.kernel.qemu") or "0",
             }
 
-        props = await asyncio.to_thread(_props)
+        props = await run_device_io(device, _props)
 
         serial = device.serial
         if not serial:
@@ -906,7 +912,7 @@ class DeviceManager:
                 # Devices that prompt for root (or are wedged) hang here without a timeout.
                 return ""
 
-        output = await asyncio.to_thread(_run)
+        output = await run_device_io(device, _run)
         return "uid=0" in output
 
     async def _heartbeat_loop(self) -> None:
@@ -930,6 +936,9 @@ class DeviceManager:
 
             if evicted_adb or evicted_u2:
                 logger.info("device_evicted", serial=serial, adb=evicted_adb, u2=evicted_u2)
+        # Drop the device's I/O pool too: queued work is cancelled and any thread still
+        # wedged inside a driver call is no longer holding a slot we track.
+        shutdown_device_io(serial)
 
     async def emulator_start(
         self,

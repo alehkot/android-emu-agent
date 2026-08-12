@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, TypeVar, cast
 import structlog
 
 from android_emu_agent.device.dumpsys import parse_activity_component
+from android_emu_agent.device.io import run_device_io
 
 if TYPE_CHECKING:
     from adbutils import AdbDevice
@@ -79,7 +80,7 @@ class ContextResolver:
                 ),
             )
 
-        output = await asyncio.to_thread(_run)
+        output = await run_device_io(device, _run)
         if not output.strip():
             logger.warning(
                 "focused_activity_empty",
@@ -104,7 +105,7 @@ class ContextResolver:
             orientation = device.shell("dumpsys input | grep -E 'SurfaceOrientation'")
             return f"{focus}\n{orientation}"
 
-        output = await asyncio.to_thread(_run)
+        output = await run_device_io(device, _run)
         if not output.strip():
             logger.warning(
                 "window_info_empty",
@@ -139,7 +140,7 @@ class ContextResolver:
         def _run() -> str:
             return cast(str, device.shell("dumpsys input_method | grep -E 'mInputShown|mCurId'"))
 
-        output = await asyncio.to_thread(_run)
+        output = await run_device_io(device, _run)
         result: dict[str, str | bool] = {"visible": False}
 
         if "mInputShown=true" in output:

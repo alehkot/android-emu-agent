@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import time
@@ -118,6 +117,7 @@ from android_emu_agent.daemon.models import (
     WaitTextRequest,
     WifiRequest,
 )
+from android_emu_agent.device.io import run_device_io
 from android_emu_agent.device.manager import Orientation
 from android_emu_agent.errors import (
     AgentError,
@@ -331,7 +331,7 @@ async def _resolve_swipe_bounds(
 ) -> tuple[list[int], str | None] | JSONResponse:
     """Resolve the swipe target bounds from screen, ref, or selector."""
     if not container:
-        info = await asyncio.to_thread(lambda: device.info)
+        info = await run_device_io(device, lambda: device.info)
         bounds = _screen_bounds_from_info(info)
         if not _bounds_are_usable(bounds):
             return _error_response(
@@ -378,7 +378,7 @@ async def _resolve_swipe_bounds(
         else:
             kwargs = option.to_u2_kwargs()
             element = device(**kwargs)
-            match_count = await _selector_match_count(element)
+            match_count = await _selector_match_count(device, element)
             if match_count == 0:
                 continue
             if match_count > 1:
@@ -386,7 +386,7 @@ async def _resolve_swipe_bounds(
                     ambiguous_selector_error(_selector_label(kwargs), match_count),
                     status_code=409,
                 )
-            element_info = await asyncio.to_thread(getattr, element, "info")
+            element_info = await run_device_io(device, getattr, element, "info")
             bounds = _bounds_from_info(element_info)
 
         if not _bounds_are_usable(bounds):
@@ -1422,7 +1422,8 @@ async def ui_snapshot(req: SnapshotRequest) -> EndpointResponse:
     try:
         # Raw hierarchy capture does not issue refs, so it must not consume a generation.
         if req.mode == "raw":
-            xml = await asyncio.to_thread(
+            xml = await run_device_io(
+                device,
                 device.dump_hierarchy,
                 compressed=use_compressed,
                 pretty=False,
@@ -1432,7 +1433,8 @@ async def ui_snapshot(req: SnapshotRequest) -> EndpointResponse:
 
         async with core.session_manager.snapshot_lock(req.session_id):
             generation = session.generation + 1
-            xml = await asyncio.to_thread(
+            xml = await run_device_io(
+                device,
                 device.dump_hierarchy,
                 compressed=use_compressed,
                 pretty=False,
@@ -1605,7 +1607,7 @@ async def action_tap(req: ActionRequest) -> EndpointResponse:
     elif isinstance(selector, CoordsSelector):
         # Direct coordinate tap without element lookup
         try:
-            await asyncio.to_thread(device.click, selector.x, selector.y)
+            await run_device_io(device, device.click, selector.x, selector.y)
         except Exception as exc:
             return _action_failure_response(ActionType.TAP, req.ref, exc)
         return {"status": "done", "selector": f"coords:{selector.x},{selector.y}"}
@@ -1826,16 +1828,16 @@ async def _selector_action_option(
     if isinstance(selector, CoordsSelector):
         matched = f"coords:{selector.x},{selector.y}"
         if action == ActionType.TAP:
-            await asyncio.to_thread(device.click, selector.x, selector.y)
+            await run_device_io(device, device.click, selector.x, selector.y)
         elif action == ActionType.LONG_TAP:
-            await asyncio.to_thread(device.long_click, selector.x, selector.y)
+            await run_device_io(device, device.long_click, selector.x, selector.y)
         elif action == ActionType.SET_TEXT:
-            await asyncio.to_thread(device.click, selector.x, selector.y)
-            await asyncio.to_thread(device.send_keys, text)
+            await run_device_io(device, device.click, selector.x, selector.y)
+            await run_device_io(device, device.send_keys, text)
         elif action == ActionType.CLEAR:
-            await asyncio.to_thread(device.click, selector.x, selector.y)
-            await asyncio.to_thread(device.send_action, "selectAll")
-            await asyncio.to_thread(device.send_keys, "")
+            await run_device_io(device, device.click, selector.x, selector.y)
+            await run_device_io(device, device.send_action, "selectAll")
+            await run_device_io(device, device.send_keys, "")
         else:
             return None
         return matched
@@ -1843,28 +1845,28 @@ async def _selector_action_option(
         return None
     kwargs = selector.to_u2_kwargs()
     element = device(**kwargs)
-    match_count = await _selector_match_count(element)
+    match_count = await _selector_match_count(device, element)
     if match_count == 0:
         return None
     label = _selector_label(kwargs)
     if match_count > 1:
         raise ambiguous_selector_error(label, match_count)
     if action == ActionType.TAP:
-        await asyncio.to_thread(element.click)
+        await run_device_io(device, element.click)
     elif action == ActionType.LONG_TAP:
-        await asyncio.to_thread(element.long_click)
+        await run_device_io(device, element.long_click)
     elif action == ActionType.SET_TEXT:
-        await asyncio.to_thread(element.set_text, text)
+        await run_device_io(device, element.set_text, text)
     elif action == ActionType.CLEAR:
-        await asyncio.to_thread(element.clear_text)
+        await run_device_io(device, element.clear_text)
     else:
         return None
     return label
 
 
-async def _selector_match_count(element: Any) -> int:
+async def _selector_match_count(device: Any, element: Any) -> int:
     """Return the number of uiautomator2 nodes matched by one selector."""
-    return int(await asyncio.to_thread(lambda: element.count))
+    return int(await run_device_io(device, lambda: element.count))
 
 
 def _selector_label(kwargs: dict[str, Any]) -> str:
@@ -4274,8 +4276,8 @@ async def action_swipe(req: SwipeRequest) -> EndpointResponse:
 
     start, end = core.action_executor._calculate_swipe_coords(bounds, direction, req.distance)
 
-    await asyncio.to_thread(
-        device.swipe, start[0], start[1], end[0], end[1], req.duration_ms / 1000
+    await run_device_io(
+        device, device.swipe, start[0], start[1], end[0], end[1], req.duration_ms / 1000
     )
 
     payload: dict[str, Any] = {"status": "done", "direction": req.direction, "bounds": bounds}
