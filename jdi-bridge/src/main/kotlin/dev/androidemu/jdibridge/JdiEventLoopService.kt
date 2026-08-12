@@ -116,7 +116,6 @@ internal class JdiEventLoopService(
 
     fun handleDisconnect(reason: String) {
         log("vm disconnected: $reason")
-        state.disconnected = true
         val normalizedReason = normalizeDisconnectReason(reason)
         state.disconnectReason = normalizedReason
         val pending =
@@ -138,13 +137,23 @@ internal class JdiEventLoopService(
             },
         )
 
-        emitEvent(
-            "vm_disconnected",
-            buildJsonObject {
-                put("reason", normalizedReason)
-                put("detail", reason)
-            },
-        )
+        try {
+            emitEvent(
+                "vm_disconnected",
+                buildJsonObject {
+                    put("reason", normalizedReason)
+                    put("detail", reason)
+                },
+            )
+        } finally {
+            // Flip the observable flag only once the reason has been published. Clients
+            // detect disconnection by polling isAttached, so setting it first leaves a
+            // window in which a session reads as detached while the explanation for it
+            // has not been emitted yet -- and a client that stops polling at that point
+            // never learns why. The write is volatile, so observing `disconnected` also
+            // guarantees visibility of the emitted event.
+            state.disconnected = true
+        }
     }
 
     private fun normalizeDisconnectReason(reason: String): String {

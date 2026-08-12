@@ -25,12 +25,19 @@ class JdiSessionTest {
     private var targetProcess: Process? = null
     private var targetPort: Int = 0
     private val notifications = mutableListOf<JsonElement>()
+    // Whether the session still reported itself attached at the moment each event was
+    // published. Used to pin the disconnect ordering guarantee.
+    private val attachedDuringEmit = mutableListOf<Boolean>()
     private lateinit var session: JdiSession
 
     @BeforeEach
     fun setUp() {
         notifications.clear()
-        session = JdiSession { notifications.add(it) }
+        attachedDuringEmit.clear()
+        session = JdiSession {
+            attachedDuringEmit.add(session.isAttached)
+            notifications.add(it)
+        }
 
         val javaHome = System.getProperty("java.home")
         val javaBin = "$javaHome/bin/java"
@@ -265,5 +272,29 @@ class JdiSessionTest {
         assertEquals("event", notif["method"]?.jsonPrimitive?.content)
         val params = notif["params"]?.jsonObject
         assertEquals("vm_disconnected", params?.get("type")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `vm disconnect publishes the reason before reporting detached`() {
+        session.attach("localhost", targetPort)
+        assertTrue(session.isAttached)
+
+        targetProcess?.destroyForcibly()
+        targetProcess?.waitFor(5, TimeUnit.SECONDS)
+
+        val deadline = System.currentTimeMillis() + 10_000
+        while (session.isAttached && System.currentTimeMillis() < deadline) {
+            Thread.sleep(50)
+        }
+        assertFalse(session.isAttached, "Session should be disconnected after target kill")
+
+        // The ordering guarantee: a client polling isAttached must never observe a
+        // detached session before the reason has been published, or it can stop polling
+        // and never learn why the VM went away.
+        assertTrue(attachedDuringEmit.isNotEmpty(), "Expected a vm_disconnected notification")
+        assertTrue(
+            attachedDuringEmit.first(),
+            "Session reported detached before the disconnect reason was emitted",
+        )
     }
 }
