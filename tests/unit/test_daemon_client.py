@@ -19,13 +19,16 @@ def _client_with_transport(transport_client: Mock) -> tuple[DaemonClient, Mock, 
     controller = Mock()
     wait_for_health = Mock()
     client.controller = controller
-    client._ensure_ready = Mock()
     client._wait_for_health = wait_for_health
     return client, controller, wait_for_health
 
 
 def _read_error() -> httpx.ReadError:
     return httpx.ReadError("connection dropped", request=httpx.Request("POST", "http://daemon"))
+
+
+def _connect_error() -> httpx.ConnectError:
+    return httpx.ConnectError("daemon not running", request=httpx.Request("POST", "http://daemon"))
 
 
 @pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE"])
@@ -56,6 +59,37 @@ def test_safe_request_can_retry_after_transport_error() -> None:
     assert transport_client.request.call_count == 2
     controller.start.assert_called_once_with()
     wait_for_health.assert_called_once_with()
+
+
+@pytest.mark.parametrize("method", ["GET", "POST", "PUT", "PATCH", "DELETE"])
+def test_connect_failure_starts_daemon_and_replays_any_method(method: str) -> None:
+    """A failed connect proves nothing was delivered, so even a mutation may be replayed."""
+    transport_client = Mock()
+    expected = httpx.Response(200, json={"status": "ok"})
+    transport_client.request.side_effect = [_connect_error(), expected]
+    client, controller, wait_for_health = _client_with_transport(transport_client)
+
+    response = client.request(method, "/actions/tap", json_body={"session_id": "s-1"})
+
+    assert response is expected
+    assert transport_client.request.call_count == 2
+    controller.start.assert_called_once_with()
+    wait_for_health.assert_called_once_with()
+
+
+def test_request_does_not_preflight_health() -> None:
+    """The happy path must cost exactly one round trip."""
+    transport_client = Mock()
+    expected = httpx.Response(200, json={"status": "done"})
+    transport_client.request.return_value = expected
+    client, controller, _wait_for_health = _client_with_transport(transport_client)
+
+    response = client.request("POST", "/actions/tap", json_body={"session_id": "s-1"})
+
+    assert response is expected
+    transport_client.request.assert_called_once()
+    transport_client.get.assert_not_called()
+    controller.start.assert_not_called()
 
 
 def _controller(socket_path: Path) -> DaemonController:

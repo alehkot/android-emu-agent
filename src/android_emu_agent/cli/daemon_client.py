@@ -188,27 +188,27 @@ class DaemonClient:
     def request(
         self, method: str, path: str, json_body: dict[str, Any] | None = None
     ) -> httpx.Response:
-        if self.auto_start:
-            self._ensure_ready()
-
+        # Issue the request directly rather than preflighting /health: the daemon is up
+        # for all but the first command, so a preflight doubles the round trips on every
+        # invocation to detect a case the failure path already handles.
         try:
             return self._client.request(method, path, json=json_body)
-        except httpx.TransportError:
-            if not self.auto_start or method.upper() not in RETRYABLE_METHODS:
+        except httpx.TransportError as exc:
+            if not self.auto_start or not self._is_safe_to_replay(method, exc):
                 raise
             self.controller.start()
             self._wait_for_health()
             return self._client.request(method, path, json=json_body)
 
-    def _ensure_ready(self) -> None:
-        try:
-            resp = self._client.get("/health")
-            if resp.status_code == 200:
-                return
-        except httpx.TransportError:
-            pass
-        self.controller.start()
-        self._wait_for_health()
+    @staticmethod
+    def _is_safe_to_replay(method: str, exc: httpx.TransportError) -> bool:
+        """Return whether a failed request may be retried after starting the daemon."""
+        # A failed connect proves the request never reached the daemon, so replaying it
+        # is safe even for a mutation. Any other transport error may have delivered the
+        # request already, so only idempotent methods may be replayed.
+        if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)):
+            return True
+        return method.upper() in RETRYABLE_METHODS
 
     def _wait_for_health(self) -> None:
         deadline = time.time() + 5
