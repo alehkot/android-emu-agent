@@ -143,14 +143,14 @@ class UISnapshotter:
         """Parse XML hierarchy and extract elements."""
         import time
 
-        start = time.time()
+        start = time.monotonic()
         tree = etree.fromstring(xml_content)
         elements = self._extract_elements(
             tree,
             generation=generation,
             interactive_only=interactive_only,
         )
-        elapsed = (time.time() - start) * 1000
+        elapsed = (time.monotonic() - start) * 1000
 
         logger.info(
             "hierarchy_parsed",

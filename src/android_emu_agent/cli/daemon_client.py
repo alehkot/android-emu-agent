@@ -123,8 +123,8 @@ class DaemonController:
 
     def _wait_for_secure_socket(self, process: subprocess.Popen[Any]) -> None:
         """Wait for Uvicorn to finish binding, then secure its socket."""
-        deadline = time.time() + 5
-        while time.time() < deadline:
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
             if self._socket_healthy():
                 return
             if process.poll() is not None:
@@ -211,8 +211,8 @@ class DaemonClient:
         return method.upper() in RETRYABLE_METHODS
 
     def _wait_for_health(self) -> None:
-        deadline = time.time() + 5
-        while time.time() < deadline:
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
             try:
                 resp = self._client.get("/health")
                 if resp.status_code == 200:

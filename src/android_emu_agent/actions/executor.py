@@ -138,7 +138,7 @@ class ActionExecutor:
         **kwargs: Any,
     ) -> ActionResult:
         """Execute an action on the device."""
-        start = time.time()
+        start = time.monotonic()
 
         try:
             if action == ActionType.BACK:
@@ -170,15 +170,15 @@ class ActionExecutor:
                     remediation="Use a supported action type",
                 )
 
-            elapsed = (time.time() - start) * 1000
+            elapsed = (time.monotonic() - start) * 1000
             logger.info("action_executed", action=action.value, elapsed_ms=round(elapsed, 2))
             return ActionResult(success=True, elapsed_ms=elapsed)
 
         except AgentError as e:
-            elapsed = (time.time() - start) * 1000
+            elapsed = (time.monotonic() - start) * 1000
             return ActionResult(success=False, elapsed_ms=elapsed, error=e)
         except Exception as e:
-            elapsed = (time.time() - start) * 1000
+            elapsed = (time.monotonic() - start) * 1000
             logger.exception("action_failed", action=action.value)
             return ActionResult(
                 success=False,

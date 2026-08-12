@@ -202,18 +202,18 @@ class WaitEngine:
     ) -> WaitResult:
         """Poll a condition until timeout."""
         timeout = timeout or self.default_timeout
-        start = time.time()
+        start = time.monotonic()
 
-        while time.time() - start < timeout:
+        while time.monotonic() - start < timeout:
             try:
                 if await run_device_io(device, predicate):
-                    elapsed = (time.time() - start) * 1000
+                    elapsed = (time.monotonic() - start) * 1000
                     return WaitResult(success=True, elapsed_ms=elapsed)
             except Exception:
                 pass  # Ignore errors during polling
             await asyncio.sleep(self.poll_interval)
 
-        elapsed = (time.time() - start) * 1000
+        elapsed = (time.monotonic() - start) * 1000
         return WaitResult(
             success=False,
             elapsed_ms=elapsed,
