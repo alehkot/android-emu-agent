@@ -1574,80 +1574,7 @@ async def action_tap(req: ActionRequest) -> EndpointResponse:
     - class:class_name : Find by UI class name
     - coords:x,y : Tap at coordinates directly
     """
-    core: DaemonCore = app.state.core
-    session = await core.session_manager.get_session(req.session_id)
-    if not session:
-        return _error_response(session_expired_error(req.session_id), status_code=404)
-
-    device = await core.device_manager.get_u2_device(session.device_serial)
-    if not device:
-        return _error_response(device_offline_error(session.device_serial), status_code=404)
-
-    # Parse the selector
-    try:
-        selector = parse_selector(req.ref)
-    except AgentError as e:
-        return _error_response(e, status_code=400)
-
-    # Handle different selector types
-    if isinstance(selector, RefSelector):
-        result = await _execute_ref_action(
-            core,
-            device,
-            req.session_id,
-            session.generation,
-            selector.ref,
-            ActionType.TAP,
-        )
-        if result is None:
-            return _error_response(not_found_error(selector.ref), status_code=404)
-        return result
-
-    elif isinstance(selector, CoordsSelector):
-        # Direct coordinate tap without element lookup
-        try:
-            await run_device_io(device, device.click, selector.x, selector.y)
-        except Exception as exc:
-            return _action_failure_response(ActionType.TAP, req.ref, exc)
-        return {"status": "done", "selector": f"coords:{selector.x},{selector.y}"}
-
-    elif isinstance(selector, FallbackSelector):
-        try:
-            for option in selector.options:
-                if isinstance(option, RefSelector):
-                    result = await _execute_ref_action(
-                        core,
-                        device,
-                        req.session_id,
-                        session.generation,
-                        option.ref,
-                        ActionType.TAP,
-                    )
-                    if result is None:
-                        continue
-                    if isinstance(result, dict) and result.get("status") == "done":
-                        result["selector"] = req.ref
-                        result["matched_selector"] = option.ref
-                    return result
-                matched = await _tap_selector_option(device, option)
-                if matched:
-                    return {"status": "done", "selector": req.ref, "matched_selector": matched}
-        except AgentError as exc:
-            return _error_response(exc, status_code=409)
-        except Exception as exc:
-            return _action_failure_response(ActionType.TAP, req.ref, exc)
-        return _error_response(not_found_error(req.ref), status_code=404)
-
-    else:
-        try:
-            matched = await _tap_selector_option(device, selector)
-        except AgentError as exc:
-            return _error_response(exc, status_code=409)
-        except Exception as exc:
-            return _action_failure_response(ActionType.TAP, req.ref, exc)
-        if not matched:
-            return _error_response(not_found_error(req.ref), status_code=404)
-        return {"status": "done", "selector": req.ref}
+    return await _action_with_locator(req, ActionType.TAP)
 
 
 @app.post("/actions/long_tap", response_model=None)
@@ -1809,11 +1736,6 @@ def _action_failure_response(
         remediation="Verify the device is online, take a fresh snapshot, and retry the action.",
     )
     return _error_response(error, status_code=500)
-
-
-async def _tap_selector_option(device: Any, selector: Selector) -> str | None:
-    """Try tapping one parsed non-ref selector option."""
-    return await _selector_action_option(device, selector, ActionType.TAP)
 
 
 async def _selector_action_option(

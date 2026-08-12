@@ -516,3 +516,24 @@ def test_swipe_rejects_coordinate_container() -> None:
     assert data["status"] == "error"
     assert data["error"]["code"] == "ERR_INVALID_CONTAINER"
     device.swipe.assert_not_called()
+
+
+def test_tap_and_long_tap_agree_on_coordinate_response_shape() -> None:
+    """Tap must echo the caller's selector like every other action does."""
+    device = MagicMock()
+
+    with _client_with_core(device) as (client, _ref_resolver):
+        tap = client.post(
+            "/actions/tap",
+            json={"session_id": "s-abc123", "ref": "coords:120,340"},
+        )
+        long_tap = client.post(
+            "/actions/long_tap",
+            json={"session_id": "s-abc123", "ref": "coords:120,340"},
+        )
+
+    assert tap.status_code == 200
+    assert long_tap.status_code == 200
+    assert tap.json()["selector"] == long_tap.json()["selector"] == "coords:120,340"
+    device.click.assert_called_once_with(120, 340)
+    device.long_click.assert_called_once_with(120, 340)
