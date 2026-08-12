@@ -8,10 +8,11 @@ import os
 import shlex
 import shutil
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import structlog
 
@@ -54,6 +55,8 @@ if TYPE_CHECKING:
     from adbutils import AdbDevice
 
 logger = structlog.get_logger()
+
+ConnectionT = TypeVar("ConnectionT")
 
 EMULATOR_RESTART_TIMEOUT_S = 120.0
 EMULATOR_BOOT_POLL_INTERVAL_S = 1.0
@@ -98,6 +101,7 @@ class DeviceManager:
         self._adb_devices: dict[str, AdbDevice] = {}
         self._u2_devices: dict[str, u2.Device] = {}
         self._lock = asyncio.Lock()
+        self._connect_locks: dict[str, asyncio.Lock] = {}
         self._heartbeat_task: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
@@ -143,37 +147,60 @@ class DeviceManager:
 
     async def get_adb_device(self, serial: str) -> AdbDevice | None:
         """Get or create an adbutils device connection."""
-        await self._discover_devices()
-        if serial not in self._devices:
-            return None
-        if serial in self._adb_devices:
-            return self._adb_devices[serial]
-
-        from adbutils import adb
 
         def _connect() -> AdbDevice:
+            from adbutils import adb
+
             return adb.device(serial)
 
-        device = await asyncio.to_thread(_connect)
-        self._adb_devices[serial] = device
-        return device
+        return await self._get_connection(serial, self._adb_devices, _connect)
 
     async def get_u2_device(self, serial: str) -> u2.Device | None:
         """Get or create a uiautomator2 device connection."""
-        await self._discover_devices()
-        if serial not in self._devices:
-            return None
-        if serial in self._u2_devices:
-            return self._u2_devices[serial]
-
-        import uiautomator2 as u2
 
         def _connect() -> u2.Device:
+            import uiautomator2 as u2
+
             return u2.connect(serial)
 
-        device = await asyncio.to_thread(_connect)
-        self._u2_devices[serial] = device
-        return device
+        return await self._get_connection(serial, self._u2_devices, _connect)
+
+    async def _get_connection(
+        self,
+        serial: str,
+        cache: dict[str, ConnectionT],
+        connect: Callable[[], ConnectionT],
+    ) -> ConnectionT | None:
+        """Return a cached device connection, discovering and connecting only on a miss."""
+        async with self._lock:
+            if serial in self._devices:
+                cached = cache.get(serial)
+                if cached is not None:
+                    return cached
+
+        # Either the serial is unknown or it has no connection yet. Discovery is the only
+        # way to learn about a newly attached device, so it runs on a miss -- but never on
+        # the hot path, where a stale entry is corrected by the discovery and health
+        # heartbeats instead.
+        await self._discover_devices()
+
+        # Serialize setup per serial so concurrent misses do not each open a connection.
+        async with self._connect_locks.setdefault(serial, asyncio.Lock()):
+            async with self._lock:
+                if serial not in self._devices:
+                    return None
+                cached = cache.get(serial)
+                if cached is not None:
+                    return cached
+
+            # Connect off the state lock: u2.connect performs an ATX handshake.
+            connection = await asyncio.to_thread(connect)
+
+            async with self._lock:
+                if serial not in self._devices:
+                    # Device dropped out while we were connecting.
+                    return None
+                return cache.setdefault(serial, connection)
 
     async def describe_device(self, serial: str) -> dict[str, Any]:
         """Return device info suitable for snapshot metadata."""

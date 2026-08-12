@@ -1425,3 +1425,100 @@ class TestDiscoverDevices:
         assert all(
             c.kwargs.get("timeout") == DEVICE_PROP_TIMEOUT_S for c in device.shell.call_args_list
         )
+
+
+class TestConnectionCaching:
+    """Tests for cache-first device accessors."""
+
+    @staticmethod
+    def _info(serial: str) -> object:
+        from android_emu_agent.device.manager import DeviceInfo
+
+        return DeviceInfo(
+            serial=serial,
+            model="Pixel",
+            sdk_version=34,
+            is_rooted=False,
+            is_emulator=True,
+        )
+
+    @pytest.mark.asyncio
+    async def test_cached_device_skips_discovery(self) -> None:
+        """A known, connected device must not trigger an ADB discovery round trip."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        manager._devices["emulator-5554"] = self._info("emulator-5554")  # type: ignore[assignment]
+        connection = MagicMock()
+        manager._u2_devices["emulator-5554"] = connection
+
+        with patch.object(manager, "_discover_devices", new=AsyncMock()) as discover:
+            result = await manager.get_u2_device("emulator-5554")
+
+        assert result is connection
+        discover.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_unknown_serial_triggers_discovery(self) -> None:
+        """An unknown serial must still refresh before reporting the device missing."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+
+        with patch.object(manager, "_discover_devices", new=AsyncMock()) as discover:
+            result = await manager.get_u2_device("emulator-9999")
+
+        assert result is None
+        discover.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_concurrent_misses_connect_once(self) -> None:
+        """Concurrent cache misses must share a single connection attempt."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        manager._devices["emulator-5554"] = self._info("emulator-5554")  # type: ignore[assignment]
+        connects = 0
+
+        def _connect(_serial: str) -> MagicMock:
+            nonlocal connects
+            connects += 1
+            return MagicMock()
+
+        fake_u2 = MagicMock()
+        fake_u2.connect.side_effect = _connect
+
+        with (
+            patch.dict("sys.modules", {"uiautomator2": fake_u2}),
+            patch.object(manager, "_discover_devices", new=AsyncMock()),
+        ):
+            results = await asyncio.gather(
+                *(manager.get_u2_device("emulator-5554") for _ in range(5))
+            )
+
+        assert connects == 1
+        assert all(result is results[0] for result in results)
+
+    @pytest.mark.asyncio
+    async def test_device_lost_during_connect_returns_none(self) -> None:
+        """A device evicted while connecting must not be cached."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        manager._devices["emulator-5554"] = self._info("emulator-5554")  # type: ignore[assignment]
+
+        def _connect(_serial: str) -> MagicMock:
+            manager._devices.pop("emulator-5554", None)
+            return MagicMock()
+
+        fake_u2 = MagicMock()
+        fake_u2.connect.side_effect = _connect
+
+        with (
+            patch.dict("sys.modules", {"uiautomator2": fake_u2}),
+            patch.object(manager, "_discover_devices", new=AsyncMock()),
+        ):
+            result = await manager.get_u2_device("emulator-5554")
+
+        assert result is None
+        assert "emulator-5554" not in manager._u2_devices
