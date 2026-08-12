@@ -130,6 +130,7 @@ from android_emu_agent.errors import (
 )
 from android_emu_agent.files.manager import FileMatch
 from android_emu_agent.reliability.manager import DEFAULT_EVENTS_PATTERN, TRIM_LEVELS, require_root
+from android_emu_agent.security import daemon_socket_path, secure_socket
 from android_emu_agent.tasks import TaskCall
 from android_emu_agent.ui.ref_resolver import LocatorBundle
 from android_emu_agent.utils.time_parser import parse_datetime
@@ -141,12 +142,28 @@ ResponsePayload = dict[str, Any]
 EndpointResponse = Response | ResponsePayload
 
 
+def _secure_own_socket() -> None:
+    """Restrict the daemon's Unix socket to its owner.
+
+    The CLI spawns uvicorn under umask 077 and re-tightens the socket when it
+    connects, but a daemon started directly (scripts/dev.sh daemon, or uvicorn by
+    hand) would otherwise leave the socket at whatever the ambient umask allows --
+    world-connectable under the common 022.
+    """
+    socket_path = daemon_socket_path()
+    try:
+        secure_socket(socket_path)
+    except (OSError, RuntimeError) as exc:
+        logger.warning("daemon_socket_not_secured", path=str(socket_path), error=str(exc))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Manage daemon lifecycle."""
     logger.info("daemon_starting")
     app.state.core = DaemonCore()
     await app.state.core.start()
+    _secure_own_socket()
     yield
     logger.info("daemon_stopping")
     await app.state.core.stop()

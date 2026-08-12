@@ -14,6 +14,7 @@ from typing import Any
 import httpx
 
 from android_emu_agent.security import (
+    daemon_socket_path,
     migrate_private_tree,
     open_private_append,
     secure_socket,
@@ -21,7 +22,7 @@ from android_emu_agent.security import (
 )
 
 STATE_DIR = Path.home() / ".android-emu-agent"
-SOCKET_PATH = Path("/tmp/android-emu-agent.sock")
+SOCKET_PATH = daemon_socket_path()
 PID_FILE = STATE_DIR / "daemon.pid"
 LOG_FILE = STATE_DIR / "daemon.log"
 BASE_URL = "http://android-emu-agent"

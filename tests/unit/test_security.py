@@ -125,3 +125,76 @@ async def test_artifact_managers_create_owner_only_storage(tmp_path: Path) -> No
     assert _mode(artifact_dir / "files") == 0o700
     assert _mode(artifact_dir / "visual") == 0o700
     assert _mode(snapshot_path) == 0o600
+
+
+class TestDaemonSocketPath:
+    """Tests for resolving the socket path the daemon serves."""
+
+    def test_defaults_to_shared_path(self, monkeypatch) -> None:
+        """Without an override the CLI and daemon must agree on one path."""
+        from android_emu_agent.security import (
+            DEFAULT_SOCKET_PATH,
+            SOCKET_PATH_ENV,
+            daemon_socket_path,
+        )
+
+        monkeypatch.delenv(SOCKET_PATH_ENV, raising=False)
+        assert daemon_socket_path() == DEFAULT_SOCKET_PATH
+
+    def test_environment_override_is_honoured(self, monkeypatch, tmp_path) -> None:
+        """An explicit socket path must win so the daemon secures the right file."""
+        from android_emu_agent.security import SOCKET_PATH_ENV, daemon_socket_path
+
+        override = tmp_path / "custom.sock"
+        monkeypatch.setenv(SOCKET_PATH_ENV, str(override))
+        assert daemon_socket_path() == override
+
+
+class TestSecureOwnSocket:
+    """Tests for the daemon tightening its own socket at startup."""
+
+    def test_tightens_socket_permissions(self, monkeypatch) -> None:
+        """A world-connectable socket must be reduced to owner-only."""
+        import shutil
+        import socket as socket_module
+        import tempfile
+
+        from android_emu_agent.daemon.server import _secure_own_socket
+        from android_emu_agent.security import SOCKET_PATH_ENV
+
+        # AF_UNIX paths are length-limited, so pytest's tmp_path is too deep here.
+        socket_dir = tempfile.mkdtemp(prefix="aea-sock-")
+        server = socket_module.socket(socket_module.AF_UNIX, socket_module.SOCK_STREAM)
+        try:
+            socket_path = Path(socket_dir) / "d.sock"
+            server.bind(str(socket_path))
+            socket_path.chmod(0o777)
+            monkeypatch.setenv(SOCKET_PATH_ENV, str(socket_path))
+
+            _secure_own_socket()
+
+            assert socket_path.stat().st_mode & 0o077 == 0
+        finally:
+            server.close()
+            shutil.rmtree(socket_dir, ignore_errors=True)
+
+    def test_missing_socket_is_not_fatal(self, tmp_path, monkeypatch) -> None:
+        """Startup must not fail when the socket path does not exist."""
+        from android_emu_agent.daemon.server import _secure_own_socket
+        from android_emu_agent.security import SOCKET_PATH_ENV
+
+        monkeypatch.setenv(SOCKET_PATH_ENV, str(tmp_path / "absent.sock"))
+        _secure_own_socket()
+
+    def test_non_socket_path_is_reported_not_raised(self, tmp_path, monkeypatch) -> None:
+        """A path that is not a socket must be refused without killing startup."""
+        from android_emu_agent.daemon.server import _secure_own_socket
+        from android_emu_agent.security import SOCKET_PATH_ENV
+
+        decoy = tmp_path / "not-a-socket"
+        decoy.write_text("plain file", encoding="utf-8")
+        monkeypatch.setenv(SOCKET_PATH_ENV, str(decoy))
+
+        _secure_own_socket()
+
+        assert decoy.read_text(encoding="utf-8") == "plain file"

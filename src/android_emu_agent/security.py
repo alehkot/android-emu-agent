@@ -7,6 +7,8 @@ import stat
 from pathlib import Path
 from typing import TextIO
 
+DEFAULT_SOCKET_PATH = Path("/tmp/android-emu-agent.sock")
+SOCKET_PATH_ENV = "ANDROID_EMU_AGENT_SOCKET"
 PRIVATE_DIRECTORY_MODE = 0o700
 PRIVATE_FILE_MODE = 0o600
 PERMISSIONS_MARKER = ".permissions-v1"
@@ -88,3 +90,9 @@ def write_private_text(path: Path, value: str) -> None:
     with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
         os.fchmod(descriptor, PRIVATE_FILE_MODE)
         handle.write(value)
+
+
+def daemon_socket_path() -> Path:
+    """Return the socket path the daemon serves, honouring an explicit override."""
+    override = os.environ.get(SOCKET_PATH_ENV)
+    return Path(override) if override else DEFAULT_SOCKET_PATH
