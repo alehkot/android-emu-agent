@@ -19,6 +19,7 @@ from android_emu_agent.errors import (
     adb_command_error,
     adb_not_found_error,
     file_not_found_error,
+    timeout_error,
 )
 from android_emu_agent.security import ensure_private_directory
 
@@ -26,6 +27,10 @@ if TYPE_CHECKING:
     from adbutils import AdbDevice
 
 logger = structlog.get_logger()
+
+# Transfers can be large, but must still be bounded: an unbounded adb push/pull pins a
+# worker thread forever when the adb server or device wedges mid-transfer.
+ADB_TRANSFER_TIMEOUT_S = 600.0
 
 
 class FileMatch(TypedDict):
@@ -456,7 +461,13 @@ class FileManager:
         run_as_command = f"run-as {shlex.quote(package)} sh -c {shlex.quote(command)}"
         return await self._shell(device, run_as_command)
 
-    async def _run_adb(self, serial: str, args: list[str]) -> subprocess.CompletedProcess[str]:
+    async def _run_adb(
+        self,
+        serial: str,
+        args: list[str],
+        *,
+        timeout_s: float = ADB_TRANSFER_TIMEOUT_S,
+    ) -> subprocess.CompletedProcess[str]:
         def _run() -> subprocess.CompletedProcess[str]:
             adb_path = shutil.which("adb")
             if not adb_path:
@@ -466,6 +477,7 @@ class FileManager:
                 check=True,
                 capture_output=True,
                 text=True,
+                timeout=timeout_s,
             )
 
         try:
@@ -474,11 +486,22 @@ class FileManager:
             raise
         except FileNotFoundError as exc:
             raise adb_not_found_error() from exc
+        except subprocess.TimeoutExpired as exc:
+            raise timeout_error(
+                f"adb {' '.join(args)}", timeout_s * 1000, {"serial": serial}
+            ) from exc
         except subprocess.CalledProcessError as exc:
             reason = (exc.stderr or exc.stdout or str(exc)).strip()
             raise adb_command_error(" ".join(args), reason) from exc
 
-    async def _run_adb_to_file(self, serial: str, args: list[str], destination: Path) -> None:
+    async def _run_adb_to_file(
+        self,
+        serial: str,
+        args: list[str],
+        destination: Path,
+        *,
+        timeout_s: float = ADB_TRANSFER_TIMEOUT_S,
+    ) -> None:
         """Run adb with binary stdout written directly to a host file."""
 
         def _run() -> None:
@@ -492,6 +515,7 @@ class FileManager:
                     check=True,
                     stdout=output,
                     stderr=subprocess.PIPE,
+                    timeout=timeout_s,
                 )
 
         try:
@@ -500,6 +524,10 @@ class FileManager:
             raise
         except FileNotFoundError as exc:
             raise adb_not_found_error() from exc
+        except subprocess.TimeoutExpired as exc:
+            raise timeout_error(
+                f"adb {' '.join(args)}", timeout_s * 1000, {"serial": serial}
+            ) from exc
         except subprocess.CalledProcessError as exc:
             stderr = exc.stderr.decode("utf-8", errors="replace") if exc.stderr else ""
             reason = stderr.strip() or str(exc)

@@ -1058,11 +1058,14 @@ class TestEmulatorSnapshot:
         ):
             await manager._wait_for_emulator_ready("emulator-5554", timeout_s=5.0)
 
-        assert mock_run_adb.await_args_list == [
-            call("emulator-5554", ["wait-for-device"]),
-            call("emulator-5554", ["shell", "getprop", "sys.boot_completed"]),
-            call("emulator-5554", ["shell", "getprop", "sys.boot_completed"]),
+        assert [c.args for c in mock_run_adb.await_args_list] == [
+            ("emulator-5554", ["wait-for-device"]),
+            ("emulator-5554", ["shell", "getprop", "sys.boot_completed"]),
+            ("emulator-5554", ["shell", "getprop", "sys.boot_completed"]),
         ]
+        # wait-for-device blocks until the device appears, so the subprocess gets its own
+        # budget -- slightly beyond the async deadline so wait_for still owns the timeout.
+        assert mock_run_adb.await_args_list[0].kwargs["timeout_s"] > 5.0
         mock_refresh.assert_awaited_once()
         mock_sleep.assert_awaited_once()
 
@@ -1522,3 +1525,73 @@ class TestConnectionCaching:
 
         assert result is None
         assert "emulator-5554" not in manager._u2_devices
+
+
+class TestSubprocessTimeouts:
+    """Tests that host-side processes are bounded."""
+
+    @pytest.mark.asyncio
+    async def test_run_adb_passes_timeout(self) -> None:
+        """adb runs must carry an explicit timeout rather than blocking forever."""
+        from android_emu_agent.device.manager import ADB_COMMAND_TIMEOUT_S, DeviceManager
+
+        manager = DeviceManager()
+        completed = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/adb"),
+            patch("subprocess.run", return_value=completed) as run,
+        ):
+            await manager._run_adb("emulator-5554", ["shell", "echo"])
+
+        assert run.call_args.kwargs["timeout"] == ADB_COMMAND_TIMEOUT_S
+
+    @pytest.mark.asyncio
+    async def test_run_adb_timeout_raises_actionable_error(self) -> None:
+        """A timed-out adb run surfaces ERR_TIMEOUT instead of leaking TimeoutExpired."""
+        from android_emu_agent.device.manager import DeviceManager
+        from android_emu_agent.errors import AgentError
+
+        manager = DeviceManager()
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/adb"),
+            patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="adb", timeout=1.0)),
+            pytest.raises(AgentError) as excinfo,
+        ):
+            await manager._run_adb("emulator-5554", ["shell", "echo"])
+
+        assert excinfo.value.code == "ERR_TIMEOUT"
+        assert excinfo.value.context["operation"] == "adb shell echo"
+
+    @pytest.mark.asyncio
+    async def test_run_host_command_passes_timeout(self) -> None:
+        """SDK tool runs must carry an explicit timeout."""
+        from android_emu_agent.device.manager import SDK_TOOL_TIMEOUT_S, DeviceManager
+
+        manager = DeviceManager()
+        completed = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", return_value=completed) as run:
+            await manager._run_host_command(["emulator", "-list-avds"], tool="emulator")
+
+        assert run.call_args.kwargs["timeout"] == SDK_TOOL_TIMEOUT_S
+
+    @pytest.mark.asyncio
+    async def test_run_host_command_timeout_raises_actionable_error(self) -> None:
+        """A hung SDK tool surfaces ERR_TIMEOUT."""
+        from android_emu_agent.device.manager import DeviceManager
+        from android_emu_agent.errors import AgentError
+
+        manager = DeviceManager()
+
+        with (
+            patch(
+                "subprocess.run",
+                side_effect=subprocess.TimeoutExpired(cmd="emulator", timeout=1.0),
+            ),
+            pytest.raises(AgentError) as excinfo,
+        ):
+            await manager._run_host_command(["emulator", "-list-avds"], tool="emulator")
+
+        assert excinfo.value.code == "ERR_TIMEOUT"

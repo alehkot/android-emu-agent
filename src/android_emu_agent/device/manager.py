@@ -73,6 +73,11 @@ EMULATOR_CONSOLE_AUTH_TOKEN_MAX_LENGTH = 1024
 DEVICE_PROP_TIMEOUT_S = 10.0
 DEVICE_ROOT_CHECK_TIMEOUT_S = 5.0
 
+# Host-side processes need a ceiling too: a wedged adb server or SDK tool otherwise pins
+# a worker thread forever. Budgets are generous enough for the slowest legitimate run.
+ADB_COMMAND_TIMEOUT_S = 300.0
+SDK_TOOL_TIMEOUT_S = 60.0
+
 
 @dataclass
 class DeviceInfo:
@@ -691,7 +696,7 @@ class DeviceManager:
         return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
     async def _run_host_command(
-        self, args: list[str], *, tool: str
+        self, args: list[str], *, tool: str, timeout_s: float = SDK_TOOL_TIMEOUT_S
     ) -> subprocess.CompletedProcess[str]:
         def _run() -> subprocess.CompletedProcess[str]:
             return subprocess.run(
@@ -699,12 +704,15 @@ class DeviceManager:
                 check=True,
                 capture_output=True,
                 text=True,
+                timeout=timeout_s,
             )
 
         try:
             return await asyncio.to_thread(_run)
         except FileNotFoundError as exc:
             raise sdk_tool_not_found_error(tool) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise timeout_error(" ".join(args), timeout_s * 1000, {"tool": tool}) from exc
         except subprocess.CalledProcessError as exc:
             reason = (exc.stderr or exc.stdout or str(exc)).strip()
             raise emulator_command_error(" ".join(args), reason) from exc
@@ -767,7 +775,13 @@ class DeviceManager:
         _add(Path.home() / "AppData" / "Local" / "Android" / "Sdk")
         return roots
 
-    async def _run_adb(self, serial: str, args: list[str]) -> subprocess.CompletedProcess[str]:
+    async def _run_adb(
+        self,
+        serial: str,
+        args: list[str],
+        *,
+        timeout_s: float = ADB_COMMAND_TIMEOUT_S,
+    ) -> subprocess.CompletedProcess[str]:
         def _run() -> subprocess.CompletedProcess[str]:
             adb_path = shutil.which("adb")
             if not adb_path:
@@ -777,6 +791,7 @@ class DeviceManager:
                 check=True,
                 capture_output=True,
                 text=True,
+                timeout=timeout_s,
             )
 
         try:
@@ -785,6 +800,10 @@ class DeviceManager:
             raise
         except FileNotFoundError as exc:
             raise adb_not_found_error() from exc
+        except subprocess.TimeoutExpired as exc:
+            raise timeout_error(
+                f"adb {' '.join(args)}", timeout_s * 1000, {"serial": serial}
+            ) from exc
         except subprocess.CalledProcessError as exc:
             reason = (exc.stderr or exc.stdout or str(exc)).strip()
             raise adb_command_error(" ".join(args), reason) from exc
@@ -1148,10 +1167,15 @@ class DeviceManager:
         operation = f"emulator boot readiness for {serial}"
         timeout_ms = timeout_s * 1000
 
+        remaining = max(deadline - loop.time(), 0.1)
         try:
             await asyncio.wait_for(
-                self._run_adb(serial, ["wait-for-device"]),
-                timeout=max(deadline - loop.time(), 0.1),
+                # `adb wait-for-device` blocks until the device appears. Give the
+                # subprocess a slightly longer budget so wait_for keeps owning the
+                # timeout semantics while the subprocess timeout still frees the
+                # worker thread, which wait_for alone cannot cancel.
+                self._run_adb(serial, ["wait-for-device"], timeout_s=remaining + 5.0),
+                timeout=remaining,
             )
         except TimeoutError as exc:
             raise timeout_error(operation, timeout_ms, {"serial": serial}) from exc

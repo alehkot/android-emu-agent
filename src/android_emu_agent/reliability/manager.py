@@ -22,6 +22,7 @@ from android_emu_agent.errors import (
     invalid_artifact_name_error,
     permission_error,
     process_not_found_error,
+    timeout_error,
 )
 from android_emu_agent.security import ensure_private_directory, ensure_private_file
 
@@ -49,6 +50,11 @@ _PROC_STATUS_FIELDS = frozenset(
         "Threads",
     }
 )
+
+# Host-side adb runs must be bounded so a wedged adb server cannot pin a worker thread.
+# Bugreports legitimately take many minutes, so they get their own larger budget.
+ADB_COMMAND_TIMEOUT_S = 300.0
+BUGREPORT_TIMEOUT_S = 900.0
 
 TRIM_LEVELS = {
     "RUNNING_MODERATE",
@@ -88,7 +94,7 @@ class ReliabilityManager:
         timestamp = self._timestamp()
         name = self._artifact_name(filename, f"bugreport_{serial}_{timestamp}", ".zip")
         output_path = self.output_dir / name
-        await self._run_adb(serial, ["bugreport", str(output_path)])
+        await self._run_adb(serial, ["bugreport", str(output_path)], timeout_s=BUGREPORT_TIMEOUT_S)
         ensure_private_file(output_path)
         logger.info("bugreport_saved", serial=serial, path=str(output_path))
         return output_path
@@ -769,7 +775,13 @@ class ReliabilityManager:
             raise process_not_found_error(package)
         return int(pid)
 
-    async def _run_adb(self, serial: str, args: list[str]) -> subprocess.CompletedProcess[str]:
+    async def _run_adb(
+        self,
+        serial: str,
+        args: list[str],
+        *,
+        timeout_s: float = ADB_COMMAND_TIMEOUT_S,
+    ) -> subprocess.CompletedProcess[str]:
         def _run() -> subprocess.CompletedProcess[str]:
             adb_path = shutil.which("adb")
             if not adb_path:
@@ -779,6 +791,7 @@ class ReliabilityManager:
                 check=True,
                 capture_output=True,
                 text=True,
+                timeout=timeout_s,
             )
 
         try:
@@ -787,6 +800,10 @@ class ReliabilityManager:
             raise
         except FileNotFoundError as exc:
             raise adb_not_found_error() from exc
+        except subprocess.TimeoutExpired as exc:
+            raise timeout_error(
+                f"adb {' '.join(args)}", timeout_s * 1000, {"serial": serial}
+            ) from exc
         except subprocess.CalledProcessError as exc:
             reason = (exc.stderr or exc.stdout or str(exc)).strip()
             raise adb_command_error(" ".join(args), reason) from exc
