@@ -19,6 +19,10 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger()
 
+# Errors that can never become true by waiting: an unknown selector key or a bad call
+# raises the same way on every poll, so retrying just burns the caller's timeout.
+FATAL_POLL_ERRORS = (TypeError, AttributeError, KeyError)
+
 
 class WaitCondition(Enum):
     """Wait condition types."""
@@ -42,14 +46,21 @@ class WaitResult:
         """Convert to JSON response."""
         if self.success:
             return {"status": "done", "elapsed_ms": round(self.elapsed_ms, 2)}
-        return {
-            "status": "timeout",
+        code = self.error.code if self.error else "ERR_TIMEOUT"
+        payload: dict[str, Any] = {
+            # A condition that ran out of time is an unmet expectation; anything else is
+            # a hard failure and must not be reported as if the screen simply never
+            # reached the expected state.
+            "status": "timeout" if code == "ERR_TIMEOUT" else "failed",
             "elapsed_ms": round(self.elapsed_ms, 2),
             "error": {
-                "code": self.error.code if self.error else "ERR_TIMEOUT",
+                "code": code,
                 "message": self.error.message if self.error else "Wait timed out",
             },
         }
+        if self.error and self.error.context.get("last_error"):
+            payload["error"]["last_error"] = self.error.context["last_error"]
+        return payload
 
 
 class WaitEngine:
@@ -203,25 +214,52 @@ class WaitEngine:
         """Poll a condition until timeout."""
         timeout = timeout or self.default_timeout
         start = time.monotonic()
+        last_error: Exception | None = None
 
         while time.monotonic() - start < timeout:
             try:
                 if await run_device_io(device, predicate):
                     elapsed = (time.monotonic() - start) * 1000
                     return WaitResult(success=True, elapsed_ms=elapsed)
-            except Exception:
-                pass  # Ignore errors during polling
+                last_error = None
+            except FATAL_POLL_ERRORS as exc:
+                # A malformed selector raises identically on every poll, so waiting the
+                # full timeout only hides the real cause behind ERR_TIMEOUT.
+                return WaitResult(
+                    success=False,
+                    elapsed_ms=(time.monotonic() - start) * 1000,
+                    error=AgentError(
+                        code="ERR_INVALID_SELECTOR",
+                        message=f"{error_message}: {exc}",
+                        context={"timeout_ms": timeout * 1000, "reason": str(exc)},
+                        remediation=(
+                            "The wait target can never match; check the selector keys and syntax."
+                        ),
+                    ),
+                )
+            except Exception as exc:
+                # Transient failures are normal while polling a screen mid-transition,
+                # but the last one is what explains an eventual timeout.
+                last_error = exc
+                logger.debug("wait_poll_error", condition=error_message, error=str(exc))
             await asyncio.sleep(self.poll_interval)
 
         elapsed = (time.monotonic() - start) * 1000
+        context: dict[str, Any] = {"timeout_ms": timeout * 1000}
+        if last_error is not None:
+            context["last_error"] = str(last_error)
         return WaitResult(
             success=False,
             elapsed_ms=elapsed,
             error=AgentError(
                 code="ERR_TIMEOUT",
                 message=error_message,
-                context={"timeout_ms": timeout * 1000},
-                remediation=remediation,
+                context=context,
+                remediation=(
+                    f"{remediation}. The last polling attempt failed with: {last_error}"
+                    if last_error is not None
+                    else remediation
+                ),
             ),
         )
 

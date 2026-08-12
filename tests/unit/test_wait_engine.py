@@ -117,3 +117,103 @@ class TestPollConditionClock:
         assert result.success is False
         assert result.error is not None
         assert result.error.code == "ERR_TIMEOUT"
+
+
+class TestPollConditionErrorReporting:
+    """Tests that polling failures reach the caller instead of being swallowed."""
+
+    @staticmethod
+    def _engine() -> WaitEngine:
+        return WaitEngine(default_timeout=0.3, poll_interval=0.05)
+
+    @staticmethod
+    def _device() -> MagicMock:
+        device = MagicMock()
+        device.serial = "emulator-5554"
+        return device
+
+    @pytest.mark.asyncio
+    async def test_timeout_surfaces_last_polling_error(self) -> None:
+        """An eventual timeout must explain what kept failing."""
+        engine = self._engine()
+
+        def _boom() -> bool:
+            raise RuntimeError("ATX server unresponsive")
+
+        result = await engine._poll_condition(
+            self._device(),
+            predicate=_boom,
+            timeout=0.2,
+            error_message="Element not found",
+            remediation="Check selector",
+        )
+
+        assert result.success is False
+        assert result.error is not None
+        assert result.error.code == "ERR_TIMEOUT"
+        assert result.error.context["last_error"] == "ATX server unresponsive"
+        assert "ATX server unresponsive" in result.error.remediation
+        assert result.to_dict()["error"]["last_error"] == "ATX server unresponsive"
+
+    @pytest.mark.asyncio
+    async def test_invalid_selector_fails_fast(self) -> None:
+        """A selector that can never match must not burn the whole timeout."""
+        engine = self._engine()
+
+        def _bad_selector() -> bool:
+            raise TypeError("got an unexpected keyword argument 'txt'")
+
+        start = asyncio.get_running_loop().time()
+        result = await engine._poll_condition(
+            self._device(),
+            predicate=_bad_selector,
+            timeout=5.0,
+            error_message="Element not found",
+            remediation="Check selector",
+        )
+        elapsed = asyncio.get_running_loop().time() - start
+
+        assert result.success is False
+        assert result.error is not None
+        assert result.error.code == "ERR_INVALID_SELECTOR"
+        assert elapsed < 1.0, "fatal selector error should not wait out the timeout"
+
+    @pytest.mark.asyncio
+    async def test_hard_failure_is_not_reported_as_timeout_status(self) -> None:
+        """A hard failure must not look like an unmet expectation."""
+        engine = self._engine()
+
+        def _bad_selector() -> bool:
+            raise AttributeError("no attribute 'exists'")
+
+        result = await engine._poll_condition(
+            self._device(),
+            predicate=_bad_selector,
+            timeout=1.0,
+            error_message="Element not found",
+            remediation="Check selector",
+        )
+
+        assert result.to_dict()["status"] == "failed"
+
+    @pytest.mark.asyncio
+    async def test_transient_error_then_success_still_passes(self) -> None:
+        """A recoverable blip must not fail the wait."""
+        engine = self._engine()
+        calls = {"n": 0}
+
+        def _flaky() -> bool:
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("device busy")
+            return True
+
+        result = await engine._poll_condition(
+            self._device(),
+            predicate=_flaky,
+            timeout=2.0,
+            error_message="Element not found",
+            remediation="Check selector",
+        )
+
+        assert result.success is True
