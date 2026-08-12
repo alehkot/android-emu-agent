@@ -72,6 +72,7 @@ class JdiSession(
 
         state.vm = machine
         state.disconnected = false
+        state.disconnectHandled.set(false)
         state.disconnectReason = null
         state.keepSuspended = keepSuspended
         synchronized(state.lock) {
@@ -112,6 +113,7 @@ class JdiSession(
         }
         state.vm = null
         state.disconnected = false
+        state.disconnectHandled.set(false)
         state.disconnectReason = null
         state.keepSuspended = false
         synchronized(state.lock) {

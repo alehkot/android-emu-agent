@@ -115,6 +115,14 @@ internal class JdiEventLoopService(
     }
 
     fun handleDisconnect(reason: String) {
+        // One EventSet can deliver VMDeathEvent alongside another event whose handling
+        // then throws VMDisconnectedException, so this runs more than once per disconnect.
+        // Report the first cause and drop the rest instead of emitting duplicate
+        // notifications and overwriting the reason with a later, less specific one.
+        if (!state.disconnectHandled.compareAndSet(false, true)) {
+            return
+        }
+
         log("vm disconnected: $reason")
         val normalizedReason = normalizeDisconnectReason(reason)
         state.disconnectReason = normalizedReason

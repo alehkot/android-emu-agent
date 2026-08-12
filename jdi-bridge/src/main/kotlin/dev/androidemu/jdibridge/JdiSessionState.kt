@@ -7,6 +7,7 @@ import com.sun.jdi.request.ClassPrepareRequest
 import com.sun.jdi.request.ExceptionRequest
 import com.sun.jdi.request.StepRequest
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.serialization.json.JsonObject
 
 internal data class BreakpointState(
@@ -47,6 +48,13 @@ internal class JdiSessionState {
     @Volatile var eventThread: Thread? = null
     @Volatile var disconnected = false
     @Volatile var disconnectReason: String? = null
+
+    /**
+     * Guards disconnect handling so it runs once per attachment. `disconnected` cannot
+     * serve as the guard: it is published only after the notification is emitted, so two
+     * callers could both pass a check against it.
+     */
+    val disconnectHandled = AtomicBoolean(false)
     @Volatile var mapping: ProguardMapping? = null
     @Volatile var keepSuspended = false
 
