@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -16,6 +16,10 @@ if TYPE_CHECKING:
     pass
 
 logger = structlog.get_logger()
+
+# Sessions persist across daemon restarts, so an agent that never calls `session stop`
+# would otherwise accumulate rows (and their ref maps) indefinitely.
+DEFAULT_SESSION_MAX_IDLE_DAYS = 7
 
 
 @dataclass
@@ -33,18 +37,32 @@ class Session:
 class SessionManager:
     """Manages session lifecycle and persistence."""
 
-    def __init__(self, database: Database) -> None:
+    def __init__(
+        self,
+        database: Database,
+        *,
+        max_idle_days: int = DEFAULT_SESSION_MAX_IDLE_DAYS,
+    ) -> None:
         self._sessions: dict[str, Session] = {}
         self._snapshot_locks: dict[str, asyncio.Lock] = {}
         self._db = database
+        self._max_idle_days = max_idle_days
         self._lifecycle_lock = asyncio.Lock()
 
     async def start(self) -> None:
         """Start session manager and restore persisted sessions."""
         logger.info("session_manager_starting")
         sessions = await self._db.list_sessions()
+        cutoff = datetime.now() - timedelta(days=self._max_idle_days)
+        pruned = 0
         for row in sessions:
             created_at = datetime.fromisoformat(row["created_at"])
+            # Sessions that are never explicitly stopped otherwise persist forever and
+            # are restored on every start, along with their ref rows.
+            if self._is_expired(row, cutoff):
+                await self._db.delete_session(row["session_id"])
+                pruned += 1
+                continue
             session = Session(
                 session_id=row["session_id"],
                 device_serial=row["device_serial"],
@@ -53,7 +71,19 @@ class SessionManager:
             )
             self._sessions[session.session_id] = session
             self._snapshot_locks[session.session_id] = asyncio.Lock()
-        logger.info("session_manager_started")
+        logger.info("session_manager_started", restored=len(self._sessions), pruned=pruned)
+
+    def _is_expired(self, row: dict[str, Any], cutoff: datetime) -> bool:
+        """Return whether a persisted session has been idle past the retention window."""
+        raw = row.get("last_activity") or row.get("created_at")
+        if not raw:
+            return False
+        try:
+            return datetime.fromisoformat(str(raw)) < cutoff
+        except ValueError:
+            # An unparseable timestamp is not grounds for deleting a session.
+            logger.warning("session_activity_unparseable", session_id=row.get("session_id"))
+            return False
 
     async def stop(self) -> None:
         """Stop session manager and cleanup."""

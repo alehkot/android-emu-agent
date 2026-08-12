@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
@@ -63,3 +64,68 @@ async def test_close_session_waits_for_in_flight_snapshot() -> None:
     assert await close_task is True
     database.delete_session.assert_awaited_once_with(session.session_id)
     assert await manager.get_session(session.session_id) is None
+
+
+def _row(session_id: str, *, last_activity: str, created_at: str | None = None) -> dict[str, str]:
+    stamp = created_at or last_activity
+    return {
+        "session_id": session_id,
+        "device_serial": "emulator-5554",
+        "created_at": stamp,
+        "last_activity": last_activity,
+        "generation": 3,
+    }
+
+
+@pytest.mark.asyncio
+async def test_start_prunes_sessions_idle_past_retention() -> None:
+    """Sessions never explicitly stopped must not accumulate across restarts."""
+    stale = (datetime.now() - timedelta(days=30)).isoformat()
+    fresh = (datetime.now() - timedelta(hours=1)).isoformat()
+    database = AsyncMock()
+    database.list_sessions.return_value = [
+        _row("s-stale", last_activity=stale),
+        _row("s-fresh", last_activity=fresh),
+    ]
+    manager = SessionManager(database, max_idle_days=7)
+
+    await manager.start()
+
+    assert [s.session_id for s in await manager.list_sessions()] == ["s-fresh"]
+    database.delete_session.assert_awaited_once_with("s-stale")
+
+
+@pytest.mark.asyncio
+async def test_start_keeps_sessions_within_retention() -> None:
+    """A recently active session must survive a daemon restart."""
+    recent = (datetime.now() - timedelta(days=2)).isoformat()
+    database = AsyncMock()
+    database.list_sessions.return_value = [_row("s-recent", last_activity=recent)]
+    manager = SessionManager(database, max_idle_days=7)
+
+    await manager.start()
+
+    assert [s.session_id for s in await manager.list_sessions()] == ["s-recent"]
+    database.delete_session.assert_not_awaited()
+    assert manager._snapshot_locks.keys() == {"s-recent"}
+
+
+@pytest.mark.asyncio
+async def test_start_keeps_session_with_unparseable_activity() -> None:
+    """A corrupt timestamp must not be treated as grounds for deletion."""
+    database = AsyncMock()
+    database.list_sessions.return_value = [
+        {
+            "session_id": "s-odd",
+            "device_serial": "emulator-5554",
+            "created_at": datetime.now().isoformat(),
+            "last_activity": "not-a-timestamp",
+            "generation": 0,
+        }
+    ]
+    manager = SessionManager(database, max_idle_days=7)
+
+    await manager.start()
+
+    assert [s.session_id for s in await manager.list_sessions()] == ["s-odd"]
+    database.delete_session.assert_not_awaited()
