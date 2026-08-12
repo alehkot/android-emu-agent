@@ -98,17 +98,29 @@ class Database:
     ) -> None:
         """Save or update a session."""
         now = datetime.now().isoformat()
+        # Only overwrite metadata when the caller actually supplied some. Passing the
+        # default through unconditionally reset every session's metadata to '{}' on each
+        # generation bump, so the column could never hold anything.
+        metadata_json = json.dumps(metadata) if metadata is not None else None
         async with self.transaction() as conn:
             await conn.execute(
                 """
                 INSERT INTO sessions (session_id, device_serial, created_at, last_activity, generation, metadata)
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, COALESCE(?, '{}'))
                 ON CONFLICT(session_id) DO UPDATE SET
                     last_activity = excluded.last_activity,
                     generation = excluded.generation,
-                    metadata = excluded.metadata
+                    metadata = COALESCE(?, sessions.metadata)
                 """,
-                (session_id, device_serial, now, now, generation, json.dumps(metadata or {})),
+                (
+                    session_id,
+                    device_serial,
+                    now,
+                    now,
+                    generation,
+                    metadata_json,
+                    metadata_json,
+                ),
             )
 
     async def get_session(self, session_id: str) -> dict[str, Any] | None:
@@ -128,7 +140,7 @@ class Database:
                 "created_at": row[2],
                 "last_activity": row[3],
                 "generation": row[4],
-                "metadata": json.loads(row[5]),
+                "metadata": json.loads(row[5]) if row[5] else {},
             }
         return None
 

@@ -152,3 +152,62 @@ async def test_cancelled_transaction_rolls_back_before_releasing_lock(tmp_path: 
         assert await database.get_session("s-cancelled") is None
     finally:
         await database.disconnect()
+
+
+class TestSessionMetadataPersistence:
+    """Tests that session metadata survives unrelated updates."""
+
+    @pytest.mark.asyncio
+    async def test_metadata_survives_generation_bump(self, tmp_path) -> None:
+        """A generation update must not silently wipe stored metadata."""
+        from android_emu_agent.db.models import Database
+
+        database = Database(tmp_path / "state.db")
+        await database.connect()
+        try:
+            await database.save_session(
+                "s-1", "emulator-5554", generation=0, metadata={"label": "checkout flow"}
+            )
+            # The hot path: increment_generation saves without passing metadata.
+            await database.save_session("s-1", "emulator-5554", generation=1)
+
+            stored = await database.get_session("s-1")
+        finally:
+            await database.disconnect()
+
+        assert stored is not None
+        assert stored["generation"] == 1
+        assert stored["metadata"] == {"label": "checkout flow"}
+
+    @pytest.mark.asyncio
+    async def test_metadata_defaults_to_empty_object(self, tmp_path) -> None:
+        """A session saved without metadata reads back as an empty mapping."""
+        from android_emu_agent.db.models import Database
+
+        database = Database(tmp_path / "state.db")
+        await database.connect()
+        try:
+            await database.save_session("s-2", "emulator-5554", generation=0)
+            stored = await database.get_session("s-2")
+        finally:
+            await database.disconnect()
+
+        assert stored is not None
+        assert stored["metadata"] == {}
+
+    @pytest.mark.asyncio
+    async def test_metadata_can_be_replaced_explicitly(self, tmp_path) -> None:
+        """Passing metadata explicitly still overwrites the stored value."""
+        from android_emu_agent.db.models import Database
+
+        database = Database(tmp_path / "state.db")
+        await database.connect()
+        try:
+            await database.save_session("s-3", "emulator-5554", metadata={"stage": "one"})
+            await database.save_session("s-3", "emulator-5554", metadata={"stage": "two"})
+            stored = await database.get_session("s-3")
+        finally:
+            await database.disconnect()
+
+        assert stored is not None
+        assert stored["metadata"] == {"stage": "two"}
