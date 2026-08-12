@@ -93,6 +93,15 @@ class Snapshot:
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to JSON-serializable dict."""
+        return self.to_json_payload()[0]
+
+    def to_json_payload(self) -> tuple[dict[str, Any], str]:
+        """Return the snapshot dict and its JSON form, serializing only once.
+
+        The size warning needs the encoded length and callers need the encoded text, so
+        producing both together avoids serializing the largest payload in the system
+        twice on every snapshot.
+        """
         result: dict[str, Any] = {
             "schema_version": self.schema_version,
             "session_id": self.session_id,
@@ -103,15 +112,16 @@ class Snapshot:
             "elements": [e.to_public_dict() for e in self.elements],
         }
 
-        # Check size and add warning if needed
-        size_bytes = len(json.dumps(result).encode())
-        if size_bytes > SNAPSHOT_SIZE_WARNING_BYTES:
+        # ensure_ascii keeps the output pure ASCII, so character count is byte count.
+        encoded = json.dumps(result, ensure_ascii=True)
+        if len(encoded) > SNAPSHOT_SIZE_WARNING_BYTES:
             result["warnings"] = [
-                f"Snapshot size {size_bytes // 1024}KB exceeds 20KB target. "
+                f"Snapshot size {len(encoded) // 1024}KB exceeds 20KB target. "
                 "Consider filtering or using a simpler screen."
             ]
+            encoded = json.dumps(result, ensure_ascii=True)
 
-        return result
+        return result, encoded
 
     def ref_payloads(self) -> list[dict[str, Any]]:
         """Return rich ref payloads for persistence and rebinding."""

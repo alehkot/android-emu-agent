@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
+from unittest.mock import patch
 
 from android_emu_agent.ui.snapshotter import UISnapshotter
 
@@ -307,3 +309,57 @@ class TestSnapshotSizeWarning:
         assert "warnings" in result
         assert len(result["warnings"]) == 1
         assert "exceeds 20KB" in result["warnings"][0]
+
+
+class TestSnapshotJsonPayload:
+    """Tests for single-pass snapshot serialization."""
+
+    @staticmethod
+    def _snapshot(element_count: int) -> object:
+        from android_emu_agent.ui.snapshotter import ElementNode, Snapshot
+
+        return Snapshot(
+            schema_version=2,
+            session_id="s-1",
+            generation=1,
+            timestamp_ms=0,
+            device={"serial": "emulator-5554"},
+            context={"package": "com.example"},
+            elements=[
+                ElementNode(
+                    ref=f"^g1a{index}",
+                    role="button",
+                    label="x" * 200,
+                    resource_id=f"com.example:id/button{index}",
+                    class_name="android.widget.Button",
+                    bounds=[0, 0, 10, 10],
+                    state={"clickable": True},
+                )
+                for index in range(element_count)
+            ],
+        )
+
+    def test_payload_matches_to_dict(self) -> None:
+        """The encoded form must be the serialization of the returned dict."""
+        snapshot = self._snapshot(3)
+        payload, encoded = snapshot.to_json_payload()
+
+        assert json.loads(encoded) == payload
+        assert payload == snapshot.to_dict()
+
+    def test_serializes_once_when_within_size_target(self) -> None:
+        """A normal snapshot must be serialized exactly once."""
+        snapshot = self._snapshot(2)
+
+        with patch("json.dumps", side_effect=json.dumps) as dumps:
+            snapshot.to_json_payload()
+
+        assert dumps.call_count == 1
+
+    def test_oversized_snapshot_carries_warning(self) -> None:
+        """The size warning must still be present and reflected in the encoded form."""
+        snapshot = self._snapshot(200)
+        payload, encoded = snapshot.to_json_payload()
+
+        assert "warnings" in payload
+        assert json.loads(encoded)["warnings"] == payload["warnings"]

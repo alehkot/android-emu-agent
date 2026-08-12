@@ -1452,9 +1452,8 @@ async def ui_snapshot(req: SnapshotRequest) -> EndpointResponse:
                 interactive_only=interactive_only,
             )
 
-            snapshot_dict = snapshot.to_dict()
+            snapshot_dict, snapshot_json = snapshot.to_json_payload()
             ref_payloads = snapshot.ref_payloads()
-            snapshot_json = json.dumps(snapshot_dict, ensure_ascii=True)
 
             # Persist all fallible snapshot data before making the generation current.
             await core.database.save_refs(req.session_id, generation, ref_payloads)
