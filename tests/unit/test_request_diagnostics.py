@@ -157,3 +157,46 @@ def test_trace_failure_does_not_replace_endpoint_response(tmp_path: Path) -> Non
 
     assert response.status_code == 200
     assert response.json()["devices"] == []
+
+
+class TestDiagnosticsRotation:
+    """Tests for bounded diagnostics log growth."""
+
+    @pytest.mark.asyncio
+    async def test_rotates_when_size_budget_exceeded(self, tmp_path) -> None:
+        """The active log must roll over instead of growing without bound."""
+        from android_emu_agent.daemon.diagnostics import RequestDiagnostics
+
+        diagnostics = RequestDiagnostics(tmp_path, max_bytes=400, backup_count=2)
+        for index in range(40):
+            await diagnostics.record({"diagnostic_id": f"{index:04d}", "path": "/x" * 20})
+
+        assert diagnostics.path.exists()
+        assert diagnostics.path.stat().st_size <= 400
+        assert diagnostics.path.with_name("requests.ndjson.1").exists()
+        # Only backup_count generations are retained.
+        assert not diagnostics.path.with_name("requests.ndjson.3").exists()
+
+    @pytest.mark.asyncio
+    async def test_rotated_files_stay_owner_only(self, tmp_path) -> None:
+        """Rotation must not widen permissions on historical diagnostics."""
+        from android_emu_agent.daemon.diagnostics import RequestDiagnostics
+
+        diagnostics = RequestDiagnostics(tmp_path, max_bytes=200, backup_count=1)
+        for index in range(20):
+            await diagnostics.record({"diagnostic_id": f"{index:04d}", "path": "/y" * 20})
+
+        rotated = diagnostics.path.with_name("requests.ndjson.1")
+        assert rotated.exists()
+        assert rotated.stat().st_mode & 0o077 == 0
+
+    @pytest.mark.asyncio
+    async def test_records_are_not_lost_below_the_budget(self, tmp_path) -> None:
+        """A log under the budget keeps every line."""
+        from android_emu_agent.daemon.diagnostics import RequestDiagnostics
+
+        diagnostics = RequestDiagnostics(tmp_path, max_bytes=1_000_000)
+        for index in range(5):
+            await diagnostics.record({"diagnostic_id": f"{index}"})
+
+        assert len(diagnostics.path.read_text().strip().splitlines()) == 5
