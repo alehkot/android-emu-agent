@@ -447,7 +447,7 @@ publish_python_test_release_artifacts() {
     local sdist_path="$PROJECT_DIR/dist/android_emu_agent-$version.tar.gz"
     local repository_url="${TWINE_TEST_REPOSITORY_URL:-https://test.pypi.org/legacy/}"
 
-    if [ -z "$TWINE_TEST_USERNAME" ] || [ -z "$TWINE_TEST_PASSWORD" ]; then
+    if [ -z "${TWINE_TEST_USERNAME:-}" ] || [ -z "${TWINE_TEST_PASSWORD:-}" ]; then
         echo "TestPyPI credentials are missing."
         echo "Export TWINE_TEST_USERNAME (usually __token__) and TWINE_TEST_PASSWORD."
         return 1
