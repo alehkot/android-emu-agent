@@ -405,8 +405,9 @@ def bridge_not_running_error(reason: str = "") -> AgentError:
         message=f"JDI Bridge not available: {reason}" if reason else "JDI Bridge not available",
         context={"reason": reason},
         remediation=(
-            "Build the bridge with './scripts/dev.sh build-bridge' "
-            "or set ANDROID_EMU_AGENT_BRIDGE_JAR to the JAR path."
+            "The daemon downloads the bridge automatically on first use; check network access "
+            "and retry. To use a local JAR, set ANDROID_EMU_AGENT_BRIDGE_JAR to its path "
+            "(in a source checkout, build one with './scripts/dev.sh build-bridge')."
         ),
     )
 
@@ -418,9 +419,9 @@ def bridge_download_failed_error(url: str, reason: str) -> AgentError:
         message=f"Could not download JDI Bridge artifact: {url}",
         context={"url": url, "reason": reason},
         remediation=(
-            "Check network access and release availability, then retry. "
-            "You can also run './scripts/dev.sh build-bridge' and set "
-            "ANDROID_EMU_AGENT_BRIDGE_JAR to a local JAR path."
+            "Check network access and that the GitHub release for this version publishes the "
+            "bridge JAR, then retry. Alternatively set ANDROID_EMU_AGENT_BRIDGE_JAR to a local "
+            "JAR path (in a source checkout, build one with './scripts/dev.sh build-bridge')."
         ),
     )
 
