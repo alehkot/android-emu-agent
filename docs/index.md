@@ -6,10 +6,17 @@ daemon-backed CLI.
 
 Use this site to learn the workflow first, then use the generated command reference for exact flags.
 
+```bash
+uv tool install android-emu-agent          # install the CLI
+android-emu-agent skills install --agent claude   # teach your coding agent to use it
+```
+
 ## Start by Goal
 
 | Goal                               | Page                                                                                                    |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Install the CLI                    | [Installation](installation.md)                                                                         |
+| Set up a coding agent              | [Agent Skills](agent-skills.md)                                                                         |
 | Run a first UI automation loop     | [Connect to a Device and Start a Session](workflow-examples.md#connect-to-a-device-and-start-a-session) |
 | Follow multi-command procedures    | [Workflow examples](workflow-examples.md)                                                               |
 | Write reusable app flows           | [Task script guide](tasks.md)                                                                           |
@@ -28,10 +35,10 @@ Use this site to learn the workflow first, then use the generated command refere
 Example:
 
 ```bash
-uv run android-emu-agent session start --device emulator-5554 --json
-uv run android-emu-agent ui snapshot <session-id> --format text
-uv run android-emu-agent action tap <session-id> ^g1a1
-uv run android-emu-agent expect exists <session-id> --text "Welcome" --timeout-ms 5000
+android-emu-agent session start --device emulator-5554 --json
+android-emu-agent ui snapshot <session-id> --format text
+android-emu-agent action tap <session-id> ^g1a1
+android-emu-agent expect exists <session-id> --text "Welcome" --timeout-ms 5000
 ```
 
 ## Main Capabilities

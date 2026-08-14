@@ -7,7 +7,7 @@ For exact parser rules, see the [`.aea` task script specification](aea-spec.md).
 
 ## Prerequisites
 
-- Android Emu Agent is installed with `uv sync --all-extras`.
+- The `android-emu-agent` CLI is installed and on `PATH`. See [Installation](installation.md).
 - The daemon can reach a target emulator or device.
 - You have a session ID, or the script includes a `session <session-id>` line.
 - You know the package name, activity names, selectors, and placeholder credentials for your target
@@ -16,9 +16,9 @@ For exact parser rules, see the [`.aea` task script specification](aea-spec.md).
 Use these commands to check the target before writing a task:
 
 ```bash
-uv run android-emu-agent device list
-uv run android-emu-agent session start --device emulator-5554 --json
-uv run android-emu-agent ui snapshot <session-id> --format text
+android-emu-agent device list
+android-emu-agent session start --device emulator-5554 --json
+android-emu-agent ui snapshot <session-id> --format text
 ```
 
 ## Write a Minimal Script
@@ -43,7 +43,7 @@ This script:
 Run validation before any device action:
 
 ```bash
-uv run android-emu-agent task validate checkout-smoke.aea
+android-emu-agent task validate checkout-smoke.aea
 ```
 
 Validation checks parser syntax, required arguments, supported operations, and the compiled task
@@ -54,7 +54,7 @@ shape. It does not contact a device and does not prove that selectors exist in y
 If the script does not include `session <session-id>`, pass the session at runtime:
 
 ```bash
-uv run android-emu-agent task run checkout-smoke.aea --session <session-id> --json
+android-emu-agent task run checkout-smoke.aea --session <session-id> --json
 ```
 
 If the script includes a `session` line, the runtime option is optional:
@@ -67,7 +67,7 @@ snapshot mode=compact
 ```
 
 ```bash
-uv run android-emu-agent task run idle-snapshot.aea --json
+android-emu-agent task run idle-snapshot.aea --json
 ```
 
 Use `--continue-on-failure` only when collecting all step failures matters more than stopping at the
@@ -81,9 +81,9 @@ A successful run returns `status: done` and `passed: true` in JSON output. A fai
 After a failed run, capture evidence before changing the screen:
 
 ```bash
-uv run android-emu-agent artifact save-snapshot <session-id> --json
-uv run android-emu-agent artifact screenshot <session-id> --pull --output ./artifacts/failure.png --json
-uv run android-emu-agent artifact logs --session <session-id> --app com.example.app --type errors --since "10m ago" --json
+android-emu-agent artifact save-snapshot <session-id> --json
+android-emu-agent artifact screenshot <session-id> --pull --output ./artifacts/failure.png --json
+android-emu-agent artifact logs --session <session-id> --app com.example.app --type errors --since "10m ago" --json
 ```
 
 ## Common Script Lines
@@ -163,8 +163,8 @@ The repository includes ready-to-edit examples:
 Validate and run an example:
 
 ```bash
-uv run android-emu-agent task validate examples/tasks/checkout-smoke.aea
-uv run android-emu-agent task run examples/tasks/checkout-smoke.aea --session <session-id> --json
+android-emu-agent task validate examples/tasks/checkout-smoke.aea
+android-emu-agent task run examples/tasks/checkout-smoke.aea --session <session-id> --json
 ```
 
 Before running app-specific examples, replace placeholder package names, selectors, activity names,

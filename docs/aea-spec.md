@@ -198,7 +198,7 @@ text:"Sign in" enabled:true clickable:true
 Run this command when an automation planner needs to discover supported selector forms:
 
 ```bash
-uv run android-emu-agent device capabilities --session <session-id> --json
+android-emu-agent device capabilities --session <session-id> --json
 ```
 
 ## Compiled Shape
@@ -241,7 +241,7 @@ Compiles to this task shape:
 Validate every script before running it:
 
 ```bash
-uv run android-emu-agent task validate examples/tasks/checkout-smoke.aea
+android-emu-agent task validate examples/tasks/checkout-smoke.aea
 ```
 
 Validation checks:
