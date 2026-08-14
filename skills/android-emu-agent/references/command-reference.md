@@ -32,6 +32,35 @@ inspect AVD definitions outside `android-emu-agent`.
 
 - `version` Show version information.
 
+### Skills
+
+Install this skill into a coding agent's skill directory. Use when the user asks to set up, install,
+or refresh the Android Emu Agent skill for their agent.
+
+- `skills install` Install the bundled skill (default agent: `claude`).
+- `skills list` Show where the skill is installed and which version.
+- `skills path` Print the bundled skill's source directory.
+
+```bash
+# Install for Claude Code (global) or Codex
+android-emu-agent skills install --agent claude
+android-emu-agent skills install --agent codex
+
+# Project-scoped install (committed with the repo)
+android-emu-agent skills install --agent claude --project
+
+# Any other agent: install into an explicit directory
+android-emu-agent skills install --dir ~/.config/some-agent/skills
+
+# Replace a directory the CLI did not create
+android-emu-agent skills install --force
+```
+
+Output interpretation: `mode` is `symlink` when installed from a source checkout (edits apply
+immediately) and `copy` otherwise. After upgrading the CLI, re-run `skills install` to refresh a
+copied skill. `npx skills add alehkot/android-emu-agent` is an equivalent path for agents supported
+by that installer.
+
 ### Daemon
 
 - `daemon start` Start the background daemon.

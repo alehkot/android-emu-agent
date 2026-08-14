@@ -15,6 +15,7 @@ from android_emu_agent.cli.commands import (
     expect,
     reliability,
     session,
+    skills,
     system,
     task,
     trace,
@@ -56,6 +57,7 @@ app.add_typer(artifact.app, name="artifact")
 app.add_typer(emulator.app, name="emulator")
 app.add_typer(reliability.app, name="reliability")
 app.add_typer(file_commands.app, name="file")
+app.add_typer(skills.app, name="skills")
 
 
 if __name__ == "__main__":

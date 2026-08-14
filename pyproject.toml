@@ -85,6 +85,10 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["android_emu_agent"]
 
+[tool.ruff.lint.flake8-bugbear]
+# Typer parameter metadata is immutable; it belongs in argument defaults.
+extend-immutable-calls = ["typer.Option", "typer.Argument"]
+
 [tool.mypy]
 python_version = "3.11"
 mypy_path = "src"

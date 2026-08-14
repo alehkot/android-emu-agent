@@ -562,3 +562,39 @@ def debug_not_attached_error(session_id: str) -> AgentError:
         context={"session_id": session_id},
         remediation="Attach first with 'debug attach --session <id> --package <pkg>'.",
     )
+
+
+def skill_source_not_found_error() -> AgentError:
+    """Create error for a missing bundled Agent Skill payload."""
+    return AgentError(
+        code="ERR_SKILL_SOURCE_NOT_FOUND",
+        message="Bundled Agent Skill files were not found",
+        context={},
+        remediation=(
+            "Reinstall the package with 'uv tool install --force android-emu-agent' "
+            "or 'pipx reinstall android-emu-agent', or run this command from a source checkout."
+        ),
+    )
+
+
+def skill_target_exists_error(path: str) -> AgentError:
+    """Create error for an existing skill directory the CLI did not install."""
+    return AgentError(
+        code="ERR_SKILL_TARGET_EXISTS",
+        message=f"Skill directory already exists and was not installed by this CLI: {path}",
+        context={"path": path},
+        remediation="Re-run with --force to replace it, or remove the directory manually.",
+    )
+
+
+def skill_symlink_unsupported_error() -> AgentError:
+    """Create error for symlink installs from a packaged (non-checkout) skill source."""
+    return AgentError(
+        code="ERR_SKILL_SYMLINK_UNSUPPORTED",
+        message="Symlink mode requires a source checkout of android-emu-agent",
+        context={},
+        remediation=(
+            "Omit --symlink to copy the bundled skill, or run "
+            "'uv run android-emu-agent skills install --symlink' from a source checkout."
+        ),
+    )

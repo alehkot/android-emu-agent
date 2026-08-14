@@ -34,6 +34,7 @@ android-emu-agent [OPTIONS] COMMAND [ARGS]...
 - `emulator`: Emulator management commands
 - `reliability`: Reliability and forensics commands
 - `file`: File transfer commands
+- `skills`: Install the bundled Agent Skill into...
 
 ## `android-emu-agent version`
 
@@ -3173,5 +3174,76 @@ android-emu-agent file app pull [OPTIONS] PACKAGE REMOTE_PATH
 - `--local TEXT`: Local output path
 - `-d, --device TEXT`: Device serial
 - `-s, --session TEXT`: Session ID
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+## `android-emu-agent skills`
+
+Install the bundled Agent Skill into coding agent directories
+
+**Usage**:
+
+```console
+android-emu-agent skills [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+- `--help`: Show this message and exit.
+
+**Commands**:
+
+- `install`: Install the bundled Agent Skill for a...
+- `list`: Show where the bundled Agent Skill is...
+- `path`: Print the path to the bundled Agent Skill...
+
+### `android-emu-agent skills install`
+
+Install the bundled Agent Skill for a coding agent.
+
+**Usage**:
+
+```console
+android-emu-agent skills install [OPTIONS]
+```
+
+**Options**:
+
+- `--agent [claude|codex|vscode]`: Target coding agent [default: claude]
+- `--project`: Install into the current project instead of the home directory
+- `--dir TEXT`: Install into an explicit directory (overrides --agent/--project)
+- `--copy`: Copy files even from a source checkout
+- `--symlink`: Symlink a source checkout (dev flow)
+- `--force`: Replace an existing skill directory
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent skills list`
+
+Show where the bundled Agent Skill is installed.
+
+**Usage**:
+
+```console
+android-emu-agent skills list [OPTIONS]
+```
+
+**Options**:
+
+- `--json`: Output JSON
+- `--help`: Show this message and exit.
+
+### `android-emu-agent skills path`
+
+Print the path to the bundled Agent Skill files.
+
+**Usage**:
+
+```console
+android-emu-agent skills path [OPTIONS]
+```
+
+**Options**:
+
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
