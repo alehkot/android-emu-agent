@@ -14,7 +14,19 @@ app = typer.Typer(help="Daemon lifecycle commands")
 
 @app.command("start")
 def daemon_start() -> None:
-    """Start the daemon process."""
+    """Start the daemon process.
+
+    Start this before any device, session, ui, action, app, or file command. The daemon owns
+    device connections and session state.
+
+    Examples:
+
+    ```bash
+    # Start the daemon, then confirm it is healthy
+    android-emu-agent daemon start
+    android-emu-agent daemon status --json
+    ```
+    """
     controller = DaemonController()
     status = controller.status()
     if status["pid_matches_daemon"]:
@@ -49,7 +61,21 @@ def daemon_stop() -> None:
 
 @app.command("status")
 def daemon_status(json_output: bool = typer.Option(False, "--json", help="Output JSON")) -> None:
-    """Show daemon status."""
+    """Show daemon status.
+
+    Reports whether the daemon is running, which process owns the socket, and the daemon's
+    version. Check the version when a source checkout and an installed release are both in use.
+
+    Examples:
+
+    ```bash
+    # Human-readable status
+    android-emu-agent daemon status
+
+    # Machine-readable status, including health.version
+    android-emu-agent daemon status --json
+    ```
+    """
     controller = DaemonController()
     status = controller.status()
 

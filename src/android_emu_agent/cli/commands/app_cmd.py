@@ -30,7 +30,20 @@ def app_install(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Install an APK on the target device."""
+    """Install an APK on the target device.
+
+    Target the device by serial or by an active session.
+
+    Examples:
+
+    ```bash
+    # Install onto a specific device
+    android-emu-agent app install ./app-debug.apk --device emulator-5554
+
+    # Install for an active session and pre-grant runtime permissions
+    android-emu-agent app install ./app-debug.apk --session s-abc123 --grant-permissions
+    ```
+    """
     payload = require_target(device, session_id)
     payload.update(
         {
@@ -92,7 +105,24 @@ def app_launch(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Launch an app."""
+    """Launch an app.
+
+    Follow this with a wait so the app is ready before the first snapshot.
+
+    Examples:
+
+    ```bash
+    # Launch and let the first screen settle
+    android-emu-agent app launch s-abc123 com.example.app
+    android-emu-agent wait idle s-abc123 --timeout-ms 10000
+
+    # Launch a specific activity
+    android-emu-agent app launch s-abc123 com.example.app --activity .DebugActivity
+
+    # Launch suspended, ready for 'debug attach'
+    android-emu-agent app launch s-abc123 com.example.app --wait-debugger
+    ```
+    """
     client = DaemonClient()
     resp = client.request(
         "POST",

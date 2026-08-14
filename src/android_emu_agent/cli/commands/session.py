@@ -15,7 +15,21 @@ def session_start(
     device: str = typer.Option(..., "--device", "-d", help="Device serial"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Start a new session on a device."""
+    """Start a new session on a device.
+
+    Returns a session_id that every ui, action, wait, and expect command needs. Get the serial
+    from 'device list'.
+
+    Examples:
+
+    ```bash
+    # Start a session and read session_id from the JSON output
+    android-emu-agent session start --device emulator-5554 --json
+
+    # Stop it when the task is done
+    android-emu-agent session stop s-abc123
+    ```
+    """
     client = DaemonClient()
     resp = client.request("POST", "/sessions/start", json_body={"device_serial": device})
     client.close()

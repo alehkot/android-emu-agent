@@ -74,6 +74,17 @@ android-emu-agent daemon [OPTIONS] COMMAND [ARGS]...
 
 Start the daemon process.
 
+Start this before any device, session, ui, action, app, or file command. The daemon owns device
+connections and session state.
+
+Examples:
+
+```bash
+# Start the daemon, then confirm it is healthy
+android-emu-agent daemon start
+android-emu-agent daemon status --json
+```
+
 **Usage**:
 
 ```console
@@ -101,6 +112,19 @@ android-emu-agent daemon stop [OPTIONS]
 ### `android-emu-agent daemon status`
 
 Show daemon status.
+
+Reports whether the daemon is running, which process owns the socket, and the daemon's version.
+Check the version when a source checkout and an installed release are both in use.
+
+Examples:
+
+```bash
+# Human-readable status
+android-emu-agent daemon status
+
+# Machine-readable status, including health.version
+android-emu-agent daemon status --json
+```
 
 **Usage**:
 
@@ -130,7 +154,7 @@ android-emu-agent debug [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 - `ping`: Ping the JDI Bridge to verify it starts...
-- `attach`: Attach the debugger to a running app&#x27;s JVM.
+- `attach`: Attach the debugger to a running app's JVM.
 - `detach`: Detach the debugger from a session.
 - `status`: Get the debug session status.
 - `observe`: Return fused app, UI snapshot, and...
@@ -168,7 +192,7 @@ android-emu-agent debug ping [OPTIONS] SESSION_ID
 
 ### `android-emu-agent debug attach`
 
-Attach the debugger to a running app&#x27;s JVM.
+Attach the debugger to a running app's JVM.
 
 **Usage**:
 
@@ -506,7 +530,7 @@ android-emu-agent debug break hits [OPTIONS]
 - `--session TEXT`: Session ID [required]
 - `--breakpoint-id INTEGER`: Optional breakpoint ID filter
 - `--limit INTEGER`: Maximum buffered hits to return [default: 100]
-- `--since TEXT`: Lower-bound timestamp (epoch ms, ISO 8601, or relative e.g. &#x27;10m ago&#x27;)
+- `--since TEXT`: Lower-bound timestamp (epoch ms, ISO 8601, or relative e.g. '10m ago')
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 
@@ -543,7 +567,7 @@ android-emu-agent debug break-exception set [OPTIONS]
 **Options**:
 
 - `--session TEXT`: Session ID [required]
-- `--class TEXT`: Exception class pattern or &#x27;_&#x27; for all [default: _]
+- `--class TEXT`: Exception class pattern or '_' for all [default: _]
 - `--caught / --no-caught`: Break on caught exceptions [default: caught]
 - `--uncaught / --no-uncaught`: Break on uncaught exceptions [default: uncaught]
 - `--json`: Output JSON
@@ -663,6 +687,18 @@ android-emu-agent device [OPTIONS] COMMAND [ARGS]...
 ### `android-emu-agent device list`
 
 List connected devices.
+
+Use this to find the serial to pass to 'session start --device'.
+
+Examples:
+
+```bash
+# Show connected emulators and devices
+android-emu-agent device list
+
+# Machine-readable output for scripts and agents
+android-emu-agent device list --json
+```
 
 **Usage**:
 
@@ -924,6 +960,19 @@ android-emu-agent expect activity [OPTIONS] SESSION_ID ACTIVITY
 
 Assert that an element exists.
 
+Fails with ERR_EXPECTATION_FAILED and a non-zero exit code when the element does not appear before
+the timeout. Use this to verify the result of an action.
+
+Examples:
+
+```bash
+# Verify a screen change after tapping
+android-emu-agent expect exists s-abc123 --text "Welcome" --timeout-ms 5000
+
+# Verify by resource ID, in a script that checks the exit code
+android-emu-agent expect exists s-abc123 --id com.example:id/home_root --json
+```
+
 **Usage**:
 
 ```console
@@ -1021,6 +1070,19 @@ android-emu-agent session [OPTIONS] COMMAND [ARGS]...
 ### `android-emu-agent session start`
 
 Start a new session on a device.
+
+Returns a session_id that every ui, action, wait, and expect command needs. Get the serial from
+'device list'.
+
+Examples:
+
+```bash
+# Start a session and read session_id from the JSON output
+android-emu-agent session start --device emulator-5554 --json
+
+# Stop it when the task is done
+android-emu-agent session stop s-abc123
+```
 
 **Usage**:
 
@@ -1487,6 +1549,19 @@ Modes (mutually exclusive):
 - --full: All elements, JSON format
 - --raw: Original XML hierarchy string
 
+Examples:
+
+```bash
+# Compact snapshot: interactive elements with ^refs
+android-emu-agent ui snapshot s-abc123
+
+# Readable text output while exploring a screen
+android-emu-agent ui snapshot s-abc123 --format text
+
+# Include labels and containers when a target is missing
+android-emu-agent ui snapshot s-abc123 --full
+```
+
 **Usage**:
 
 ```console
@@ -1581,6 +1656,22 @@ android-emu-agent action [OPTIONS] COMMAND [ARGS]...
 
 Tap an element.
 
+Take a fresh snapshot first and copy the complete ^ref from it. Refs are generation-scoped, so
+re-snapshot after every action. Use a selector when no stable ref is available.
+
+Examples:
+
+```bash
+# Tap a ref from the latest snapshot
+android-emu-agent action tap s-abc123 ^g1a1
+
+# Tap by visible text, falling back to a resource ID
+android-emu-agent action tap s-abc123 'text:"Sign in" || id:com.example:id/login_btn'
+
+# Tap by content description
+android-emu-agent action tap s-abc123 'desc:"Open navigation"'
+```
+
 **Usage**:
 
 ```console
@@ -1620,6 +1711,19 @@ android-emu-agent action long-tap [OPTIONS] SESSION_ID REF
 ### `android-emu-agent action set-text`
 
 Set text on an element.
+
+Tap the field and re-snapshot before setting text, because focusing a field can change the UI. Press
+back afterwards to dismiss the keyboard.
+
+Examples:
+
+```bash
+# Fill an email field identified by a ref
+android-emu-agent action set-text s-abc123 ^g2a1 "user@example.com"
+
+# Fill a field located by resource ID
+android-emu-agent action set-text s-abc123 id:com.example:id/password "secret123"
+```
 
 **Usage**:
 
@@ -1719,6 +1823,21 @@ android-emu-agent action recents [OPTIONS] SESSION_ID
 
 Perform swipe gesture.
 
+Swipe direction is the finger movement: 'up' moves content up, revealing what is below.
+
+Examples:
+
+```bash
+# Scroll a screen down to reveal lower content
+android-emu-agent action swipe up --session s-abc123
+
+# Swipe inside a specific list rather than the whole screen
+android-emu-agent action swipe up --session s-abc123 --in id:com.example:id/recycler
+
+# Shorter, slower swipe for a carousel
+android-emu-agent action swipe left --session s-abc123 --distance 0.5 --duration 600
+```
+
 **Usage**:
 
 ```console
@@ -1786,6 +1905,16 @@ android-emu-agent wait [OPTIONS] COMMAND [ARGS]...
 
 Wait for UI idle.
 
+Use this after an action that starts an animation or a screen transition, instead of sleeping.
+Default timeout is 10000 ms.
+
+Examples:
+
+```bash
+# Let a transition settle before the next snapshot
+android-emu-agent wait idle s-abc123 --timeout-ms 5000
+```
+
 **Usage**:
 
 ```console
@@ -1826,6 +1955,16 @@ android-emu-agent wait activity [OPTIONS] SESSION_ID ACTIVITY
 ### `android-emu-agent wait text`
 
 Wait for text to appear.
+
+Use this when the next screen is identified by its content. This waits, but does not assert; use
+'expect' commands for pass/fail checks.
+
+Examples:
+
+```bash
+# Wait for a screen that appears after sign-in
+android-emu-agent wait text s-abc123 "Welcome" --timeout-ms 15000
+```
 
 **Usage**:
 
@@ -1932,6 +2071,18 @@ android-emu-agent app [OPTIONS] COMMAND [ARGS]...
 
 Install an APK on the target device.
 
+Target the device by serial or by an active session.
+
+Examples:
+
+```bash
+# Install onto a specific device
+android-emu-agent app install ./app-debug.apk --device emulator-5554
+
+# Install for an active session and pre-grant runtime permissions
+android-emu-agent app install ./app-debug.apk --session s-abc123 --grant-permissions
+```
+
 **Usage**:
 
 ```console
@@ -1997,6 +2148,22 @@ android-emu-agent app reset [OPTIONS] SESSION_ID PACKAGE
 ### `android-emu-agent app launch`
 
 Launch an app.
+
+Follow this with a wait so the app is ready before the first snapshot.
+
+Examples:
+
+```bash
+# Launch and let the first screen settle
+android-emu-agent app launch s-abc123 com.example.app
+android-emu-agent wait idle s-abc123 --timeout-ms 10000
+
+# Launch a specific activity
+android-emu-agent app launch s-abc123 com.example.app --activity .DebugActivity
+
+# Launch suspended, ready for 'debug attach'
+android-emu-agent app launch s-abc123 com.example.app --wait-debugger
+```
 
 **Usage**:
 
@@ -2246,8 +2413,7 @@ android-emu-agent artifact logs [OPTIONS] [SESSION_ID]
 - `-p, --package, --app TEXT`: Filter to logs for one app package
 - `--level TEXT`: Deprecated alias for --type (v|d|i|w|e|f|s or verbose/debug/...)
 - `--type TEXT`: Log type (errors, warnings, info, debug, verbose, fatal, silent)
-- `--since TEXT`: Since filter: line count, logcat timestamp, ISO 8601, or relative (e.g. &#x27;10m
-  ago&#x27;)
+- `--since TEXT`: Since filter: line count, logcat timestamp, ISO 8601, or relative (e.g. '10m ago')
 - `--follow`: Unsupported compatibility flag; use adb logcat for live streaming
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
@@ -2311,6 +2477,22 @@ android-emu-agent emulator list-avds [OPTIONS]
 
 Start an AVD using the Android emulator CLI.
 
+Waits for boot by default, so the command returns only once Android is ready for a session. Get AVD
+names from 'emulator list-avds'.
+
+Examples:
+
+```bash
+# Boot an AVD and wait until it is ready
+android-emu-agent emulator start Pixel_8_API_34
+
+# Start from a known snapshot for deterministic runs
+android-emu-agent emulator start Pixel_8_API_34 --snapshot post-onboarding
+
+# Clean userdata, headless, for CI
+android-emu-agent emulator start Pixel_8_API_34 --wipe-data --no-window
+```
+
 **Usage**:
 
 ```console
@@ -2319,7 +2501,7 @@ android-emu-agent emulator start [OPTIONS] AVD_NAME
 
 **Arguments**:
 
-- `AVD_NAME`: AVD name from &#x27;emulator -list-avds&#x27; [required]
+- `AVD_NAME`: AVD name from 'emulator -list-avds' [required]
 
 **Options**:
 
@@ -3200,6 +3382,27 @@ android-emu-agent skills [OPTIONS] COMMAND [ARGS]...
 ### `android-emu-agent skills install`
 
 Install the bundled Agent Skill for a coding agent.
+
+Safe to re-run: it replaces a previous install and drops files removed upstream. Re-run it after
+upgrading the CLI. A source checkout is symlinked so local edits apply immediately; an installed
+package is copied.
+
+Examples:
+
+```bash
+# Install for Claude Code, or for Codex
+android-emu-agent skills install --agent claude
+android-emu-agent skills install --agent codex
+
+# Install into a project so the team shares it
+android-emu-agent skills install --agent claude --project
+
+# Install for any other agent
+android-emu-agent skills install --dir ~/.config/some-agent/skills
+
+# Replace a skill directory this CLI did not create
+android-emu-agent skills install --force
+```
 
 **Usage**:
 

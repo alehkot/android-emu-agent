@@ -62,7 +62,24 @@ def emulator_start(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Start an AVD using the Android emulator CLI."""
+    """Start an AVD using the Android emulator CLI.
+
+    Waits for boot by default, so the command returns only once Android is ready for a session.
+    Get AVD names from 'emulator list-avds'.
+
+    Examples:
+
+    ```bash
+    # Boot an AVD and wait until it is ready
+    android-emu-agent emulator start Pixel_8_API_34
+
+    # Start from a known snapshot for deterministic runs
+    android-emu-agent emulator start Pixel_8_API_34 --snapshot post-onboarding
+
+    # Clean userdata, headless, for CI
+    android-emu-agent emulator start Pixel_8_API_34 --wipe-data --no-window
+    ```
+    """
     client = DaemonClient(timeout=EMULATOR_START_TIMEOUT if wait_boot else 10.0)
     resp = client.request(
         "POST",

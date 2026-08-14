@@ -50,6 +50,19 @@ def ui_snapshot(
     - Default (compact): Interactive elements only, JSON format
     - --full: All elements, JSON format
     - --raw: Original XML hierarchy string
+
+    Examples:
+
+    ```bash
+    # Compact snapshot: interactive elements with ^refs
+    android-emu-agent ui snapshot s-abc123
+
+    # Readable text output while exploring a screen
+    android-emu-agent ui snapshot s-abc123 --format text
+
+    # Include labels and containers when a target is missing
+    android-emu-agent ui snapshot s-abc123 --full
+    ```
     """
     try:
         mode = _validate_snapshot_flags(full, raw)

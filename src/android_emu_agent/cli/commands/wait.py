@@ -43,7 +43,18 @@ def wait_idle(
     timeout_ms: int | None = typer.Option(None, "--timeout-ms", help="Timeout in ms"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Wait for UI idle."""
+    """Wait for UI idle.
+
+    Use this after an action that starts an animation or a screen transition, instead of
+    sleeping. Default timeout is 10000 ms.
+
+    Examples:
+
+    ```bash
+    # Let a transition settle before the next snapshot
+    android-emu-agent wait idle s-abc123 --timeout-ms 5000
+    ```
+    """
     client = DaemonClient()
     resp = client.request(
         "POST",
@@ -79,7 +90,18 @@ def wait_text(
     timeout_ms: int | None = typer.Option(None, "--timeout-ms", help="Timeout in ms"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Wait for text to appear."""
+    """Wait for text to appear.
+
+    Use this when the next screen is identified by its content. This waits, but does not assert;
+    use 'expect' commands for pass/fail checks.
+
+    Examples:
+
+    ```bash
+    # Wait for a screen that appears after sign-in
+    android-emu-agent wait text s-abc123 "Welcome" --timeout-ms 15000
+    ```
+    """
     client = DaemonClient()
     resp = client.request(
         "POST",

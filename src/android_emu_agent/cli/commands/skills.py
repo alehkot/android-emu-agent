@@ -160,7 +160,29 @@ def skills_install(
     force: bool = typer.Option(False, "--force", help="Replace an existing skill directory"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Install the bundled Agent Skill for a coding agent."""
+    """Install the bundled Agent Skill for a coding agent.
+
+    Safe to re-run: it replaces a previous install and drops files removed upstream. Re-run it
+    after upgrading the CLI. A source checkout is symlinked so local edits apply immediately; an
+    installed package is copied.
+
+    Examples:
+
+    ```bash
+    # Install for Claude Code, or for Codex
+    android-emu-agent skills install --agent claude
+    android-emu-agent skills install --agent codex
+
+    # Install into a project so the team shares it
+    android-emu-agent skills install --agent claude --project
+
+    # Install for any other agent
+    android-emu-agent skills install --dir ~/.config/some-agent/skills
+
+    # Replace a skill directory this CLI did not create
+    android-emu-agent skills install --force
+    ```
+    """
     if copy and symlink:
         raise typer.BadParameter("--copy and --symlink are mutually exclusive")
     if directory is not None and project:

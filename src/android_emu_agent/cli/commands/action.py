@@ -16,7 +16,24 @@ def action_tap(
     ref: str = typer.Argument(..., help="Element ^ref or selector"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Tap an element."""
+    """Tap an element.
+
+    Take a fresh snapshot first and copy the complete ^ref from it. Refs are generation-scoped,
+    so re-snapshot after every action. Use a selector when no stable ref is available.
+
+    Examples:
+
+    ```bash
+    # Tap a ref from the latest snapshot
+    android-emu-agent action tap s-abc123 ^g1a1
+
+    # Tap by visible text, falling back to a resource ID
+    android-emu-agent action tap s-abc123 'text:"Sign in" || id:com.example:id/login_btn'
+
+    # Tap by content description
+    android-emu-agent action tap s-abc123 'desc:"Open navigation"'
+    ```
+    """
     client = DaemonClient()
     resp = client.request("POST", "/actions/tap", json_body={"session_id": session_id, "ref": ref})
     client.close()
@@ -45,7 +62,21 @@ def action_set_text(
     text: str = typer.Argument(..., help="Text to set"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Set text on an element."""
+    """Set text on an element.
+
+    Tap the field and re-snapshot before setting text, because focusing a field can change the
+    UI. Press back afterwards to dismiss the keyboard.
+
+    Examples:
+
+    ```bash
+    # Fill an email field identified by a ref
+    android-emu-agent action set-text s-abc123 ^g2a1 "user@example.com"
+
+    # Fill a field located by resource ID
+    android-emu-agent action set-text s-abc123 id:com.example:id/password "secret123"
+    ```
+    """
     client = DaemonClient()
     resp = client.request(
         "POST",
@@ -118,7 +149,23 @@ def action_swipe(
     duration: int = typer.Option(300, "--duration", help="Swipe duration in ms"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Perform swipe gesture."""
+    """Perform swipe gesture.
+
+    Swipe direction is the finger movement: 'up' moves content up, revealing what is below.
+
+    Examples:
+
+    ```bash
+    # Scroll a screen down to reveal lower content
+    android-emu-agent action swipe up --session s-abc123
+
+    # Swipe inside a specific list rather than the whole screen
+    android-emu-agent action swipe up --session s-abc123 --in id:com.example:id/recycler
+
+    # Shorter, slower swipe for a carousel
+    android-emu-agent action swipe left --session s-abc123 --distance 0.5 --duration 600
+    ```
+    """
     client = DaemonClient()
     resp = client.request(
         "POST",

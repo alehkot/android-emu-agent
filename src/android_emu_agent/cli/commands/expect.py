@@ -110,7 +110,21 @@ def expect_exists(
     timeout_ms: int | None = typer.Option(None, "--timeout-ms", help="Timeout in ms"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Assert that an element exists."""
+    """Assert that an element exists.
+
+    Fails with ERR_EXPECTATION_FAILED and a non-zero exit code when the element does not appear
+    before the timeout. Use this to verify the result of an action.
+
+    Examples:
+
+    ```bash
+    # Verify a screen change after tapping
+    android-emu-agent expect exists s-abc123 --text "Welcome" --timeout-ms 5000
+
+    # Verify by resource ID, in a script that checks the exit code
+    android-emu-agent expect exists s-abc123 --id com.example:id/home_root --json
+    ```
+    """
     client = DaemonClient()
     resp = client.request(
         "POST",

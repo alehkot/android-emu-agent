@@ -1191,9 +1191,13 @@ case "${1:-help}" in
 
     docs-gen)
         echo "Regenerating CLI reference docs..."
+        # Typer HTML-escapes help text. Quotes must be literal so examples inside fenced code
+        # blocks stay copy-pasteable; &lt;/&gt; stay escaped because prose like <name> would
+        # otherwise be parsed as an HTML tag.
         uv run typer android_emu_agent.cli.main utils docs --name android-emu-agent \
             | sed 's/^\$ //' \
             | sed 's/^- /\* /' \
+            | sed -e 's/&#x27;/'"'"'/g' -e 's/&quot;/"/g' \
             | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' \
             > docs/reference.md
         if command -v npm >/dev/null 2>&1; then

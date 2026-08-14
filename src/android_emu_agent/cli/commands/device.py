@@ -21,7 +21,20 @@ def _parse_on_off(state: str) -> tuple[str, bool]:
 
 @app.command("list")
 def device_list(json_output: bool = typer.Option(False, "--json", help="Output JSON")) -> None:
-    """List connected devices."""
+    """List connected devices.
+
+    Use this to find the serial to pass to 'session start --device'.
+
+    Examples:
+
+    ```bash
+    # Show connected emulators and devices
+    android-emu-agent device list
+
+    # Machine-readable output for scripts and agents
+    android-emu-agent device list --json
+    ```
+    """
     client = DaemonClient()
     resp = client.request("GET", "/devices")
     client.close()
