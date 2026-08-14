@@ -52,10 +52,10 @@ Max attempts: **2** (initial attempt + 1 retry). If both fail → escalate to Le
 
 ```bash
 # Level 1 example
-uv run android-emu-agent wait idle <session_id> --timeout-ms 5000
-uv run android-emu-agent ui snapshot <session_id>
+android-emu-agent wait idle <session_id> --timeout-ms 5000
+android-emu-agent ui snapshot <session_id>
 # Find target again by text/desc/role, get new ^ref
-uv run android-emu-agent action tap <session_id> ^<new_ref>
+android-emu-agent action tap <session_id> ^<new_ref>
 ```
 
 If the original action succeeded with a warning rather than returning `ERR_STALE_REF`, skip straight
@@ -86,14 +86,14 @@ Max corrective actions: **3**. If the target is still unreachable → escalate t
 
 ```bash
 # Level 2 example
-uv run android-emu-agent artifact screenshot <session_id> --pull --output ./debug.png
-uv run android-emu-agent ui snapshot <session_id> --full
+android-emu-agent artifact screenshot <session_id> --pull --output ./debug.png
+android-emu-agent ui snapshot <session_id> --full
 # Analyze: element is below the fold → scroll
-uv run android-emu-agent action scroll down -s <session_id>
-uv run android-emu-agent wait idle <session_id>
-uv run android-emu-agent ui snapshot <session_id>
+android-emu-agent action scroll down -s <session_id>
+android-emu-agent wait idle <session_id>
+android-emu-agent ui snapshot <session_id>
 # Find target, retry action
-uv run android-emu-agent action tap <session_id> ^<new_ref>
+android-emu-agent action tap <session_id> ^<new_ref>
 ```
 
 ## Level 3: User Guidance (Interactive)

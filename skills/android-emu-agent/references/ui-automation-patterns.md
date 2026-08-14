@@ -43,25 +43,25 @@ Example:
 
 ```bash
 # Snapshot shows permission dialog
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # context.package = "com.google.android.permissioncontroller"
 # ^g1a1 = "While using the app", ^g1a2 = "Only this time", ^g1a3 = "Don't allow"
 
 # Grant permission
-uv run android-emu-agent action tap s-abc123 ^g1a1
+android-emu-agent action tap s-abc123 ^g1a1
 
 # Verify dismissed
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # context.package should now be your app
 ```
 
 Deterministic setup alternative:
 
 ```bash
-uv run android-emu-agent system permissions list com.example.camera.app --session s-abc123
-uv run android-emu-agent system permissions grant com.example.camera.app android.permission.CAMERA --session s-abc123
-uv run android-emu-agent app force-stop s-abc123 com.example.camera.app
-uv run android-emu-agent app launch s-abc123 com.example.camera.app
+android-emu-agent system permissions list com.example.camera.app --session s-abc123
+android-emu-agent system permissions grant com.example.camera.app android.permission.CAMERA --session s-abc123
+android-emu-agent app force-stop s-abc123 com.example.camera.app
+android-emu-agent app launch s-abc123 com.example.camera.app
 ```
 
 Android version differences:
@@ -84,17 +84,17 @@ Detection:
 ANR dialog (App Not Responding):
 
 ```bash
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # context.package = "android"
 # Text: "MyApp isn't responding"
 # ^g1a1 = "Wait", ^g1a2 = "Close app"
 
 # Option 1: Wait for recovery
-uv run android-emu-agent action tap s-abc123 ^g1a1
+android-emu-agent action tap s-abc123 ^g1a1
 
 # Option 2: Close and restart
-uv run android-emu-agent action tap s-abc123 ^g1a2
-uv run android-emu-agent app launch s-abc123 com.example.myapp
+android-emu-agent action tap s-abc123 ^g1a2
+android-emu-agent app launch s-abc123 com.example.myapp
 ```
 
 Crash dialog:
@@ -103,9 +103,9 @@ Crash dialog:
 # Text: "MyApp has stopped" or "MyApp keeps stopping"
 # ^g1a1 = "Close app", ^g1a2 = "App info" (optional)
 
-uv run android-emu-agent action tap s-abc123 ^g1a1
-uv run android-emu-agent wait idle s-abc123
-uv run android-emu-agent app launch s-abc123 com.example.myapp
+android-emu-agent action tap s-abc123 ^g1a1
+android-emu-agent wait idle s-abc123
+android-emu-agent app launch s-abc123 com.example.myapp
 ```
 
 Strategy:
@@ -122,12 +122,12 @@ permission setup. They are shell-backed state changes, so prefer snapshots for r
 and only open or close surfaces when the user requested interaction.
 
 ```bash
-uv run android-emu-agent system notifications open --session s-abc123
-uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent system notifications close --session s-abc123
+android-emu-agent system notifications open --session s-abc123
+android-emu-agent ui snapshot s-abc123
+android-emu-agent system notifications close --session s-abc123
 
-uv run android-emu-agent system quick-settings open --session s-abc123
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent system quick-settings open --session s-abc123
+android-emu-agent ui snapshot s-abc123
 ```
 
 ## Dealing With Stale Refs
@@ -148,16 +148,16 @@ Recovery flow:
 
 ```bash
 # Action may fail with ERR_STALE_REF or succeed with a warning
-uv run android-emu-agent action tap s-abc123 ^g1a3
+android-emu-agent action tap s-abc123 ^g1a3
 # Possible result: status=done, warning="Used stale ref ..."
 
 # Recovery: refresh refs before the next action
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # Find the element again by its characteristics
 # ^g1a5 now has the same label "Submit"
 
 # Use new ref for subsequent actions
-uv run android-emu-agent action tap s-abc123 ^g1a5
+android-emu-agent action tap s-abc123 ^g1a5
 ```
 
 Prevention tips:
@@ -187,30 +187,30 @@ Examples:
 
 ```bash
 # Wait for animations and pending operations to complete
-uv run android-emu-agent wait idle s-abc123 --timeout-ms 5000
+android-emu-agent wait idle s-abc123 --timeout-ms 5000
 
 # Wait for specific activity to be in foreground
-uv run android-emu-agent wait activity s-abc123 "HomeActivity" --timeout-ms 10000
+android-emu-agent wait activity s-abc123 "HomeActivity" --timeout-ms 10000
 
 # Wait for text to appear anywhere on screen
-uv run android-emu-agent wait text s-abc123 "Welcome back" --timeout-ms 5000
+android-emu-agent wait text s-abc123 "Welcome back" --timeout-ms 5000
 
 # Wait for element with specific text to exist
-uv run android-emu-agent wait exists s-abc123 --text "Continue" --timeout-ms 5000
+android-emu-agent wait exists s-abc123 --text "Continue" --timeout-ms 5000
 
 # Use richer selectors when exact text is unstable
-uv run android-emu-agent wait exists s-abc123 --text-contains "Continue" --timeout-ms 5000
-uv run android-emu-agent wait exists s-abc123 --id-matches ".*checkout.*" --timeout-ms 5000
-uv run android-emu-agent wait exists s-abc123 --class android.widget.Button --desc-contains "Pay"
+android-emu-agent wait exists s-abc123 --text-contains "Continue" --timeout-ms 5000
+android-emu-agent wait exists s-abc123 --id-matches ".*checkout.*" --timeout-ms 5000
+android-emu-agent wait exists s-abc123 --class android.widget.Button --desc-contains "Pay"
 
 # For tap escape hatches, try fallback selectors in priority order
-uv run android-emu-agent action tap s-abc123 'text:"Sign in" || id:com.example:id/login'
+android-emu-agent action tap s-abc123 'text:"Sign in" || id:com.example:id/login'
 
 # Optional visual evidence for a ref from the latest snapshot
-uv run android-emu-agent ui ground s-abc123 --ref ^g1a1 --pull --output ./grounding.json
+android-emu-agent ui ground s-abc123 --ref ^g1a1 --pull --output ./grounding.json
 
 # Wait for loading indicator to disappear
-uv run android-emu-agent wait gone s-abc123 --text "Loading..." --timeout-ms 15000
+android-emu-agent wait gone s-abc123 --text "Loading..." --timeout-ms 15000
 ```
 
 Best practices:
@@ -237,42 +237,42 @@ Step-by-step login flow:
 
 ```bash
 # 1. Launch app and wait for login screen
-uv run android-emu-agent app launch s-abc123 com.example.app
-uv run android-emu-agent wait idle s-abc123 --timeout-ms 5000
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent app launch s-abc123 com.example.app
+android-emu-agent wait idle s-abc123 --timeout-ms 5000
+android-emu-agent ui snapshot s-abc123
 # Identify: ^g1a1 = username field, ^g1a2 = password field, ^g1a3 = sign in button
 
 # 2. Enter username
-uv run android-emu-agent action tap s-abc123 ^g1a1
-uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action set-text s-abc123 ^g1a1 "user@example.com"
+android-emu-agent action tap s-abc123 ^g1a1
+android-emu-agent ui snapshot s-abc123
+android-emu-agent action set-text s-abc123 ^g1a1 "user@example.com"
 
 # 3. Enter password (re-snapshot to get fresh refs)
-uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action tap s-abc123 ^g1a2
-uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action set-text s-abc123 ^g1a2 "secretpassword"
+android-emu-agent ui snapshot s-abc123
+android-emu-agent action tap s-abc123 ^g1a2
+android-emu-agent ui snapshot s-abc123
+android-emu-agent action set-text s-abc123 ^g1a2 "secretpassword"
 
 # 4. Dismiss keyboard if visible
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # Check: context.ime_visible = true
-uv run android-emu-agent action back s-abc123
+android-emu-agent action back s-abc123
 
 # 5. Submit login
-uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action tap s-abc123 ^g1a3
+android-emu-agent ui snapshot s-abc123
+android-emu-agent action tap s-abc123 ^g1a3
 
 # 6. Wait and verify success
-uv run android-emu-agent wait activity s-abc123 "HomeActivity" --timeout-ms 15000
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent wait activity s-abc123 "HomeActivity" --timeout-ms 15000
+android-emu-agent ui snapshot s-abc123
 ```
 
 Handling login failures:
 
 ```bash
 # After tapping submit, check for error messages
-uv run android-emu-agent wait idle s-abc123 --timeout-ms 5000
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent wait idle s-abc123 --timeout-ms 5000
+android-emu-agent ui snapshot s-abc123
 
 # Look for error indicators in snapshot:
 # - Text containing "incorrect", "invalid", "failed"
@@ -297,56 +297,56 @@ Detection:
 Strategy 1: Look for a skip button
 
 ```bash
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # Look for ^ref with text "Skip"
-uv run android-emu-agent action tap s-abc123 ^g1a5
-uv run android-emu-agent wait idle s-abc123
+android-emu-agent action tap s-abc123 ^g1a5
+android-emu-agent wait idle s-abc123
 ```
 
 Strategy 2: Tap through pages
 
 ```bash
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a1 = "Next"
-uv run android-emu-agent action tap s-abc123 ^g1a1
-uv run android-emu-agent wait idle s-abc123
+android-emu-agent action tap s-abc123 ^g1a1
+android-emu-agent wait idle s-abc123
 
-uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action tap s-abc123 ^g1a1
-uv run android-emu-agent wait idle s-abc123
+android-emu-agent ui snapshot s-abc123
+android-emu-agent action tap s-abc123 ^g1a1
+android-emu-agent wait idle s-abc123
 
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a2 = "Get Started"
-uv run android-emu-agent action tap s-abc123 ^g1a2
+android-emu-agent action tap s-abc123 ^g1a2
 ```
 
 Strategy 3: Swipe through carousel
 
 ```bash
-uv run android-emu-agent action swipe left -s s-abc123
-uv run android-emu-agent wait idle s-abc123
+android-emu-agent action swipe left -s s-abc123
+android-emu-agent wait idle s-abc123
 
-uv run android-emu-agent action swipe left -s s-abc123
-uv run android-emu-agent wait idle s-abc123
+android-emu-agent action swipe left -s s-abc123
+android-emu-agent wait idle s-abc123
 
-uv run android-emu-agent action swipe left -s s-abc123
-uv run android-emu-agent wait idle s-abc123
+android-emu-agent action swipe left -s s-abc123
+android-emu-agent wait idle s-abc123
 
-uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action tap s-abc123 ^g1a1
+android-emu-agent ui snapshot s-abc123
+android-emu-agent action tap s-abc123 ^g1a1
 ```
 
 Strategy 4: Use emulator snapshots for repeated testing
 
 ```bash
 # 1. Complete onboarding manually
-uv run android-emu-agent emulator snapshot save emulator-5554 post-onboarding
+android-emu-agent emulator snapshot save emulator-5554 post-onboarding
 
 # 2. Before each run, restore the saved state
-uv run android-emu-agent emulator snapshot restore emulator-5554 post-onboarding
+android-emu-agent emulator snapshot restore emulator-5554 post-onboarding
 
 # 3. Or boot an AVD directly from a named snapshot
-uv run android-emu-agent emulator start Pixel_8_API_34 --snapshot post-onboarding --wait-boot
+android-emu-agent emulator start Pixel_8_API_34 --snapshot post-onboarding --wait-boot
 ```
 
 ## Navigation Patterns
@@ -354,59 +354,59 @@ uv run android-emu-agent emulator start Pixel_8_API_34 --snapshot post-onboardin
 Bottom navigation tabs:
 
 ```bash
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a10 = "Home", ^g1a11 = "Search", ^g1a12 = "Profile"
 
-uv run android-emu-agent action tap s-abc123 ^g1a12
-uv run android-emu-agent wait idle s-abc123
+android-emu-agent action tap s-abc123 ^g1a12
+android-emu-agent wait idle s-abc123
 ```
 
 Hamburger menu (navigation drawer):
 
 ```bash
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a1 = hamburger menu button
 
-uv run android-emu-agent action tap s-abc123 ^g1a1
-uv run android-emu-agent wait idle s-abc123
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent action tap s-abc123 ^g1a1
+android-emu-agent wait idle s-abc123
+android-emu-agent ui snapshot s-abc123
 # Drawer items: ^g1a5 = "Settings", ^g1a6 = "Help"
 
-uv run android-emu-agent action tap s-abc123 ^g1a5
+android-emu-agent action tap s-abc123 ^g1a5
 ```
 
 Back navigation:
 
 ```bash
 # System back button
-uv run android-emu-agent action back s-abc123
+android-emu-agent action back s-abc123
 
 # Toolbar back arrow
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a1 = "Navigate up"
-uv run android-emu-agent action tap s-abc123 ^g1a1
+android-emu-agent action tap s-abc123 ^g1a1
 ```
 
 Toolbar actions:
 
 ```bash
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a2 = "Search", ^g1a3 = "More options"
 
-uv run android-emu-agent action tap s-abc123 ^g1a3
-uv run android-emu-agent wait idle s-abc123
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent action tap s-abc123 ^g1a3
+android-emu-agent wait idle s-abc123
+android-emu-agent ui snapshot s-abc123
 # Menu items: ^g1a5 = "Settings", ^g1a6 = "Share"
 ```
 
 Tab switching (TabLayout):
 
 ```bash
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a1 = "Tab 1" (selected), ^g1a2 = "Tab 2"
 
-uv run android-emu-agent action tap s-abc123 ^g1a2
-uv run android-emu-agent wait idle s-abc123
+android-emu-agent action tap s-abc123 ^g1a2
+android-emu-agent wait idle s-abc123
 ```
 
 ## Form Filling
@@ -414,68 +414,68 @@ uv run android-emu-agent wait idle s-abc123
 Text fields:
 
 ```bash
-uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action tap s-abc123 ^g1a1
-uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action set-text s-abc123 ^g1a1 "My text input"
+android-emu-agent ui snapshot s-abc123
+android-emu-agent action tap s-abc123 ^g1a1
+android-emu-agent ui snapshot s-abc123
+android-emu-agent action set-text s-abc123 ^g1a1 "My text input"
 
 # Clear existing text first
-uv run android-emu-agent action clear s-abc123 ^g1a1
-uv run android-emu-agent action set-text s-abc123 ^g1a1 "New text"
+android-emu-agent action clear s-abc123 ^g1a1
+android-emu-agent action set-text s-abc123 ^g1a1 "New text"
 
 # Dismiss keyboard after entry
-uv run android-emu-agent action back s-abc123
+android-emu-agent action back s-abc123
 ```
 
 Checkboxes and toggles:
 
 ```bash
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a5 = checkbox, state: { checked: false }
 
-uv run android-emu-agent action tap s-abc123 ^g1a5
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent action tap s-abc123 ^g1a5
+android-emu-agent ui snapshot s-abc123
 # Verify: state.checked true
 ```
 
 Dropdowns and spinners:
 
 ```bash
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a3 = spinner showing current selection
 
-uv run android-emu-agent action tap s-abc123 ^g1a3
-uv run android-emu-agent wait idle s-abc123
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent action tap s-abc123 ^g1a3
+android-emu-agent wait idle s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a10 = "Option A", ^g1a11 = "Option B"
 
-uv run android-emu-agent action tap s-abc123 ^g1a11
-uv run android-emu-agent wait idle s-abc123
+android-emu-agent action tap s-abc123 ^g1a11
+android-emu-agent wait idle s-abc123
 ```
 
 Date pickers:
 
 ```bash
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a4 = date field showing "Select date"
 
-uv run android-emu-agent action tap s-abc123 ^g1a4
-uv run android-emu-agent wait idle s-abc123
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent action tap s-abc123 ^g1a4
+android-emu-agent wait idle s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a1 = prev month, ^g1a2 = next month
 # Days: ^g1a15 = "15", ^g1a20 = "20"
 
-uv run android-emu-agent action tap s-abc123 ^g1a20
-uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action tap s-abc123 ^g1a30  # "OK"
+android-emu-agent action tap s-abc123 ^g1a20
+android-emu-agent ui snapshot s-abc123
+android-emu-agent action tap s-abc123 ^g1a30  # "OK"
 ```
 
 Form validation:
 
 ```bash
-uv run android-emu-agent action tap s-abc123 ^g1a1
-uv run android-emu-agent wait idle s-abc123
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent action tap s-abc123 ^g1a1
+android-emu-agent wait idle s-abc123
+android-emu-agent ui snapshot s-abc123
 
 # Look for:
 # - Error text elements
@@ -487,29 +487,29 @@ uv run android-emu-agent ui snapshot s-abc123
 Basic scroll commands:
 
 ```bash
-uv run android-emu-agent action scroll down -s s-abc123
-uv run android-emu-agent action scroll up -s s-abc123
-uv run android-emu-agent action scroll down -s s-abc123 --distance 0.5
+android-emu-agent action scroll down -s s-abc123
+android-emu-agent action scroll up -s s-abc123
+android-emu-agent action scroll down -s s-abc123 --distance 0.5
 ```
 
 Scrolling within containers:
 
 ```bash
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a5 = scrollable container
 
-uv run android-emu-agent action scroll down -s s-abc123 --in ^g1a5
+android-emu-agent action scroll down -s s-abc123 --in ^g1a5
 ```
 
 Finding elements by scrolling:
 
 ```bash
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # Target not visible
 
-uv run android-emu-agent action scroll down -s s-abc123
-uv run android-emu-agent wait idle s-abc123
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent action scroll down -s s-abc123
+android-emu-agent wait idle s-abc123
+android-emu-agent ui snapshot s-abc123
 # Repeat until found or max scrolls reached
 ```
 
@@ -525,9 +525,9 @@ Scroll distance guidelines:
 Horizontal scrolling:
 
 ```bash
-uv run android-emu-agent action scroll left -s s-abc123
-uv run android-emu-agent action scroll right -s s-abc123
-uv run android-emu-agent action scroll left -s s-abc123 --in ^g1a3
+android-emu-agent action scroll left -s s-abc123
+android-emu-agent action scroll right -s s-abc123
+android-emu-agent action scroll left -s s-abc123 --in ^g1a3
 ```
 
 Loop termination:

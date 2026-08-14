@@ -53,16 +53,16 @@ Match your symptom to the right section:
 ### Daemon Won't Start
 
 ```bash
-uv run android-emu-agent daemon status
-uv run android-emu-agent daemon stop
-uv run android-emu-agent daemon start
+android-emu-agent daemon status
+android-emu-agent daemon stop
+android-emu-agent daemon start
 ps aux | grep android-emu-agent
 ```
 
 ### Device Not Appearing
 
 ```bash
-uv run android-emu-agent device list
+android-emu-agent device list
 adb devices
 adb kill-server
 adb start-server
@@ -85,8 +85,8 @@ avdmanager list avd
 If no emulator is running yet, you can boot one through the agent:
 
 ```bash
-uv run android-emu-agent emulator list-avds
-uv run android-emu-agent emulator start <avd_name> --wait-boot
+android-emu-agent emulator list-avds
+android-emu-agent emulator start <avd_name> --wait-boot
 ```
 
 ### Elements Not Appearing in Snapshot
@@ -105,20 +105,20 @@ order (do not stop at compact mode):
 
 ```bash
 # 1) Fresh compact snapshot
-uv run android-emu-agent ui snapshot <session_id>
+android-emu-agent ui snapshot <session_id>
 
 # 2) Stabilize + compact re-check
-uv run android-emu-agent wait idle <session_id> --timeout-ms 5000
-uv run android-emu-agent ui snapshot <session_id>
+android-emu-agent wait idle <session_id> --timeout-ms 5000
+android-emu-agent ui snapshot <session_id>
 
 # 3) Full hierarchy (includes non-interactive + nested labels)
-uv run android-emu-agent ui snapshot <session_id> --full
+android-emu-agent ui snapshot <session_id> --full
 
 # 4) Raw XML hierarchy (framework-level diagnostics)
-uv run android-emu-agent ui snapshot <session_id> --raw
+android-emu-agent ui snapshot <session_id> --raw
 
 # 5) Worst-case: visual evidence for delivery + analysis
-uv run android-emu-agent ui screenshot <session_id>
+android-emu-agent ui screenshot <session_id>
 ```
 
 ### Actions Not Working
@@ -132,8 +132,8 @@ uv run android-emu-agent ui screenshot <session_id>
 - Try `long-tap` for stubborn elements.
 
 ```bash
-uv run android-emu-agent wait idle <session_id> --timeout-ms 3000
-uv run android-emu-agent action long-tap <session_id> ^g1a1
+android-emu-agent wait idle <session_id> --timeout-ms 3000
+android-emu-agent action long-tap <session_id> ^g1a1
 ```
 
 ### Action Failure Recovery
@@ -163,30 +163,30 @@ Use that ID to correlate request failures, stale-ref healing warnings, and endpo
 ### App Keeps Crashing
 
 ```bash
-uv run android-emu-agent app reset <session_id> com.example.app
-uv run android-emu-agent wait idle <session_id>
-uv run android-emu-agent app launch <session_id> com.example.app
-uv run android-emu-agent wait activity <session_id> "MainActivity" --timeout-ms 10000
+android-emu-agent app reset <session_id> com.example.app
+android-emu-agent wait idle <session_id>
+android-emu-agent app launch <session_id> com.example.app
+android-emu-agent wait activity <session_id> "MainActivity" --timeout-ms 10000
 ```
 
 ## Debug Tips
 
 ```bash
 # Complete snapshot (all elements)
-uv run android-emu-agent ui snapshot <session_id> --full
+android-emu-agent ui snapshot <session_id> --full
 
 # Screenshot for visual debugging (optionally pull to local path)
-uv run android-emu-agent artifact screenshot <session_id> --pull --output ./screenshot.png
+android-emu-agent artifact screenshot <session_id> --pull --output ./screenshot.png
 # Or capture without a session
-uv run android-emu-agent ui screenshot --device <serial> --pull
+android-emu-agent ui screenshot --device <serial> --pull
 
 # Recent logcat logs
-uv run android-emu-agent artifact logs <session_id>
+android-emu-agent artifact logs <session_id>
 # Filtered bounded logcat for one app
-uv run android-emu-agent artifact logs --session <session_id> --app com.example.app --type errors --since "10m ago"
+android-emu-agent artifact logs --session <session_id> --app com.example.app --type errors --since "10m ago"
 
 # Full debug bundle
-uv run android-emu-agent artifact bundle <session_id>
+android-emu-agent artifact bundle <session_id>
 ```
 
 ## Reliability Forensics

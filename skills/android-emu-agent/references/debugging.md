@@ -163,17 +163,17 @@ bridge after responding; attached sessions keep their existing bridge.
 ## End-to-End Flow
 
 ```bash
-uv run android-emu-agent app launch <session_id> com.example --wait-debugger
-uv run android-emu-agent debug attach --session <session_id> --package com.example
-uv run android-emu-agent debug break set com.example.LoginActivity 42 --session <session_id> --condition "attempts > 3"
-uv run android-emu-agent debug break set com.example.LoginActivity 45 --session <session_id> --log-message "attempt={hitCount} user={username}" --capture-stack --stack-max-frames 8
-uv run android-emu-agent debug break-exception set --session <session_id> --class '*' --no-caught --uncaught
-uv run android-emu-agent debug resume --session <session_id>
-uv run android-emu-agent debug events --session <session_id>
-uv run android-emu-agent debug observe --session <session_id> --json
-uv run android-emu-agent debug break hits --session <session_id> --limit 100
-uv run android-emu-agent debug inspect savedInstanceState --session <session_id>
-uv run android-emu-agent debug step-over --session <session_id>
-uv run android-emu-agent ui snapshot <session_id>
-uv run android-emu-agent debug resume --session <session_id>
+android-emu-agent app launch <session_id> com.example --wait-debugger
+android-emu-agent debug attach --session <session_id> --package com.example
+android-emu-agent debug break set com.example.LoginActivity 42 --session <session_id> --condition "attempts > 3"
+android-emu-agent debug break set com.example.LoginActivity 45 --session <session_id> --log-message "attempt={hitCount} user={username}" --capture-stack --stack-max-frames 8
+android-emu-agent debug break-exception set --session <session_id> --class '*' --no-caught --uncaught
+android-emu-agent debug resume --session <session_id>
+android-emu-agent debug events --session <session_id>
+android-emu-agent debug observe --session <session_id> --json
+android-emu-agent debug break hits --session <session_id> --limit 100
+android-emu-agent debug inspect savedInstanceState --session <session_id>
+android-emu-agent debug step-over --session <session_id>
+android-emu-agent ui snapshot <session_id>
+android-emu-agent debug resume --session <session_id>
 ```

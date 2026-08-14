@@ -20,7 +20,7 @@ archives, capability-guided selector planning, intent preflight, and evidence bu
 - Example 5: Handle App Crash and Recover
 - Example 6: Complete E2E Test Flow
 - Example 7: Action Failure Recovery Escalation
-- Example 8: Run a Checked-in `.aea` Task Script
+- Example 8: Run an `.aea` Task Script
 
 ## Example 0: Boot an AVD and Restore a Known State
 
@@ -29,17 +29,17 @@ session.
 
 ```bash
 # 1. Inspect available AVDs
-uv run android-emu-agent emulator list-avds
+android-emu-agent emulator list-avds
 
 # 2. Start the emulator and wait for Android boot
-uv run android-emu-agent emulator start Pixel_8_API_34 --wait-boot
+android-emu-agent emulator start Pixel_8_API_34 --wait-boot
 
 # 3. Restore a known snapshot for deterministic tests
-uv run android-emu-agent emulator snapshot restore emulator-5554 post-onboarding
+android-emu-agent emulator snapshot restore emulator-5554 post-onboarding
 
 # 4. Start the daemon and a session
-uv run android-emu-agent daemon start
-uv run android-emu-agent session start --device emulator-5554
+android-emu-agent daemon start
+android-emu-agent session start --device emulator-5554
 ```
 
 ## Example 1: Launch App and Handle Permissions
@@ -51,26 +51,26 @@ Patterns used: permission dialog handling
 
 ```bash
 # 1. Start session
-uv run android-emu-agent session start --device emulator-5554
+android-emu-agent session start --device emulator-5554
 # Returns: session_id = s-abc123
 
 # 2. Launch the app
-uv run android-emu-agent app launch s-abc123 com.example.camera.app
-uv run android-emu-agent wait idle s-abc123 --timeout-ms 5000
+android-emu-agent app launch s-abc123 com.example.camera.app
+android-emu-agent wait idle s-abc123 --timeout-ms 5000
 
 # 3. Take snapshot - might show permission dialog
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # context.package = "com.google.android.permissioncontroller"
 # ^g1a1 = "While using the app"
 # ^g1a2 = "Only this time"
 # ^g1a3 = "Don't allow"
 
 # 4. Grant permission
-uv run android-emu-agent action tap s-abc123 ^g1a1
-uv run android-emu-agent wait idle s-abc123
+android-emu-agent action tap s-abc123 ^g1a1
+android-emu-agent wait idle s-abc123
 
 # 5. Verify permission granted and app is ready
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # context.package = "com.example.camera.app"
 # context.activity = ".MainActivity"
 ```
@@ -79,9 +79,9 @@ For setup-heavy tests where the permission dialog itself is not under test, gran
 permission before launch:
 
 ```bash
-uv run android-emu-agent system permissions grant com.example.camera.app android.permission.CAMERA --session s-abc123
-uv run android-emu-agent app launch s-abc123 com.example.camera.app
-uv run android-emu-agent wait idle s-abc123 --timeout-ms 5000
+android-emu-agent system permissions grant com.example.camera.app android.permission.CAMERA --session s-abc123
+android-emu-agent app launch s-abc123 com.example.camera.app
+android-emu-agent wait idle s-abc123 --timeout-ms 5000
 ```
 
 ## Example 2: Login Flow
@@ -91,34 +91,34 @@ Goal: Log into an app with email and password.
 Patterns used: login flow (`references/ui-automation-patterns.md > Login and Authentication Flows`).
 
 ```bash
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a1 = "Email" text field
 # ^g1a2 = "Password" text field
 # ^g1a3 = "Sign In" button
 
 # Enter email
-uv run android-emu-agent action tap s-abc123 ^g1a1
-uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action set-text s-abc123 ^g1a1 "user@example.com"
+android-emu-agent action tap s-abc123 ^g1a1
+android-emu-agent ui snapshot s-abc123
+android-emu-agent action set-text s-abc123 ^g1a1 "user@example.com"
 
 # Enter password
-uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action tap s-abc123 ^g1a2
-uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action set-text s-abc123 ^g1a2 "mySecurePassword123"
+android-emu-agent ui snapshot s-abc123
+android-emu-agent action tap s-abc123 ^g1a2
+android-emu-agent ui snapshot s-abc123
+android-emu-agent action set-text s-abc123 ^g1a2 "mySecurePassword123"
 
 # Dismiss keyboard
-uv run android-emu-agent action back s-abc123
+android-emu-agent action back s-abc123
 
 # Submit login
-uv run android-emu-agent ui snapshot s-abc123
-uv run android-emu-agent action tap s-abc123 ^g1a3
+android-emu-agent ui snapshot s-abc123
+android-emu-agent action tap s-abc123 ^g1a3
 
 # Wait for success
-uv run android-emu-agent wait activity s-abc123 "HomeActivity" --timeout-ms 15000
+android-emu-agent wait activity s-abc123 "HomeActivity" --timeout-ms 15000
 
 # Verify logged in
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # context.activity = ".HomeActivity"
 ```
 
@@ -128,28 +128,28 @@ Goal: Open navigation drawer, go to settings, and toggle a setting.
 
 ```bash
 # Open navigation drawer
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a1 = hamburger menu icon (desc: "Open navigation drawer")
 
-uv run android-emu-agent action tap s-abc123 ^g1a1
-uv run android-emu-agent wait idle s-abc123
+android-emu-agent action tap s-abc123 ^g1a1
+android-emu-agent wait idle s-abc123
 
 # Navigate to Settings
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a7 = "Settings"
 
-uv run android-emu-agent action tap s-abc123 ^g1a7
-uv run android-emu-agent wait activity s-abc123 "SettingsActivity" --timeout-ms 5000
+android-emu-agent action tap s-abc123 ^g1a7
+android-emu-agent wait activity s-abc123 "SettingsActivity" --timeout-ms 5000
 
 # Toggle a setting
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a2 = "Dark Mode" switch, state: { checked: false }
 
-uv run android-emu-agent action tap s-abc123 ^g1a2
-uv run android-emu-agent wait idle s-abc123
+android-emu-agent action tap s-abc123 ^g1a2
+android-emu-agent wait idle s-abc123
 
 # Verify
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a2 state: { checked: true }
 ```
 
@@ -158,20 +158,20 @@ uv run android-emu-agent ui snapshot s-abc123
 Goal: Find "Privacy Policy" in a long settings list.
 
 ```bash
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # "Privacy Policy" not visible
 
-uv run android-emu-agent action scroll down -s s-abc123
-uv run android-emu-agent wait idle s-abc123
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent action scroll down -s s-abc123
+android-emu-agent wait idle s-abc123
+android-emu-agent ui snapshot s-abc123
 
-uv run android-emu-agent action scroll down -s s-abc123
-uv run android-emu-agent wait idle s-abc123
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent action scroll down -s s-abc123
+android-emu-agent wait idle s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a8 = "Privacy Policy"
 
-uv run android-emu-agent action tap s-abc123 ^g1a8
-uv run android-emu-agent wait idle s-abc123
+android-emu-agent action tap s-abc123 ^g1a8
+android-emu-agent wait idle s-abc123
 ```
 
 ## Example 5: Handle App Crash and Recover
@@ -179,21 +179,21 @@ uv run android-emu-agent wait idle s-abc123
 Goal: Detect and recover from an app crash.
 
 ```bash
-uv run android-emu-agent action tap s-abc123 ^g1a5
-uv run android-emu-agent wait idle s-abc123 --timeout-ms 3000
+android-emu-agent action tap s-abc123 ^g1a5
+android-emu-agent wait idle s-abc123 --timeout-ms 3000
 
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # context.package = "android"
 # Text: "MyApp has stopped"
 # ^g1a1 = "Close app"
 
-uv run android-emu-agent action tap s-abc123 ^g1a1
-uv run android-emu-agent wait idle s-abc123
+android-emu-agent action tap s-abc123 ^g1a1
+android-emu-agent wait idle s-abc123
 
-uv run android-emu-agent app launch s-abc123 com.example.myapp
-uv run android-emu-agent wait activity s-abc123 "MainActivity" --timeout-ms 10000
+android-emu-agent app launch s-abc123 com.example.myapp
+android-emu-agent wait activity s-abc123 "MainActivity" --timeout-ms 10000
 
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # context.package = "com.example.myapp"
 ```
 
@@ -205,44 +205,44 @@ Patterns used: onboarding skip, login flow, permission handling
 (`references/ui-automation-patterns.md`).
 
 ```bash
-uv run android-emu-agent daemon status
-uv run android-emu-agent session start --device emulator-5554
+android-emu-agent daemon status
+android-emu-agent session start --device emulator-5554
 # session_id = s-test01
 
-uv run android-emu-agent app reset s-test01 com.example.app
-uv run android-emu-agent app launch s-test01 com.example.app
-uv run android-emu-agent wait idle s-test01 --timeout-ms 10000
+android-emu-agent app reset s-test01 com.example.app
+android-emu-agent app launch s-test01 com.example.app
+android-emu-agent wait idle s-test01 --timeout-ms 10000
 
-uv run android-emu-agent ui snapshot s-test01
+android-emu-agent ui snapshot s-test01
 # ^g1a1 = "Skip"
 
-uv run android-emu-agent action tap s-test01 ^g1a1
-uv run android-emu-agent wait idle s-test01
+android-emu-agent action tap s-test01 ^g1a1
+android-emu-agent wait idle s-test01
 
-uv run android-emu-agent ui snapshot s-test01
+android-emu-agent ui snapshot s-test01
 # ^g1a2 = "Email", ^g1a3 = "Password", ^g1a4 = "Login"
 
-uv run android-emu-agent action tap s-test01 ^g1a2
-uv run android-emu-agent ui snapshot s-test01
-uv run android-emu-agent action set-text s-test01 ^g1a2 "test@example.com"
+android-emu-agent action tap s-test01 ^g1a2
+android-emu-agent ui snapshot s-test01
+android-emu-agent action set-text s-test01 ^g1a2 "test@example.com"
 
-uv run android-emu-agent ui snapshot s-test01
-uv run android-emu-agent action tap s-test01 ^g1a3
-uv run android-emu-agent ui snapshot s-test01
-uv run android-emu-agent action set-text s-test01 ^g1a3 "testPassword123"
+android-emu-agent ui snapshot s-test01
+android-emu-agent action tap s-test01 ^g1a3
+android-emu-agent ui snapshot s-test01
+android-emu-agent action set-text s-test01 ^g1a3 "testPassword123"
 
-uv run android-emu-agent action back s-test01
-uv run android-emu-agent ui snapshot s-test01
-uv run android-emu-agent action tap s-test01 ^g1a4
+android-emu-agent action back s-test01
+android-emu-agent ui snapshot s-test01
+android-emu-agent action tap s-test01 ^g1a4
 
-uv run android-emu-agent wait activity s-test01 "HomeActivity" --timeout-ms 15000
+android-emu-agent wait activity s-test01 "HomeActivity" --timeout-ms 15000
 
-uv run android-emu-agent ui snapshot s-test01
+android-emu-agent ui snapshot s-test01
 # context.package = "com.example.app"
 # context.activity = ".HomeActivity"
 
-uv run android-emu-agent artifact screenshot s-test01 --pull --output ./artifacts/
-uv run android-emu-agent session stop s-test01
+android-emu-agent artifact screenshot s-test01 --pull --output ./artifacts/
+android-emu-agent session stop s-test01
 ```
 
 ## Example 7: Action Failure Recovery Escalation
@@ -253,56 +253,55 @@ For the full recovery protocol (limits, decision flowchart), see `references/rec
 
 ```bash
 # Observe
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a5 = "Confirm Purchase" button
 
 # Act — stale ref may fail or auto-heal with a warning
-uv run android-emu-agent action tap s-abc123 ^g1a5
+android-emu-agent action tap s-abc123 ^g1a5
 # Possible result: status=done with warning about stale ref healing
 
 # --- Level 1: Re-snapshot Recovery ---
 
 # Wait for UI to settle
-uv run android-emu-agent wait idle s-abc123 --timeout-ms 5000
+android-emu-agent wait idle s-abc123 --timeout-ms 5000
 
 # Fresh snapshot to continue with reliable refs
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # "Confirm Purchase" not visible in snapshot — Level 1 cannot resolve
 
 # --- Level 2: Visual / Screenshot Recovery ---
 
 # Capture screenshot for visual analysis
-uv run android-emu-agent artifact screenshot s-abc123 --pull --output ./debug-purchase.png
+android-emu-agent artifact screenshot s-abc123 --pull --output ./debug-purchase.png
 # Screenshot reveals "Confirm Purchase" is below the fold
 
 # Full snapshot to confirm
-uv run android-emu-agent ui snapshot s-abc123 --full
+android-emu-agent ui snapshot s-abc123 --full
 # Scrollable container detected
 
 # Corrective action: scroll down
-uv run android-emu-agent action scroll down -s s-abc123
-uv run android-emu-agent wait idle s-abc123
+android-emu-agent action scroll down -s s-abc123
+android-emu-agent wait idle s-abc123
 
 # Re-snapshot — target found
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # ^g1a3 = "Confirm Purchase"
 
 # Retry action — success
-uv run android-emu-agent action tap s-abc123 ^g1a3
-uv run android-emu-agent wait idle s-abc123
+android-emu-agent action tap s-abc123 ^g1a3
+android-emu-agent wait idle s-abc123
 
 # Verify
-uv run android-emu-agent ui snapshot s-abc123
+android-emu-agent ui snapshot s-abc123
 # context.activity = ".OrderConfirmationActivity"
 ```
 
-## Example 8: Run a Checked-in `.aea` Task Script
+## Example 8: Run an `.aea` Task Script
 
 Goal: Validate a human-editable task script, then run it against an active session.
 
-The formal `.aea` syntax is documented in `docs/aea-spec.md`. The repository keeps example scripts
-under `examples/tasks/`. Start with `examples/tasks/idle-snapshot.aea` when you want a minimal
-script that can run against any active session:
+The formal `.aea` syntax is documented at <https://alehkot.github.io/android-emu-agent/aea-spec/>.
+Save this minimal script as `idle-snapshot.aea`; it runs against any active session:
 
 ```text
 name "idle snapshot"
@@ -315,15 +314,15 @@ snapshot mode=compact
 Validate the script before running:
 
 ```bash
-uv run android-emu-agent task validate examples/tasks/idle-snapshot.aea
+android-emu-agent task validate ./idle-snapshot.aea
 ```
 
 Run it with an existing session:
 
 ```bash
-uv run android-emu-agent task run examples/tasks/idle-snapshot.aea --session s-abc123 --json
+android-emu-agent task run ./idle-snapshot.aea --session s-abc123 --json
 ```
 
-For app-specific examples, inspect `examples/tasks/checkout-smoke.aea` and
-`examples/tasks/login-flow.aea`, then replace package names, selectors, credentials, and activity
-names with values from the target app.
+For app-specific starting points, copy `checkout-smoke.aea` or `login-flow.aea` from
+<https://github.com/alehkot/android-emu-agent/tree/main/examples/tasks>, then replace package names,
+selectors, credentials, and activity names with values from the target app.

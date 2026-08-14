@@ -44,16 +44,16 @@ Example:
 # User: "Hey, I'm going to use my Android emulator"
 
 # Agent checks readiness:
-uv run android-emu-agent daemon status
+android-emu-agent daemon status
 # If not running:
-uv run android-emu-agent daemon start
+android-emu-agent daemon start
 
-uv run android-emu-agent device list
+android-emu-agent device list
 # Confirms: emulator-5554 is connected
 
-uv run android-emu-agent session list
+android-emu-agent session list
 # If no active session:
-uv run android-emu-agent session start --device emulator-5554
+android-emu-agent session start --device emulator-5554
 # Returns: session_id = s-abc123
 
 # Agent responds:

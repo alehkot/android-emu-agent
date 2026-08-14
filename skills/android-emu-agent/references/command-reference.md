@@ -2,12 +2,12 @@
 
 > **Read this file when** you need to look up a command, its arguments, or selector syntax.
 
-Examples in this repo assume `uv run android-emu-agent <command>`. If you installed the CLI
-globally, replace with `android-emu-agent <command>`.
+Commands below call `android-emu-agent` directly. Inside an android-emu-agent source checkout,
+prefix every command with `uv run` (see SKILL.md, Core Rules).
 
 This file is a task-planning cheat sheet, not the exhaustive CLI source of truth. For current full
-help, use `uv run android-emu-agent --help` and subcommand help. In this repo, `docs/reference.md`
-is generated from the live CLI; regenerate it instead of hand-editing generated command tables.
+help, use `android-emu-agent --help` and subcommand help, or the generated reference at
+<https://alehkot.github.io/android-emu-agent/reference/>.
 
 Most commands accept `--json` for machine-readable JSON output (useful for scripting or when you
 need to parse structured results programmatically).
@@ -147,14 +147,16 @@ verify exists text:"Email"
 expect activity MainActivity
 ```
 
-The formal parser contract is documented in `docs/aea-spec.md`.
+The formal parser contract is documented at <https://alehkot.github.io/android-emu-agent/aea-spec/>.
 
-Checked-in examples live under `examples/tasks/`. Validate before running:
+Validate a script before running it:
 
 ```bash
-uv run android-emu-agent task validate examples/tasks/checkout-smoke.aea
-uv run android-emu-agent task run examples/tasks/checkout-smoke.aea --session s-abc123 --json
+android-emu-agent task validate ./checkout-smoke.aea
+android-emu-agent task run ./checkout-smoke.aea --session s-abc123 --json
 ```
+
+Ready-made scripts to copy: <https://github.com/alehkot/android-emu-agent/tree/main/examples/tasks>.
 
 ### UI
 
@@ -489,8 +491,8 @@ an ambiguous earlier alternative.
 ## Swipe and Scroll Directions
 
 ```bash
-uv run android-emu-agent action swipe <direction> -s <session_id> [--in <target>] [--distance <0-1>]
-uv run android-emu-agent action scroll <direction> -s <session_id> [--in <target>] [--distance <0-1>]
+android-emu-agent action swipe <direction> -s <session_id> [--in <target>] [--distance <0-1>]
+android-emu-agent action scroll <direction> -s <session_id> [--in <target>] [--distance <0-1>]
 ```
 
 Directions: `up`, `down`, `left`, `right`
@@ -506,20 +508,20 @@ Options:
 
 ```bash
 # Wait for UI to become idle (animations complete)
-uv run android-emu-agent wait idle <session_id> --timeout-ms 5000
+android-emu-agent wait idle <session_id> --timeout-ms 5000
 
 # Wait for specific activity
-uv run android-emu-agent wait activity <session_id> "MainActivity" --timeout-ms 10000
+android-emu-agent wait activity <session_id> "MainActivity" --timeout-ms 10000
 
 # Wait for text to appear
-uv run android-emu-agent wait text <session_id> "Welcome" --timeout-ms 5000
+android-emu-agent wait text <session_id> "Welcome" --timeout-ms 5000
 
 # Wait for element to exist
-uv run android-emu-agent wait exists <session_id> --text "Submit" --timeout-ms 5000
-uv run android-emu-agent wait exists <session_id> --id "com.example:id/btn" --timeout-ms 5000
+android-emu-agent wait exists <session_id> --text "Submit" --timeout-ms 5000
+android-emu-agent wait exists <session_id> --id "com.example:id/btn" --timeout-ms 5000
 
 # Wait for element to disappear
-uv run android-emu-agent wait gone <session_id> --text "Loading..." --timeout-ms 10000
+android-emu-agent wait gone <session_id> --text "Loading..." --timeout-ms 10000
 ```
 
 Default timeout: 10000ms (10 seconds)

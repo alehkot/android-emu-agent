@@ -11,13 +11,13 @@ Commands to push/pull files to shared storage (sdcard) and app-private storage. 
 
 ```bash
 # Push local file -> /sdcard/Download/<name>
-uv run android-emu-agent file push ./sample.json --device emulator-5554
+android-emu-agent file push ./sample.json --device emulator-5554
 
 # Push to a specific path
-uv run android-emu-agent file push ./sample.json --device emulator-5554 --remote /sdcard/Download/sample.json
+android-emu-agent file push ./sample.json --device emulator-5554 --remote /sdcard/Download/sample.json
 
 # Pull from shared storage
-uv run android-emu-agent file pull /sdcard/Download/sample.json --device emulator-5554
+android-emu-agent file pull /sdcard/Download/sample.json --device emulator-5554
 ```
 
 ## App-Private Storage
@@ -27,13 +27,13 @@ Android's `run-as` command can enter its sandbox.
 
 ```bash
 # Push into app files/ (default)
-uv run android-emu-agent file app push com.example.app ./config.json --device emulator-5554
+android-emu-agent file app push com.example.app ./config.json --device emulator-5554
 
 # Push to a specific app-private path
-uv run android-emu-agent file app push com.example.app ./config.json --device emulator-5554 --remote files/config.json
+android-emu-agent file app push com.example.app ./config.json --device emulator-5554 --remote files/config.json
 
 # Pull app-private file or directory
-uv run android-emu-agent file app pull com.example.app files/ --device emulator-5554
+android-emu-agent file app pull com.example.app files/ --device emulator-5554
 ```
 
 Outputs land in `~/.android-emu-agent/artifacts/files` unless you provide `--local`.
@@ -45,10 +45,10 @@ without root for paths readable by the Android shell user; protected paths still
 
 ```bash
 # Find all SQLite files under app data
-uv run android-emu-agent file find /data/data --name "*.db" --type file --max-depth 6 --device emulator-5554
+android-emu-agent file find /data/data --name "*.db" --type file --max-depth 6 --device emulator-5554
 
 # Find directories named "cache" under shared storage
-uv run android-emu-agent file find /sdcard --name "cache" --type dir --max-depth 4 --device emulator-5554
+android-emu-agent file find /sdcard --name "cache" --type dir --max-depth 4 --device emulator-5554
 ```
 
 The output includes: path, type, size (bytes), mode, uid:gid, and mtime (epoch).
@@ -60,10 +60,10 @@ paths require root.
 
 ```bash
 # List immediate entries in a directory
-uv run android-emu-agent file list /data/data --device emulator-5554
+android-emu-agent file list /data/data --device emulator-5554
 
 # List only folders
-uv run android-emu-agent file list /sdcard --type dir --device emulator-5554
+android-emu-agent file list /sdcard --type dir --device emulator-5554
 ```
 
 The output includes: path, type, size (bytes), mode, uid:gid, and mtime (epoch).

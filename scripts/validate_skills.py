@@ -20,6 +20,18 @@ NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 FIELD_RE = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*):(?:\s*(.*))?$")
 REFERENCE_RE = re.compile(r"(?<![\w/])references/[A-Za-z0-9_.-]+\.md")
 
+# Skills ship inside the wheel, where the repository layout does not exist. Commands must use the
+# installed CLI, and paths must point at the docs site or GitHub rather than the checkout.
+UV_RUN_RE = re.compile(r"uv run android-emu-agent")
+# Files allowed to name the checkout-only invocation, and how often (the rule quotes the form).
+UV_RUN_ALLOWANCE = {
+    "SKILL.md": 1,
+    "references/command-reference.md": 1,
+}
+REPO_PATH_RE = re.compile(
+    r"(?<![\w./-])(?:docs/[A-Za-z0-9_-]+\.md|examples/tasks/?|\./scripts/dev\.sh|scripts/dev\.sh)"
+)
+
 
 class SkillValidationError(Exception):
     """Raised when a skill cannot be parsed."""
@@ -90,6 +102,26 @@ def _check_reference_paths(skill_dir: Path, path: Path, text: str, errors: list[
             errors.append(f"{path}: missing referenced file '{reference}'")
 
 
+def _check_invocation_prefix(rel_name: str, path: Path, text: str, errors: list[str]) -> None:
+    """Skill commands must use the installed CLI, not the checkout-only 'uv run' form."""
+    found = len(UV_RUN_RE.findall(text))
+    allowed = UV_RUN_ALLOWANCE.get(rel_name, 0)
+    if found > allowed:
+        errors.append(
+            f"{path}: use the bare 'android-emu-agent' invocation "
+            f"({found} 'uv run android-emu-agent' occurrences, at most {allowed} allowed here)"
+        )
+
+
+def _check_repository_paths(path: Path, text: str, errors: list[str]) -> None:
+    """Skills ship without the repository, so checkout-only paths cannot be followed."""
+    for match in sorted(set(REPO_PATH_RE.findall(text))):
+        errors.append(
+            f"{path}: references repository-only path '{match}'; "
+            "link to the docs site or a GitHub URL instead"
+        )
+
+
 def _validate_skill(skill_dir: Path) -> list[str]:
     errors: list[str] = []
     skill_file = skill_dir / "SKILL.md"
@@ -133,6 +165,8 @@ def _validate_skill(skill_dir: Path) -> list[str]:
     skill_text = skill_file.read_text(encoding="utf-8")
     _check_fenced_code(skill_file, skill_text, errors)
     _check_reference_paths(skill_dir, skill_file, skill_text, errors)
+    _check_invocation_prefix("SKILL.md", skill_file, skill_text, errors)
+    _check_repository_paths(skill_file, skill_text, errors)
 
     reference_dir = skill_dir / "references"
     if reference_dir.is_dir():
@@ -141,6 +175,10 @@ def _validate_skill(skill_dir: Path) -> list[str]:
             reference_lines = reference_text.splitlines()
             _check_fenced_code(reference_file, reference_text, errors)
             _check_reference_paths(skill_dir, reference_file, reference_text, errors)
+            _check_invocation_prefix(
+                f"references/{reference_file.name}", reference_file, reference_text, errors
+            )
+            _check_repository_paths(reference_file, reference_text, errors)
 
             first_lines = "\n".join(reference_lines[:8])
             if "Read this file when" not in first_lines:

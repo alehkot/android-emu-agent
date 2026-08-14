@@ -8,7 +8,7 @@
 Request a UI snapshot to see interactive elements:
 
 ```bash
-uv run android-emu-agent ui snapshot <session_id>
+android-emu-agent ui snapshot <session_id>
 ```
 
 The snapshot returns context and actionable elements with generation-scoped refs in the form
@@ -70,9 +70,9 @@ Quick decision checklist (work through in order):
 Execute one action at a time using the `^ref` from the current snapshot:
 
 ```bash
-uv run android-emu-agent action tap <session_id> ^g1a1
-uv run android-emu-agent action set-text <session_id> ^g1a2 "username"
-uv run android-emu-agent action back <session_id>
+android-emu-agent action tap <session_id> ^g1a1
+android-emu-agent action set-text <session_id> ^g1a2 "username"
+android-emu-agent action back <session_id>
 ```
 
 Refs are tied to a specific snapshot generation. The daemon may heal a stale ref against the newest
@@ -88,7 +88,7 @@ guidance.
 Take a new snapshot to confirm the action had the expected effect:
 
 ```bash
-uv run android-emu-agent ui snapshot <session_id>
+android-emu-agent ui snapshot <session_id>
 ```
 
 Verify that the expected UI change occurred and no error dialogs appeared. If the expected state is

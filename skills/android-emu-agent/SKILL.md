@@ -14,8 +14,7 @@ description: >
 
 Use the `android-emu-agent` CLI + daemon to control Android UI with actionable snapshots and
 generation-scoped element refs. Compact snapshots are designed to work well across classic XML
-layouts and modern frameworks such as Compose and Litho. If you're working inside this repo, prefer
-`uv run android-emu-agent ...` to ensure the correct environment.
+layouts and modern frameworks such as Compose and Litho.
 
 ## Operating Process
 
@@ -40,30 +39,34 @@ layouts and modern frameworks such as Compose and Litho. If you're working insid
 
 ## Quick Start
 
+If `android-emu-agent` is not on `PATH`, install it first with `uv tool install android-emu-agent`
+(or `pipx install android-emu-agent`). See
+<https://alehkot.github.io/android-emu-agent/installation/>.
+
 1. Start the daemon.
 
 ```bash
-uv run android-emu-agent daemon start
-uv run android-emu-agent daemon status
+android-emu-agent daemon start
+android-emu-agent daemon status
 ```
 
 1. Verify a device is connected.
 
 ```bash
-uv run android-emu-agent device list
+android-emu-agent device list
 ```
 
 1. If no emulator is running, boot one first.
 
 ```bash
-uv run android-emu-agent emulator list-avds
-uv run android-emu-agent emulator start <avd_name> --wait-boot
+android-emu-agent emulator list-avds
+android-emu-agent emulator start <avd_name> --wait-boot
 ```
 
 1. Start a session.
 
 ```bash
-uv run android-emu-agent session start --device <serial>
+android-emu-agent session start --device <serial>
 # Returns: session_id = s-abc123
 ```
 
@@ -71,25 +74,30 @@ uv run android-emu-agent session start --device <serial>
 
 ```bash
 # Observe
-uv run android-emu-agent ui snapshot <session_id>
+android-emu-agent ui snapshot <session_id>
 
 # Act (one action)
-uv run android-emu-agent action tap <session_id> ^g1a1
+android-emu-agent action tap <session_id> ^g1a1
 
 # Verify
-uv run android-emu-agent ui snapshot <session_id>
+android-emu-agent ui snapshot <session_id>
 ```
 
 ## Daemon Lifecycle (When and How to Start)
 
 - Start the daemon before any device/session/ui/action/app/reliability/file commands.
 - The CLI can auto-start the daemon on first request, but start it explicitly for stable sessions.
-- Verify health with `uv run android-emu-agent daemon status` before long runs.
-- Stop it when you are done with `uv run android-emu-agent daemon stop`.
-- If you are working inside this repo, use `uv run android-emu-agent ...` for all of the above.
+- Verify health with `android-emu-agent daemon status` before long runs.
+- Stop it when you are done with `android-emu-agent daemon stop`.
 
 ## Core Rules
 
+- **Prefer a source checkout over an installed release.** These commands call `android-emu-agent`
+  directly, which uses the installed CLI. If you are working inside the android-emu-agent repository
+  itself, run every command as `uv run android-emu-agent ...` from the checkout root instead: the
+  checkout may contain unpublished changes, so an installed binary can be stale. After switching
+  between the two, restart the daemon (`daemon stop`, then `daemon start`) so it does not keep
+  serving the previous version.
 - **Never act without a user request.** When the user starts a session (e.g. "I'm going to use my
   emulator"), only ensure readiness (daemon up, device connected, session active). Do not tap,
   swipe, type, launch apps, or take any UI action until the user explicitly asks. See

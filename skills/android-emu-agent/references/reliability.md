@@ -69,7 +69,7 @@ Run these steps in order. Each step narrows the diagnosis.
 Shows why the system killed the app. Available on Android 11+.
 
 ```bash
-uv run android-emu-agent reliability exit-info com.example.app --device emulator-5554
+android-emu-agent reliability exit-info com.example.app --device emulator-5554
 ```
 
 **Output interpretation:** Look for `reason` field — common values: `REASON_CRASH` (unhandled
@@ -81,15 +81,15 @@ exception), `REASON_ANR` (main thread blocked), `REASON_LOW_MEMORY` (OOM kill),
 Timeline of process starts, deaths, and ANRs from the system events buffer.
 
 ```bash
-uv run android-emu-agent reliability events --device emulator-5554 --package com.example.app
-uv run android-emu-agent reliability events --device emulator-5554 --pattern "am_proc_died|am_anr"
+android-emu-agent reliability events --device emulator-5554 --package com.example.app
+android-emu-agent reliability events --device emulator-5554 --pattern "am_proc_died|am_anr"
 ```
 
 Use `--since` to limit by time (timestamp in `MM-DD HH:MM:SS.mmm` format) or line count:
 
 ```bash
-uv run android-emu-agent reliability events --device emulator-5554 --since "01-15 14:30:00.000"
-uv run android-emu-agent reliability events --device emulator-5554 --since 100
+android-emu-agent reliability events --device emulator-5554 --since "01-15 14:30:00.000"
+android-emu-agent reliability events --device emulator-5554 --since 100
 ```
 
 **Output interpretation:** Look for `am_proc_died` entries (process killed), `am_anr` (ANR trigger),
@@ -100,9 +100,9 @@ uv run android-emu-agent reliability events --device emulator-5554 --since 100
 Persistent crash and ANR stack traces that survive process death.
 
 ```bash
-uv run android-emu-agent reliability dropbox list --device emulator-5554 --package com.example.app
-uv run android-emu-agent reliability dropbox print data_app_crash --device emulator-5554
-uv run android-emu-agent reliability dropbox print data_app_anr --device emulator-5554
+android-emu-agent reliability dropbox list --device emulator-5554 --package com.example.app
+android-emu-agent reliability dropbox print data_app_crash --device emulator-5554
+android-emu-agent reliability dropbox print data_app_anr --device emulator-5554
 ```
 
 **Output interpretation:** `data_app_crash` entries contain Java stack traces. `data_app_anr`
@@ -114,14 +114,14 @@ Full system capture including `/data/anr`, `/data/tombstones`, and all system lo
 1-3 don't provide enough context.
 
 ```bash
-uv run android-emu-agent reliability bugreport --device emulator-5554
+android-emu-agent reliability bugreport --device emulator-5554
 # Zip saved to ~/.android-emu-agent/artifacts/reliability
 ```
 
 Use `--output` to control destination:
 
 ```bash
-uv run android-emu-agent reliability bugreport --device emulator-5554 --output ./bugreport.zip
+android-emu-agent reliability bugreport --device emulator-5554 --output ./bugreport.zip
 ```
 
 ### Step 5: Last ANR Summary
@@ -129,7 +129,7 @@ uv run android-emu-agent reliability bugreport --device emulator-5554 --output .
 Quick check for the most recent ANR without pulling full traces.
 
 ```bash
-uv run android-emu-agent reliability last-anr --device emulator-5554
+android-emu-agent reliability last-anr --device emulator-5554
 ```
 
 ### Background and Process State
@@ -138,10 +138,10 @@ Check if the app is being restricted or killed by system policies.
 
 ```bash
 # Background restrictions (battery optimization, app standby bucket)
-uv run android-emu-agent reliability background com.example.app --device emulator-5554
+android-emu-agent reliability background com.example.app --device emulator-5554
 
 # Live process snapshot (exact pid, oom_adj score, selected /proc status fields)
-uv run android-emu-agent reliability process com.example.app --device emulator-5554
+android-emu-agent reliability process com.example.app --device emulator-5554
 ```
 
 **Output interpretation for `process`:** `oom_adj` near 0 = foreground (safe). Higher values (e.g.,
@@ -152,8 +152,8 @@ uv run android-emu-agent reliability process com.example.app --device emulator-5
 ### App Health Profile
 
 ```bash
-uv run android-emu-agent reliability profile com.example.app --session s-abc123 --json
-uv run android-emu-agent reliability profile com.example.app --device emulator-5554 --since 100
+android-emu-agent reliability profile com.example.app --session s-abc123 --json
+android-emu-agent reliability profile com.example.app --device emulator-5554 --since 100
 ```
 
 **Output interpretation:** Start with the `sections` object. `process` exposes pid and
@@ -165,7 +165,7 @@ events for the package.
 ### Memory Usage
 
 ```bash
-uv run android-emu-agent reliability meminfo com.example.app --device emulator-5554
+android-emu-agent reliability meminfo com.example.app --device emulator-5554
 ```
 
 **Output interpretation:** Check `TOTAL PSS` for overall memory footprint. High `Native Heap` may
@@ -174,7 +174,7 @@ indicate native leaks. High `Java Heap` may indicate object retention.
 ### Rendering Performance
 
 ```bash
-uv run android-emu-agent reliability gfxinfo com.example.app --device emulator-5554
+android-emu-agent reliability gfxinfo com.example.app --device emulator-5554
 ```
 
 **Output interpretation:** Look at frame stats — frames exceeding 16ms indicate jank. `Janky frames`
@@ -188,13 +188,13 @@ unless `--output` is provided.
 
 ```bash
 # System/app timeline trace
-uv run android-emu-agent reliability perfetto --session s-abc123 --duration 10
+android-emu-agent reliability perfetto --session s-abc123 --duration 10
 
 # App process CPU profile plus local text report
-uv run android-emu-agent reliability simpleperf com.example.app --session s-abc123 --duration 10
+android-emu-agent reliability simpleperf com.example.app --session s-abc123 --duration 10
 
 # Visual reproduction evidence
-uv run android-emu-agent reliability screenrecord --session s-abc123 --duration 10
+android-emu-agent reliability screenrecord --session s-abc123 --duration 10
 ```
 
 Keep durations short and repeatable. Use `--categories` on `perfetto` only when you know which data
@@ -206,8 +206,8 @@ Use `--mode reset` to clear compiled code (simulates cold-start / unoptimized pa
 `--mode speed` to force full ahead-of-time compilation (simulates optimized path).
 
 ```bash
-uv run android-emu-agent reliability compile com.example.app --device emulator-5554 --mode reset
-uv run android-emu-agent reliability compile com.example.app --device emulator-5554 --mode speed
+android-emu-agent reliability compile com.example.app --device emulator-5554 --mode reset
+android-emu-agent reliability compile com.example.app --device emulator-5554 --mode speed
 ```
 
 ## Rooted Devices / Emulators
@@ -217,9 +217,9 @@ uv run android-emu-agent reliability compile com.example.app --device emulator-5
 Direct access to system-protected directories. Faster than bugreport for targeted analysis.
 
 ```bash
-uv run android-emu-agent reliability pull anr --device emulator-5554
-uv run android-emu-agent reliability pull tombstones --device emulator-5554
-uv run android-emu-agent reliability pull dropbox --device emulator-5554
+android-emu-agent reliability pull anr --device emulator-5554
+android-emu-agent reliability pull tombstones --device emulator-5554
+android-emu-agent reliability pull dropbox --device emulator-5554
 ```
 
 ### Force Thread Dump (SIGQUIT)
@@ -227,7 +227,7 @@ uv run android-emu-agent reliability pull dropbox --device emulator-5554
 Use when the app is frozen/hung to capture what all threads are doing.
 
 ```bash
-uv run android-emu-agent reliability sigquit com.example.app --device emulator-5554
+android-emu-agent reliability sigquit com.example.app --device emulator-5554
 ```
 
 ### Memory Pressure Simulation
@@ -236,10 +236,10 @@ Use to test how the app handles low-memory conditions.
 
 ```bash
 # Raise oom_adj to make the system more likely to kill the app
-uv run android-emu-agent reliability oom-adj com.example.app --device emulator-5554 --score 1000
+android-emu-agent reliability oom-adj com.example.app --device emulator-5554 --score 1000
 
 # Trigger the app's onTrimMemory callback at a specific level
-uv run android-emu-agent reliability trim-memory com.example.app --device emulator-5554 --level RUNNING_CRITICAL
+android-emu-agent reliability trim-memory com.example.app --device emulator-5554 --level RUNNING_CRITICAL
 ```
 
 ## Lifecycle and Scheduling Diagnostics
@@ -250,9 +250,9 @@ Forces the system to destroy activities as soon as they leave the foreground. Us
 `onSaveInstanceState`/`onRestoreInstanceState` bugs.
 
 ```bash
-uv run android-emu-agent reliability always-finish on --device emulator-5554
+android-emu-agent reliability always-finish on --device emulator-5554
 # ... run your test ...
-uv run android-emu-agent reliability always-finish off --device emulator-5554
+android-emu-agent reliability always-finish off --device emulator-5554
 ```
 
 ### JobScheduler Constraints
@@ -260,7 +260,7 @@ uv run android-emu-agent reliability always-finish off --device emulator-5554
 Check pending and running jobs for the app.
 
 ```bash
-uv run android-emu-agent reliability jobscheduler com.example.app --device emulator-5554
+android-emu-agent reliability jobscheduler com.example.app --device emulator-5554
 ```
 
 The result is package-scoped and bounded. It includes registered job blocks and their required,
@@ -274,7 +274,7 @@ These commands work on debuggable apps without root, using `run-as`.
 ### List App-Private Files
 
 ```bash
-uv run android-emu-agent reliability run-as-ls com.example.app --device emulator-5554 --path files/
+android-emu-agent reliability run-as-ls com.example.app --device emulator-5554 --path files/
 ```
 
 ### Dump Heap Profile
@@ -282,11 +282,11 @@ uv run android-emu-agent reliability run-as-ls com.example.app --device emulator
 Capture a heap dump for memory analysis.
 
 ```bash
-uv run android-emu-agent reliability dumpheap com.example.app --device emulator-5554
+android-emu-agent reliability dumpheap com.example.app --device emulator-5554
 ```
 
 Use `--keep-remote` to preserve the heap file on-device after pulling:
 
 ```bash
-uv run android-emu-agent reliability dumpheap com.example.app --device emulator-5554 --keep-remote
+android-emu-agent reliability dumpheap com.example.app --device emulator-5554 --keep-remote
 ```
