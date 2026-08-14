@@ -77,6 +77,10 @@ Release workflow helper:
   release assets)
 - `./scripts/dev.sh verify-release` (confirm the GitHub release has bridge JAR/checksum assets)
 - `./scripts/dev.sh publish-pypi` (rebuild checked Python dist artifacts and upload them with Twine)
+- `./scripts/dev.sh publish-testpypi` (same gate, uploading to TestPyPI; needs `TWINE_TEST_USERNAME`
+  and `TWINE_TEST_PASSWORD`)
+- `./scripts/dev.sh verify-testpypi` (install the current version from TestPyPI and smoke-test the
+  CLI)
 
 ## 4. Coding Standards
 

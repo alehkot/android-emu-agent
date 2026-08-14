@@ -470,6 +470,79 @@ publish_python_release_artifacts() {
     uvx --from twine twine upload "$wheel_path" "$sdist_path"
 }
 
+publish_python_test_release_artifacts() {
+    local version="$1"
+    local wheel_path="$PROJECT_DIR/dist/android_emu_agent-$version-py3-none-any.whl"
+    local sdist_path="$PROJECT_DIR/dist/android_emu_agent-$version.tar.gz"
+    local repository_url="${TWINE_TEST_REPOSITORY_URL:-https://test.pypi.org/legacy/}"
+
+    if [ -z "$TWINE_TEST_USERNAME" ] || [ -z "$TWINE_TEST_PASSWORD" ]; then
+        echo "TestPyPI credentials are missing."
+        echo "Export TWINE_TEST_USERNAME (usually __token__) and TWINE_TEST_PASSWORD."
+        return 1
+    fi
+
+    if [ ! -f "$wheel_path" ] || [ ! -f "$sdist_path" ]; then
+        build_python_release_artifacts "$version" || return 1
+    fi
+
+    echo "Uploading Python distributions to TestPyPI ($repository_url)..."
+    TWINE_USERNAME="$TWINE_TEST_USERNAME" \
+        TWINE_PASSWORD="$TWINE_TEST_PASSWORD" \
+        uvx --from twine twine upload \
+        --repository-url "$repository_url" \
+        "$wheel_path" "$sdist_path"
+}
+
+verify_testpypi_install() {
+    local version="$1"
+    local api_url="${TWINE_TEST_API_URL:-https://test.pypi.org/pypi}"
+    local wheel_url
+    local venv_root
+    local status=0
+
+    ensure_command uv "Install uv from https://docs.astral.sh/uv/." || return 1
+
+    # Resolve the wheel URL directly so only this package comes from TestPyPI. TestPyPI carries
+    # unrelated squatted versions of common dependencies, so it must never resolve the dep tree.
+    wheel_url="$(curl -fsSL "$api_url/android-emu-agent/$version/json" 2>/dev/null | python3 -c '
+import json, sys
+
+try:
+    payload = json.load(sys.stdin)
+except ValueError:
+    sys.exit(1)
+
+for entry in payload.get("urls", []):
+    if entry.get("packagetype") == "bdist_wheel":
+        print(entry["url"])
+        break
+else:
+    sys.exit(1)
+')" || {
+        echo "Could not find a wheel for android-emu-agent==$version on TestPyPI."
+        echo "TestPyPI can lag a few seconds behind an upload; retry if this just published."
+        return 1
+    }
+
+    venv_root="$(mktemp -d)"
+    echo "Smoke-testing android-emu-agent==$version installed from TestPyPI..."
+    echo "  wheel: $wheel_url"
+
+    if uv venv "$venv_root/venv" >/dev/null 2>&1 \
+        && VIRTUAL_ENV="$venv_root/venv" uv pip install \
+            --index-url https://pypi.org/simple/ "$wheel_url" >/dev/null 2>&1 \
+        && "$venv_root/venv/bin/android-emu-agent" --help >/dev/null 2>&1; then
+        echo "TestPyPI smoke test passed for android-emu-agent==$version."
+    else
+        echo "TestPyPI smoke test failed for android-emu-agent==$version."
+        status=1
+    fi
+
+    rm -rf "$venv_root"
+    return "$status"
+}
+
 verify_github_release_assets() {
     local tag="$1"
     local version="$2"
@@ -782,6 +855,37 @@ publish_current_python_version() {
     publish_python_release_artifacts "$version"
 }
 
+publish_current_python_test_version() {
+    ensure_clean_worktree || return 1
+
+    local version
+    version="$(read_project_version)"
+    if [ -z "$version" ]; then
+        echo "Unable to read version from pyproject.toml [project].version."
+        return 1
+    fi
+
+    ensure_version_consistency "$version" || return 1
+    run_release_checks || return 1
+    build_python_release_artifacts "$version" || return 1
+    ensure_clean_worktree || return 1
+    publish_python_test_release_artifacts "$version" || return 1
+
+    echo "Next: run './scripts/dev.sh verify-testpypi' once the TestPyPI index updates."
+}
+
+verify_current_testpypi_install() {
+    local version
+    version="$(read_project_version)"
+    if [ -z "$version" ]; then
+        echo "Unable to read version from pyproject.toml [project].version."
+        return 1
+    fi
+
+    ensure_version_consistency "$version" || return 1
+    verify_testpypi_install "$version"
+}
+
 bump_version() {
     if ! git diff --quiet || ! git diff --cached --quiet; then
         echo "Working tree has uncommitted changes. Please commit or stash them first."
@@ -1055,6 +1159,14 @@ case "${1:-help}" in
         publish_current_python_version
         ;;
 
+    publish-testpypi)
+        publish_current_python_test_version
+        ;;
+
+    verify-testpypi)
+        verify_current_testpypi_install
+        ;;
+
     skills)
         ensure_supported_os
         target="${2:-all}"
@@ -1161,6 +1273,9 @@ case "${1:-help}" in
         echo "  release [--bump] Build artifacts, push branch+tag, and publish GitHub release assets"
         echo "  verify-release   Verify the GitHub release has bridge JAR and checksum assets"
         echo "  publish-pypi     Rebuild checked Python dist artifacts and upload with Twine"
+        echo "  publish-testpypi Rebuild checked Python dist artifacts and upload to TestPyPI"
+        echo "                   (needs TWINE_TEST_USERNAME and TWINE_TEST_PASSWORD)"
+        echo "  verify-testpypi  Install the current version from TestPyPI and smoke-test the CLI"
         echo "  docs             Build documentation (mkdocs)"
         echo "  docs-serve       Serve documentation locally"
         echo "  docs-gen         Regenerate CLI reference from Typer app"

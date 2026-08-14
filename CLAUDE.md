@@ -54,6 +54,8 @@ uv run pyright             # Type check with pyright
 ./scripts/dev.sh release --bump   # Patch bump, tag, then publish GitHub release assets
 ./scripts/dev.sh verify-release   # Verify release bridge JAR/checksum assets exist
 ./scripts/dev.sh publish-pypi     # Rebuild checked Python dist and upload with Twine
+./scripts/dev.sh publish-testpypi # Same gate, uploading to TestPyPI (needs TWINE_TEST_* env vars)
+./scripts/dev.sh verify-testpypi  # Install current version from TestPyPI and smoke-test the CLI
 ./scripts/dev.sh docs             # Build documentation (mkdocs)
 ./scripts/dev.sh docs-serve       # Serve documentation locally
 ./scripts/dev.sh docs-gen         # Regenerate CLI reference from Typer app

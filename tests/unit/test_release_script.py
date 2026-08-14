@@ -54,3 +54,24 @@ def test_pypi_publish_validates_and_rechecks_before_upload() -> None:
     publish = body.index("publish_python_release_artifacts")
 
     assert checks < build < clean_recheck < publish
+
+
+def test_testpypi_publish_validates_and_rechecks_before_upload() -> None:
+    """TestPyPI uploads should follow the same gate as production PyPI uploads."""
+    body = _function_body("publish_current_python_test_version")
+
+    checks = body.index("run_release_checks")
+    build = body.index("build_python_release_artifacts")
+    clean_recheck = body.index("ensure_clean_worktree", checks)
+    publish = body.index("publish_python_test_release_artifacts")
+
+    assert checks < build < clean_recheck < publish
+
+
+def test_testpypi_publish_requires_dedicated_credentials() -> None:
+    """TestPyPI uploads must not silently fall back to production PyPI credentials."""
+    body = _function_body("publish_python_test_release_artifacts")
+
+    assert "TWINE_TEST_USERNAME" in body
+    assert "TWINE_TEST_PASSWORD" in body
+    assert "--repository-url" in body
