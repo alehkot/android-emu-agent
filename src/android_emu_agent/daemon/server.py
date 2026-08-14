@@ -684,6 +684,7 @@ async def health() -> dict[str, Any]:
 
     return {
         "status": "ok" if (all_healthy or not devices) else "degraded",
+        "version": __version__,
         "pid": os.getpid(),
         "running": core.is_running,
         "active_sessions": len(sessions),
