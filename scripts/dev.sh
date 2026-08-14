@@ -24,40 +24,11 @@ ensure_supported_os() {
 }
 
 install_skills() {
-    local target_dir="$1"
-    local label="$2"
-    local skills_root="$PROJECT_DIR/skills"
-
-    if [ ! -d "$skills_root" ]; then
-        echo "Skills directory not found at $skills_root."
-        return 1
-    fi
-
-    mkdir -p "$target_dir"
-
-    local linked=0
-    local skill_path
-    for skill_path in "$skills_root"/*; do
-        [ -d "$skill_path" ] || continue
-        [ -f "$skill_path/SKILL.md" ] || continue
-
-        local skill_name
-        skill_name="$(basename "$skill_path")"
-        local dest="$target_dir/$skill_name"
-
-        if [ -e "$dest" ] && [ ! -L "$dest" ]; then
-            echo "Skipping $label skill '$skill_name': $dest exists and is not a symlink."
-            continue
-        fi
-
-        ln -sfn "$skill_path" "$dest"
-        echo "Linked $label skill '$skill_name' -> $dest"
-        linked=$((linked + 1))
-    done
-
-    if [ "$linked" -eq 0 ]; then
-        echo "No skills linked for $label."
-    fi
+    # Symlink the checkout's skills so local edits apply immediately. Running through
+    # 'uv run' guarantees the checkout's CLI, not a globally installed release.
+    local agent="$1"
+    shift
+    uv run android-emu-agent skills install --agent "$agent" --symlink --force "$@"
 }
 
 read_project_version() {
@@ -1170,27 +1141,21 @@ case "${1:-help}" in
     skills)
         ensure_supported_os
         target="${2:-all}"
-        codex_root="${CODEX_HOME:-$HOME/.codex}"
-        claude_root="${AGENTS_HOME:-${CLAUDE_HOME:-$HOME/.agents}}"
 
         case "$target" in
             codex)
-                echo "Installing skills for Codex..."
-                install_skills "$codex_root/skills" "Codex"
+                install_skills codex
                 ;;
             claude)
-                echo "Installing skills for Claude..."
-                install_skills "$claude_root/skills" "Claude"
+                install_skills claude
                 ;;
             vscode)
-                echo "Installing skills for VS Code..."
-                install_skills "$PROJECT_DIR/.agents/skills" "VS Code"
+                install_skills vscode --project
                 ;;
             all)
-                echo "Installing skills for Codex, Claude, and VS Code..."
-                install_skills "$codex_root/skills" "Codex"
-                install_skills "$claude_root/skills" "Claude"
-                install_skills "$PROJECT_DIR/.agents/skills" "VS Code"
+                install_skills codex
+                install_skills claude
+                install_skills vscode --project
                 ;;
             *)
                 echo "Unknown skills target '$target'. Use 'codex', 'claude', 'vscode', or 'all'."
@@ -1206,15 +1171,12 @@ case "${1:-help}" in
 
     skills-codex)
         ensure_supported_os
-        echo "Installing skills for Codex..."
-        codex_root="${CODEX_HOME:-$HOME/.codex}"
-        install_skills "$codex_root/skills" "Codex"
+        install_skills codex
         ;;
 
     skills-vscode)
         ensure_supported_os
-        echo "Installing skills for VS Code..."
-        install_skills "$PROJECT_DIR/.agents/skills" "VS Code"
+        install_skills vscode --project
         ;;
 
     docs)
@@ -1242,9 +1204,7 @@ case "${1:-help}" in
 
     skills-claude)
         ensure_supported_os
-        echo "Installing skills for Claude..."
-        claude_root="${AGENTS_HOME:-${CLAUDE_HOME:-$HOME/.agents}}"
-        install_skills "$claude_root/skills" "Claude"
+        install_skills claude
         ;;
 
     help|*)
@@ -1281,9 +1241,9 @@ case "${1:-help}" in
         echo "  docs-gen         Regenerate CLI reference from Typer app"
         echo "  skills [target]  Symlink skills into agent directories (codex|claude|vscode|all)"
         echo "  skills-validate  Validate bundled Agent Skills"
-        echo "  skills-codex     Symlink skills into Codex agent directory"
-        echo "  skills-vscode    Symlink skills into VS Code .agents/skills"
-        echo "  skills-claude    Symlink skills into Claude agent directory"
+        echo "  skills-codex     Symlink skills into ~/.codex/skills"
+        echo "  skills-vscode    Symlink skills into this repo's .agents/skills"
+        echo "  skills-claude    Symlink skills into ~/.claude/skills"
         echo "  help             Show this help"
         ;;
 esac

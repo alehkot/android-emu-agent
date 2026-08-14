@@ -61,9 +61,9 @@ uv run pyright             # Type check with pyright
 ./scripts/dev.sh docs-gen         # Regenerate CLI reference from Typer app
 ./scripts/dev.sh skills [target]  # Symlink skills to agent dirs (codex|claude|vscode|all)
 ./scripts/dev.sh skills-validate  # Validate bundled Agent Skills
-./scripts/dev.sh skills-codex     # Symlink skills into Codex agent directory
-./scripts/dev.sh skills-vscode    # Symlink skills into VS Code .agents/skills
-./scripts/dev.sh skills-claude    # Symlink skills into Claude agent directory
+./scripts/dev.sh skills-codex     # Symlink skills into ~/.codex/skills
+./scripts/dev.sh skills-vscode    # Symlink skills into this repo's .agents/skills
+./scripts/dev.sh skills-claude    # Symlink skills into ~/.claude/skills
 ```
 
 ## Architecture
