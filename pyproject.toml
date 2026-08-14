@@ -5,8 +5,21 @@ description = "CLI + daemon for LLM-driven Android UI control — ships with rea
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Oleg Kot", email = "kot.oleg@gmail.com" }]
-keywords = ["android", "automation", "llm", "ui-testing"]
+keywords = ["android", "automation", "llm", "ui-testing", "agent-skills", "adb", "emulator"]
 readme = { file = "README.md", content-type = "text/markdown" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Debuggers",
+]
 
 dependencies = [
     "fastapi>=0.128.1",
@@ -24,6 +37,9 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/alehkot/android-emu-agent"
 Documentation = "https://alehkot.github.io/android-emu-agent/"
+Repository = "https://github.com/alehkot/android-emu-agent"
+Issues = "https://github.com/alehkot/android-emu-agent/issues"
+Changelog = "https://github.com/alehkot/android-emu-agent/releases"
 
 [project.optional-dependencies]
 dev = [
