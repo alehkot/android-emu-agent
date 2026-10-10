@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import threading
 from collections.abc import Callable
+from concurrent.futures import Future
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
@@ -217,6 +218,42 @@ async def test_cancelling_wait_propagates_without_waiting_for_device(
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
+
+
+@pytest.mark.asyncio
+async def test_cancellation_racing_success_does_not_continue_workflow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Exercise the real I/O helper so Python 3.11 cancellation cannot look like success."""
+    pool = DeviceIOPool(max_workers=1)
+    loop = asyncio.get_running_loop()
+    completed: Future[bool] = Future()
+    following_action = MagicMock()
+    executor = MagicMock()
+    executor.submit.return_value = completed
+    monkeypatch.setattr(pool, "executor", MagicMock(return_value=executor))
+    monkeypatch.setattr(wait_module, "run_device_io", pool.run)
+
+    async def workflow() -> None:
+        await WaitEngine()._poll_condition(
+            cast(Any, "wait-cancel-race-device"),
+            lambda: True,
+            timeout=1,
+            error_message="Missing",
+            remediation="Check selector",
+        )
+        following_action()
+
+    task = asyncio.create_task(workflow())
+    try:
+        await asyncio.sleep(0)
+        completed.set_result(True)
+        loop.call_soon(task.cancel)
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        following_action.assert_not_called()
+    finally:
+        pool.shutdown_all()
 
 
 @pytest.mark.asyncio

@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
+from concurrent.futures import Future
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -30,6 +32,27 @@ class TestSerialOf:
 
 
 class TestDeviceIOPool:
+    @pytest.mark.asyncio
+    async def test_caller_cancellation_wins_race_with_io_completion(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Python 3.11 wait_for can otherwise swallow cancellation of a finished Future."""
+        pool = DeviceIOPool(max_workers=1)
+        loop = asyncio.get_running_loop()
+        completed: Future[bool] = Future()
+        executor = MagicMock()
+        executor.submit.return_value = completed
+        monkeypatch.setattr(pool, "executor", MagicMock(return_value=executor))
+        task = asyncio.create_task(pool.run("cancel-race-device", lambda: True, io_timeout=1))
+        try:
+            await asyncio.sleep(0)  # Let the device await start before racing its completion.
+            completed.set_result(True)
+            loop.call_soon(task.cancel)
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        finally:
+            pool.shutdown_all()
+
     @pytest.mark.asyncio
     async def test_runs_call_and_returns_result(self) -> None:
         pool = DeviceIOPool(max_workers=2)

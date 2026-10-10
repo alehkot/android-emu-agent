@@ -245,7 +245,7 @@ class WaitEngine:
                     ),
                 )
             except TimeoutError as exc:
-                # wait_for raises an empty TimeoutError when the I/O budget expires.
+                # The I/O helper raises an empty TimeoutError when its budget expires.
                 # Keep a useful preceding transport error rather than replacing it
                 # with an empty diagnostic, while still explaining a first-poll stall.
                 if str(exc):

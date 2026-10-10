@@ -75,7 +75,10 @@ class DeviceIOPool:
         future = loop.run_in_executor(self.executor(serial_of(device)), call)
         if io_timeout is None:
             return await future
-        return await asyncio.wait_for(future, io_timeout)
+        # Unlike Python 3.11's wait_for, timeout preserves caller cancellation when
+        # it races with the executor Future completing (CPython issue #86296).
+        async with asyncio.timeout(io_timeout):
+            return await future
 
     def shutdown(self, serial: str) -> None:
         """Drop one device's pool, cancelling work that has not started yet."""
