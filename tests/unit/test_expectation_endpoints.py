@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from android_emu_agent.actions.wait import WaitEngine
+from android_emu_agent.device.io import shutdown_device_io
 from android_emu_agent.expectations import ExpectationManager
 
 
@@ -95,7 +98,8 @@ def test_expect_text_passes_when_wait_succeeds() -> None:
     with _client_with_core(device) as client:
         response = client.post(
             "/expect/text",
-            json={"session_id": "s-abc123", "text": "Ready", "timeout_ms": 1},
+            # This checks response shaping, not worker scheduling within a single millisecond.
+            json={"session_id": "s-abc123", "text": "Ready", "timeout_ms": 100},
         )
 
     assert response.status_code == 200
@@ -128,6 +132,46 @@ def test_expect_exists_fails_with_expectation_error() -> None:
     assert data["passed"] is False
     assert data["error"]["code"] == "ERR_EXPECTATION_FAILED"
     assert data["actual"]["error"]["code"] == "ERR_TIMEOUT"
+
+
+@pytest.mark.parametrize("endpoint", ["/wait/text", "/expect/text"])
+def test_stalled_device_returns_timeout_through_wait_and_expect_endpoints(endpoint: str) -> None:
+    """The daemon must shape the timeout before a blocked observation can complete."""
+    release = threading.Event()
+    finished = threading.Event()
+    device = MagicMock()
+    device.serial = "endpoint-deadline-device"
+
+    def blocked_exists() -> bool:
+        release.wait(timeout=5)
+        finished.set()
+        return True
+
+    device.return_value.exists.side_effect = blocked_exists
+
+    try:
+        with _client_with_core(device) as client:
+            response = client.post(
+                endpoint,
+                json={"session_id": "s-abc123", "text": "Ready", "timeout_ms": 50},
+            )
+
+        assert not finished.is_set()
+        assert response.status_code == 200
+        data = response.json()
+        if endpoint == "/expect/text":
+            assert data["passed"] is False
+            assert data["error"]["code"] == "ERR_EXPECTATION_FAILED"
+            data = data["actual"]
+        assert data["status"] == "timeout"
+        assert data["error"]["code"] == "ERR_TIMEOUT"
+        assert data["error"]["last_error"]
+    finally:
+        release.set()
+        try:
+            assert finished.wait(timeout=2)
+        finally:
+            shutdown_device_io(device.serial)
 
 
 def test_expect_text_preserves_session_errors() -> None:

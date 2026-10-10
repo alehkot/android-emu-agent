@@ -214,11 +214,18 @@ class WaitEngine:
         """Poll a condition until timeout."""
         timeout = timeout or self.default_timeout
         start = time.monotonic()
+        deadline = start + timeout
         last_error: Exception | None = None
 
-        while time.monotonic() - start < timeout:
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
             try:
-                if await run_device_io(device, predicate):
+                # Bound queued and running I/O as well as the time between polls. The
+                # device's worker may still finish after this await times out.
+                matched = await run_device_io(device, predicate, io_timeout=remaining)
+                if matched and time.monotonic() < deadline:
                     elapsed = (time.monotonic() - start) * 1000
                     return WaitResult(success=True, elapsed_ms=elapsed)
                 last_error = None
@@ -237,12 +244,23 @@ class WaitEngine:
                         ),
                     ),
                 )
+            except TimeoutError as exc:
+                # The I/O helper raises an empty TimeoutError when its budget expires.
+                # Keep a useful preceding transport error rather than replacing it
+                # with an empty diagnostic, while still explaining a first-poll stall.
+                if str(exc):
+                    last_error = exc
+                elif last_error is None:
+                    last_error = TimeoutError("Device polling did not complete before the timeout")
             except Exception as exc:
                 # Transient failures are normal while polling a screen mid-transition,
                 # but the last one is what explains an eventual timeout.
                 last_error = exc
                 logger.debug("wait_poll_error", condition=error_message, error=str(exc))
-            await asyncio.sleep(self.poll_interval)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            await asyncio.sleep(min(self.poll_interval, remaining))
 
         elapsed = (time.monotonic() - start) * 1000
         context: dict[str, Any] = {"timeout_ms": timeout * 1000}
