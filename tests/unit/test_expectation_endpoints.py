@@ -98,7 +98,8 @@ def test_expect_text_passes_when_wait_succeeds() -> None:
     with _client_with_core(device) as client:
         response = client.post(
             "/expect/text",
-            json={"session_id": "s-abc123", "text": "Ready", "timeout_ms": 1},
+            # This checks response shaping, not worker scheduling within a single millisecond.
+            json={"session_id": "s-abc123", "text": "Ready", "timeout_ms": 100},
         )
 
     assert response.status_code == 200
