@@ -126,6 +126,12 @@ wait exists text:"Payment" timeout_ms=5000
 wait gone text:"Loading" timeout_ms=10000
 ```
 
+For activity, text, exists, and gone conditions, `timeout_ms` covers device polling and the delays
+between polls. The same deadline applies when these conditions are used as verifiers. A stalled
+device call produces `ERR_TIMEOUT`; it cannot turn into a successful result after the deadline. The
+underlying device I/O may still finish after the wait returns, since running worker threads cannot
+be forcibly cancelled.
+
 `verify` attaches to the previous step:
 
 ```text

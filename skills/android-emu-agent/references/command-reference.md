@@ -213,6 +213,12 @@ description:
 `wait exists` and `wait gone` can also heal stale refs when the daemon can confidently rebind the
 target against the latest snapshot.
 
+For `activity`, `text`, `exists`, and `gone`, `--timeout-ms` bounds the daemon's entire polling
+loop, including device I/O and time between polls. A stalled device call returns `ERR_TIMEOUT`
+instead of extending that polling deadline; a result received after the deadline is not a success.
+The underlying device call may still finish in its bounded per-device worker pool after the wait
+returns. This does not forcibly stop the device operation or its driver's recovery work.
+
 ### Expect
 
 - `expect idle <session_id>` Assert that UI becomes idle.

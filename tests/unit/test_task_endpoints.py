@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
@@ -13,6 +14,7 @@ from starlette.responses import Response
 
 from android_emu_agent.actions.executor import ActionExecutor
 from android_emu_agent.actions.wait import WaitEngine
+from android_emu_agent.device.io import shutdown_device_io
 from android_emu_agent.tasks import TaskCall, TaskManager
 from android_emu_agent.ui.ref_resolver import RefResolver
 
@@ -129,6 +131,51 @@ def test_task_run_endpoint_dispatches_wait_verifier() -> None:
     assert data["passed"] is True
     assert data["verifiers"][0]["operation"] == "exists"
     device.assert_called_with(text="Ready")
+
+
+def test_task_verifier_times_out_before_stalled_observation_finishes() -> None:
+    """A blocked verifier must fail the task without dispatching later verifiers."""
+    release = threading.Event()
+    finished = threading.Event()
+    device = MagicMock()
+    device.serial = "task-deadline-device"
+
+    def blocked_exists() -> bool:
+        release.wait(timeout=5)
+        finished.set()
+        return True
+
+    device.return_value.exists.side_effect = blocked_exists
+
+    try:
+        with _client_with_core(device) as client:
+            response = client.post(
+                "/tasks/run",
+                json={
+                    "session_id": "s-abc123",
+                    "task": {
+                        "verifiers": [
+                            {"type": "exists", "text": "Ready", "timeout_ms": 50},
+                            {"type": "text", "text": "Next"},
+                        ]
+                    },
+                },
+            )
+
+        assert not finished.is_set()
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "failed"
+        assert data["passed"] is False
+        assert len(data["verifiers"]) == 1
+        assert data["verifiers"][0]["response"]["error"]["code"] == "ERR_TIMEOUT"
+        device.assert_called_once_with(text="Ready")
+    finally:
+        release.set()
+        try:
+            assert finished.wait(timeout=2)
+        finally:
+            shutdown_device_io(device.serial)
 
 
 def test_task_script_run_endpoint_dispatches_compiled_script() -> None:
