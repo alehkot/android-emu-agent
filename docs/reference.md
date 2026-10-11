@@ -1644,7 +1644,7 @@ android-emu-agent action [OPTIONS] COMMAND [ARGS]...
 
 - `tap`: Tap an element.
 - `long-tap`: Long tap an element.
-- `set-text`: Set text on an element.
+- `set-text`: Replace the existing text on an element...
 - `clear`: Clear text.
 - `back`: Press back.
 - `home`: Press home.
@@ -1710,7 +1710,7 @@ android-emu-agent action long-tap [OPTIONS] SESSION_ID REF
 
 ### `android-emu-agent action set-text`
 
-Set text on an element.
+Replace the existing text on an element (an empty string clears it).
 
 Tap the field and re-snapshot before setting text, because focusing a field can change the UI. Press
 back afterwards to dismiss the keyboard.

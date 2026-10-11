@@ -307,12 +307,14 @@ class _CoordinateProxy:
         self._device.long_click(self._x, self._y)
 
     def set_text(self, text: str) -> None:
-        """Click then send text."""
+        """Focus the field and replace its text."""
         self._device.click(self._x, self._y)
-        self._device.send_keys(text)
+        if text:
+            self._device.send_keys(text, clear=True)
+        else:
+            self._device.clear_text()
 
     def clear_text(self) -> None:
-        """Click then clear (select all + delete)."""
+        """Focus the field and clear its text."""
         self._device.click(self._x, self._y)
-        self._device.send_action("selectAll")
-        self._device.send_keys("")
+        self._device.clear_text()

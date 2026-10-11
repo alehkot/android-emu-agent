@@ -62,7 +62,7 @@ def action_set_text(
     text: str = typer.Argument(..., help="Text to set"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Set text on an element.
+    """Replace the existing text on an element (an empty string clears it).
 
     Tap the field and re-snapshot before setting text, because focusing a field can change the
     UI. Press back afterwards to dismiss the keyboard.
