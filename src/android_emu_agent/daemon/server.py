@@ -1772,11 +1772,13 @@ async def _selector_action_option(
             await run_device_io(device, device.long_click, selector.x, selector.y)
         elif action == ActionType.SET_TEXT:
             await run_device_io(device, device.click, selector.x, selector.y)
-            await run_device_io(device, device.send_keys, text)
+            if text:
+                await run_device_io(device, device.send_keys, text, clear=True)
+            else:
+                await run_device_io(device, device.clear_text)
         elif action == ActionType.CLEAR:
             await run_device_io(device, device.click, selector.x, selector.y)
-            await run_device_io(device, device.send_action, "selectAll")
-            await run_device_io(device, device.send_keys, "")
+            await run_device_io(device, device.clear_text)
         else:
             return None
         return matched

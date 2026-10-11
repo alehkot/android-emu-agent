@@ -183,8 +183,13 @@ vision mandatory for automation.
 
 - `action tap <session_id> <target>` Tap an element.
 - `action long-tap <session_id> <ref>` Long press.
-- `action set-text <session_id> <ref> <text>` Enter text.
+- `action set-text <session_id> <ref> <text>` Replace the field’s existing text (an empty string
+  clears it).
 - `action clear <session_id> <ref>` Clear text field.
+
+`set-text` replaces rather than appends, including direct coordinate selectors and coordinate
+fallbacks for refs. Coordinate actions focus the target field before replacing or clearing text.
+
 - `action back <session_id>` Press back button.
 - `action home <session_id>` Press home button.
 - `action recents <session_id>` Open recent apps.

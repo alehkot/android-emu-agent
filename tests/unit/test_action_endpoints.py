@@ -5,8 +5,9 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from android_emu_agent.actions.executor import ActionExecutor
@@ -537,3 +538,136 @@ def test_tap_and_long_tap_agree_on_coordinate_response_shape() -> None:
     assert tap.json()["selector"] == long_tap.json()["selector"] == "coords:120,340"
     device.click.assert_called_once_with(120, 340)
     device.long_click.assert_called_once_with(120, 340)
+
+
+@pytest.mark.parametrize("target", ["coords:300,150", "^g2a1", 'text:"Missing" || coords:300,150'])
+@pytest.mark.parametrize("text", ["replacement", "Привет 👋", ""])
+def test_coordinate_set_text_replaces_existing_content(target: str, text: str) -> None:
+    """Direct coordinates and ref fallbacks must replace, including repeated and empty sets."""
+    device = MagicMock()
+    device.return_value.count = 0
+    content = "existing content"
+
+    def send_keys(value: str, clear: bool = False) -> None:
+        nonlocal content
+        content = value if clear else content + value
+
+    def clear_text() -> None:
+        nonlocal content
+        content = ""
+
+    device.send_keys.side_effect = send_keys
+    device.clear_text.side_effect = clear_text
+    with _client_with_core(device) as (client, resolver):
+        resolver.store_refs(
+            "s-abc123",
+            generation=2,
+            elements=[
+                {
+                    "ref": "^g2a1",
+                    "resource_id": "missing:id/input",
+                    "class": "android.widget.EditText",
+                    "bounds": [100, 100, 500, 200],
+                }
+            ],
+        )
+        for _ in range(2):
+            response = client.post(
+                "/actions/set_text",
+                json={
+                    "session_id": "s-abc123",
+                    "ref": target,
+                    "text": text,
+                },
+            )
+            assert response.status_code == 200
+            assert response.json()["status"] == "done"
+            assert content == text
+    assert device.click.call_count == 2
+    device.click.assert_called_with(300, 150)
+    if text:
+        device.send_keys.assert_called_with(text, clear=True)
+    else:
+        assert device.clear_text.call_count == 2
+        device.send_keys.assert_not_called()
+    device.send_action.assert_not_called()
+    mutation = call.send_keys(text, clear=True) if text else call.clear_text()
+    mutations = [
+        item for item in device.mock_calls if item[0] in {"click", "send_keys", "clear_text"}
+    ]
+    assert mutations == [call.click(300, 150), mutation] * 2
+
+
+@pytest.mark.parametrize("target", ["coords:300,150", "^g2a1", 'text:"Missing" || coords:300,150'])
+def test_coordinate_clear_uses_supported_clear_api(target: str) -> None:
+    """Clearing must empty the field without an unsupported IME editor action."""
+    device = MagicMock()
+    device.return_value.count = 0
+    content = "existing content"
+
+    def clear_text() -> None:
+        nonlocal content
+        content = ""
+
+    device.clear_text.side_effect = clear_text
+    device.send_action.side_effect = ValueError("unsupported editor action")
+    with _client_with_core(device) as (client, resolver):
+        resolver.store_refs(
+            "s-abc123",
+            generation=2,
+            elements=[
+                {
+                    "ref": "^g2a1",
+                    "resource_id": "missing:id/input",
+                    "class": "android.widget.EditText",
+                    "bounds": [100, 100, 500, 200],
+                }
+            ],
+        )
+        response = client.post("/actions/clear", json={"session_id": "s-abc123", "ref": target})
+    assert response.status_code == 200
+    assert response.json()["status"] == "done"
+    assert content == ""
+    device.click.assert_called_once_with(300, 150)
+    device.clear_text.assert_called_once_with()
+    device.send_action.assert_not_called()
+    device.send_keys.assert_not_called()
+
+
+@pytest.mark.parametrize("target", ["coords:300,150", "^g2a1"])
+@pytest.mark.parametrize("action", ["set_text", "clear"])
+@pytest.mark.parametrize("failed_step", ["click", "mutation"])
+def test_coordinate_text_failures_are_not_reported_as_success(
+    target: str, action: str, failed_step: str
+) -> None:
+    """Never mutate after a failed focus, and surface driver failures through both paths."""
+    device = MagicMock()
+    device.return_value.count = 0
+    mutation = device.send_keys if action == "set_text" else device.clear_text
+    failing_call = device.click if failed_step == "click" else mutation
+    failing_call.side_effect = RuntimeError("device input failed")
+    with _client_with_core(device) as (client, resolver):
+        resolver.store_refs(
+            "s-abc123",
+            generation=2,
+            elements=[
+                {
+                    "ref": "^g2a1",
+                    "resource_id": "missing:id/input",
+                    "class": "android.widget.EditText",
+                    "bounds": [100, 100, 500, 200],
+                }
+            ],
+        )
+        payload = {"session_id": "s-abc123", "ref": target}
+        if action == "set_text":
+            payload["text"] = "replacement"
+        response = client.post(f"/actions/{action}", json=payload)
+    assert response.json()["error"]["code"] == "ERR_ACTION_FAILED"
+    assert response.json()["status"] != "done"
+    device.click.assert_called_once_with(300, 150)
+    if failed_step == "click":
+        device.send_keys.assert_not_called()
+        device.clear_text.assert_not_called()
+    else:
+        assert mutation.call_count == 1
