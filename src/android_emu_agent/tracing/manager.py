@@ -330,10 +330,9 @@ class TraceManager:
     def _validate_archive_path(directory: Path, archive_path: Path) -> None:
         """Reject archives that would overwrite or recursively include their own input."""
         source = directory.resolve()
-        if (
-            archive_path.parent.resolve().is_relative_to(source)
-            or archive_path.resolve().is_relative_to(source)
-        ):
+        if archive_path.parent.resolve().is_relative_to(
+            source
+        ) or archive_path.resolve().is_relative_to(source):
             raise AgentError(
                 code="ERR_TRACE_OUTPUT_PATH",
                 message="Archive output must be outside the trace source directory",
