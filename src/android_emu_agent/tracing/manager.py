@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import shutil
+import tempfile
 import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -122,6 +123,7 @@ class TraceManager:
 
     async def _stop_locked(self, trace: ActiveTrace, output_path: str | None) -> dict[str, Any]:
         """Finalize one trace while the manager lock is held."""
+        archive_path = self._archive_path(trace, output_path)
         await self.record_event(
             trace.session_id,
             {
@@ -136,7 +138,6 @@ class TraceManager:
             status="stopped",
             stopped_at=stopped_at,
         )
-        archive_path = self._archive_path(trace, output_path)
         await asyncio.to_thread(self._zip_trace, trace.directory, archive_path)
         del self._active[trace.session_id]
         return {
@@ -317,11 +318,28 @@ class TraceManager:
     def _archive_path(self, trace: ActiveTrace, output_path: str | None) -> Path:
         if output_path:
             path = Path(output_path).expanduser()
-            if path.exists() and path.is_dir():
-                return path / f"{trace.trace_id}{TRACE_ARCHIVE_SUFFIX}"
-            path.parent.mkdir(parents=True, exist_ok=True)
-            return path
-        return self.output_dir / f"{trace.trace_id}{TRACE_ARCHIVE_SUFFIX}"
+            if path.is_dir():
+                path = path / f"{trace.trace_id}{TRACE_ARCHIVE_SUFFIX}"
+        else:
+            path = self.output_dir / f"{trace.trace_id}{TRACE_ARCHIVE_SUFFIX}"
+        self._validate_archive_path(trace.directory, path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+
+    @staticmethod
+    def _validate_archive_path(directory: Path, archive_path: Path) -> None:
+        """Reject archives that would overwrite or recursively include their own input."""
+        source = directory.resolve()
+        if (
+            archive_path.parent.resolve().is_relative_to(source)
+            or archive_path.resolve().is_relative_to(source)
+        ):
+            raise AgentError(
+                code="ERR_TRACE_OUTPUT_PATH",
+                message="Archive output must be outside the trace source directory",
+                context={"path": str(archive_path), "directory": str(directory)},
+                remediation="Choose an output file or directory outside the trace source directory.",
+            )
 
     @staticmethod
     def _append_line(path: Path, line: str) -> None:
@@ -363,13 +381,25 @@ class TraceManager:
 
     @staticmethod
     def _zip_trace(directory: Path, archive_path: Path) -> None:
-        if archive_path.exists():
-            archive_path.unlink()
-        with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            for path in sorted(directory.rglob("*")):
-                if path.is_file():
-                    zf.write(path, path.relative_to(directory))
-        ensure_private_file(archive_path)
+        """Publish a completed ZIP atomically, preserving any previous archive on failure."""
+        TraceManager._validate_archive_path(directory, archive_path)
+        temporary_path: Path | None = None
+        try:
+            # A sibling temporary file guarantees the final rename stays on one filesystem.
+            # NamedTemporaryFile creates it owner-only before any trace data is written.
+            with tempfile.NamedTemporaryFile(
+                dir=archive_path.parent, prefix=".aea-trace-", suffix=".tmp", delete=False
+            ) as handle:
+                temporary_path = Path(handle.name)
+                with zipfile.ZipFile(handle, "w", zipfile.ZIP_DEFLATED) as zf:
+                    for path in sorted(directory.rglob("*")):
+                        if path.is_file():
+                            zf.write(path, path.relative_to(directory))
+            ensure_private_file(temporary_path)
+            temporary_path.replace(archive_path)
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
 
     @staticmethod
     def _replay_step(event: dict[str, Any]) -> dict[str, Any]:

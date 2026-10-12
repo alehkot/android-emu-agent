@@ -113,7 +113,8 @@ runtime permission rules for the target app and device.
 
 - `trace start <session_id> [--label <label>]` Start recording a session trace.
 - `trace stop <session_id> [--output <path_or_dir>]` Stop recording and write a `.aea-trace.zip`
-  archive.
+  archive. Choose an output outside the trace source directory; an existing archive is replaced only
+  after the new ZIP is complete.
 - `trace status [--session <session_id>]` List active traces.
 - `trace replay <path> [--until-failure]` Return a dry-run replay plan from an archive.
 - `trace export <path> [--output <path>]` Export a trace archive to Markdown.

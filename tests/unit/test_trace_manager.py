@@ -142,3 +142,158 @@ async def test_stop_all_archives_every_active_trace(tmp_path: Path) -> None:
     assert {result["session_id"] for result in stopped} == {"s-one", "s-two"}
     assert all(Path(result["path"]).exists() for result in stopped)
     assert (await manager.status())["traces"] == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "destination", ["manifest.json", "events.ndjson", "nested/result.zip", "."]
+)
+async def test_trace_stop_rejects_output_inside_source_without_changing_trace(
+    tmp_path: Path, destination: str
+) -> None:
+    """An output path must never replace or become part of its own trace input."""
+    from android_emu_agent.errors import AgentError
+
+    manager = TraceManager(tmp_path / "traces")
+    started = await manager.start("s-one")
+    directory = Path(started["directory"])
+    before = {path.name: path.read_bytes() for path in directory.iterdir()}
+
+    with pytest.raises(AgentError, match="outside"):
+        await manager.stop("s-one", str(directory / destination))
+
+    assert {path.name: path.read_bytes() for path in directory.iterdir()} == before
+    assert len((await manager.status())["traces"]) == 1
+    stopped = await manager.stop("s-one")
+    assert [event["kind"] for event in manager.load_events(stopped["path"])] == [
+        "trace_started",
+        "trace_stopped",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_trace_stop_rejects_symlinked_source_directory(tmp_path: Path) -> None:
+    """The safety check must resolve aliases of the source directory."""
+    from android_emu_agent.errors import AgentError
+
+    manager = TraceManager(tmp_path / "traces")
+    started = await manager.start("s-one")
+    alias = tmp_path / "alias"
+    alias.symlink_to(started["directory"], target_is_directory=True)
+    with pytest.raises(AgentError, match="outside"):
+        await manager.stop("s-one", str(alias / "result.zip"))
+    assert len(manager.load_events(started["directory"])) == 1
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_trace_archive_write_failure_preserves_destination(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, existing: bool
+) -> None:
+    """A partial ZIP must not replace an earlier archive or appear as a completed one."""
+    directory = tmp_path / "source"
+    directory.mkdir()
+    (directory / "events.ndjson").write_text("{}\n")
+    output = tmp_path / "archive.zip"
+    previous = b"previous good archive"
+    if existing:
+        output.write_bytes(previous)
+
+    def fail_write(*_args: object, **_kwargs: object) -> None:
+        raise OSError("simulated disk full")
+
+    monkeypatch.setattr(zipfile.ZipFile, "write", fail_write)
+    with pytest.raises(OSError, match="disk full"):
+        TraceManager._zip_trace(directory, output)
+
+    if existing:
+        assert output.read_bytes() == previous
+    else:
+        assert not output.exists()
+    assert set(tmp_path.iterdir()) == ({directory, output} if existing else {directory})
+
+
+def test_trace_archive_replaces_destination_only_after_zip_closes(tmp_path: Path) -> None:
+    """Successful replacement produces a private, readable archive without temp leftovers."""
+    directory = tmp_path / "source"
+    directory.mkdir()
+    (directory / "events.ndjson").write_text("{}\n")
+    output = tmp_path / "archive.zip"
+    output.write_bytes(b"previous archive")
+    TraceManager._zip_trace(directory, output)
+    with zipfile.ZipFile(output) as archive:
+        assert archive.testzip() is None
+        assert archive.read("events.ndjson") == b"{}\n"
+    assert stat.S_IMODE(output.stat().st_mode) == 0o600
+    assert set(tmp_path.iterdir()) == {directory, output}
+
+
+def test_trace_archive_replace_failure_preserves_destination(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    directory = tmp_path / "source"
+    directory.mkdir()
+    (directory / "events.ndjson").write_text("{}\n")
+    output = tmp_path / "archive.zip"
+    output.write_bytes(b"previous archive")
+
+    def fail_replace(_source: Path, _target: Path) -> None:
+        raise OSError("simulated rename failure")
+
+    monkeypatch.setattr(Path, "replace", fail_replace)
+    with pytest.raises(OSError, match="rename failure"):
+        TraceManager._zip_trace(directory, output)
+    assert output.read_bytes() == b"previous archive"
+    assert set(tmp_path.iterdir()) == {directory, output}
+
+
+@pytest.mark.asyncio
+async def test_trace_stop_accepts_external_directory(tmp_path: Path) -> None:
+    manager = TraceManager(tmp_path / "traces")
+    started = await manager.start("s-one")
+    output = tmp_path / "exports"
+    output.mkdir()
+    stopped = await manager.stop("s-one", str(output))
+    assert Path(stopped["path"]) == output / f"{started['trace_id']}.aea-trace.zip"
+    assert manager.load_manifest(stopped["path"])["status"] == "stopped"
+
+
+@pytest.mark.asyncio
+async def test_trace_stop_rejects_output_symlink_to_source_file(tmp_path: Path) -> None:
+    from android_emu_agent.errors import AgentError
+
+    manager = TraceManager(tmp_path / "traces")
+    started = await manager.start("s-one")
+    manifest = Path(started["directory"]) / "manifest.json"
+    original = manifest.read_bytes()
+    output = tmp_path / "archive.zip"
+    output.symlink_to(manifest)
+    with pytest.raises(AgentError, match="outside"):
+        await manager.stop("s-one", str(output))
+    assert output.is_symlink()
+    assert manifest.read_bytes() == original
+
+
+@pytest.mark.asyncio
+async def test_trace_stop_rejects_source_symlink_pointing_outside(tmp_path: Path) -> None:
+    """A final symlink must not hide that the temp file and output entry are inside source."""
+    from android_emu_agent.errors import AgentError
+
+    manager = TraceManager(tmp_path / "traces")
+    started = await manager.start("s-one")
+    directory = Path(started["directory"])
+    external = tmp_path / "external.zip"
+    external.write_bytes(b"previous archive")
+    output = directory / "link.zip"
+    output.symlink_to(external)
+    manifest = (directory / "manifest.json").read_bytes()
+    with pytest.raises(AgentError, match="outside"):
+        await manager.stop("s-one", str(output))
+    assert output.is_symlink()
+    assert external.read_bytes() == b"previous archive"
+    assert (directory / "manifest.json").read_bytes() == manifest
+    assert len(manager.load_events(directory)) == 1
+    assert {path.name for path in directory.iterdir()} == {
+        "events.ndjson",
+        "manifest.json",
+        "link.zip",
+    }
