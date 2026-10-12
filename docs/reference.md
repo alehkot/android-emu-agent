@@ -1459,7 +1459,7 @@ android-emu-agent trace stop [OPTIONS] SESSION_ID
 
 **Options**:
 
-- `-o, --output TEXT`: Archive output path or directory
+- `-o, --output TEXT`: Archive output path or directory, outside the trace source directory
 - `--json`: Output JSON
 - `--help`: Show this message and exit.
 

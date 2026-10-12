@@ -34,7 +34,7 @@ def trace_stop(
         None,
         "--output",
         "-o",
-        help="Archive output path or directory",
+        help="Archive output path or directory, outside the trace source directory",
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:

@@ -127,3 +127,20 @@ def test_trace_export_rejects_unsupported_format_with_agent_error(tmp_path: Path
 
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "ERR_UNSUPPORTED_TRACE_FORMAT"
+
+
+def test_trace_stop_rejects_source_output_and_can_retry(tmp_path: Path) -> None:
+    """Invalid archive destinations return an actionable 400 without ending the trace."""
+    with _client_with_core(tmp_path) as (client, trace_manager):
+        started = client.post("/trace/start", json={"session_id": "s-abc123"}).json()
+        response = client.post(
+            "/trace/stop",
+            json={"session_id": "s-abc123", "output_path": started["directory"]},
+        )
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "ERR_TRACE_OUTPUT_PATH"
+        assert "outside" in response.json()["error"]["remediation"]
+        stopped = client.post("/trace/stop", json={"session_id": "s-abc123"})
+        assert stopped.status_code == 200
+        events = trace_manager.load_events(stopped.json()["path"])
+        assert [event["kind"] for event in events] == ["trace_started", "trace_stopped"]
