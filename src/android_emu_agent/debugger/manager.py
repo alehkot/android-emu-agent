@@ -7,11 +7,13 @@ import contextlib
 import os
 import re
 import shutil
+import socket
 import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from weakref import WeakValueDictionary
 
 import structlog
 
@@ -89,6 +91,7 @@ class DebugManager:
         self._java_path: Path | None = None
         self._downloader = BridgeDownloader()
         self._bridge_start_lock = asyncio.Lock()
+        self._attach_locks: WeakValueDictionary[str, asyncio.Lock] = WeakValueDictionary()
 
     def _find_java(self) -> Path:
         """Locate the java binary, checking JAVA_HOME first, then PATH."""
@@ -254,6 +257,10 @@ class DebugManager:
             raise
         finally:
             if session_id not in self._debug_sessions:
+                # Retire this client before scheduling I/O. Otherwise an attach
+                # resumed ahead of cleanup could acquire the client we will stop.
+                if self._bridges.get(session_id) is client:
+                    del self._bridges[session_id]
                 cleanup_task = asyncio.create_task(self._stop_owned_bridge(session_id, client))
                 if cancelled:
                     await self._finish_cancelled_cleanup(cleanup_task)
@@ -280,6 +287,29 @@ class DebugManager:
         keep_suspended: bool = False,
     ) -> dict[str, Any]:
         """Attach the debugger to a running app."""
+        # Hold a strong reference while queued or active; unused session locks can
+        # disappear once their callers finish. Different sessions remain independent.
+        lock = self._attach_locks.setdefault(session_id, asyncio.Lock())
+        async with lock:
+            return await self._attach_locked(
+                session_id,
+                device_serial,
+                package,
+                adb_device,
+                process_name,
+                keep_suspended,
+            )
+
+    async def _attach_locked(
+        self,
+        session_id: str,
+        device_serial: str,
+        package: str,
+        adb_device: Any,
+        process_name: str | None,
+        keep_suspended: bool,
+    ) -> dict[str, Any]:
+        """Keep attachment ownership exclusive through commit or rollback."""
         if session_id in self._debug_sessions:
             existing = self._debug_sessions[session_id]
             if existing.state == "attached":
@@ -992,7 +1022,7 @@ class DebugManager:
     async def _setup_forward(self, pid: int, adb_device: Any) -> int:
         """Set up ADB forward from a local port to jdwp:<pid>. Returns local port."""
         forward_task = asyncio.create_task(
-            asyncio.to_thread(adb_device.forward_port, f"jdwp:{pid}")
+            asyncio.to_thread(self._allocate_forward, pid, adb_device)
         )
         try:
             local_port = await asyncio.shield(forward_task)
@@ -1009,6 +1039,17 @@ class DebugManager:
             raise
         except Exception as exc:
             raise adb_forward_failed_error(pid, str(exc)) from None
+
+    @staticmethod
+    def _allocate_forward(pid: int, adb_device: Any) -> int:
+        """Create a private forward rather than borrowing another caller's rule."""
+        # adbutils.forward_port reuses a matching remote. Rollback must only own
+        # a newly allocated local rule, and norebind guards the free-port race.
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as port_socket:
+            port_socket.bind(("127.0.0.1", 0))
+            local_port = int(port_socket.getsockname()[1])
+        adb_device.forward(f"tcp:{local_port}", f"jdwp:{pid}", norebind=True)
+        return local_port
 
     @staticmethod
     async def _finish_cancelled_cleanup(task: asyncio.Task[None]) -> None:

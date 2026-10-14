@@ -23,6 +23,13 @@ def _bridge() -> MagicMock:
     return bridge
 
 
+def _port_socket(port: int = 54321) -> MagicMock:
+    port_socket = MagicMock()
+    port_socket.__enter__.return_value = port_socket
+    port_socket.getsockname.return_value = ("127.0.0.1", port)
+    return port_socket
+
+
 def _assert_no_session(manager: DebugManager) -> None:
     assert not manager._bridges
     assert not manager._debug_sessions
@@ -119,30 +126,31 @@ async def test_forward_allocation_cancellation_settles_thread(
     finished = asyncio.Event()
     release = threading.Event()
 
-    def forward(_remote: str) -> int:
+    def forward(_local: str, _remote: str, *, norebind: bool) -> None:
+        assert norebind
         loop.call_soon_threadsafe(entered.set)
         try:
             assert release.wait(timeout=2), "Test must release the worker thread"
             if allocation_fails:
                 raise RuntimeError("allocation failed after cancellation")
-            return 54321
         finally:
             loop.call_soon_threadsafe(finished.set)
 
-    adb_device.forward_port.side_effect = forward
-    task = asyncio.create_task(manager._setup_forward(123, adb_device))
-    try:
-        await asyncio.wait_for(entered.wait(), timeout=2)
-        task.cancel("cancel forwarding")
-        if cancel_twice:
-            await asyncio.sleep(0)
-            task.cancel("second cancellation")
-        release.set()
-        with pytest.raises(asyncio.CancelledError, match="cancel forwarding"):
-            await asyncio.wait_for(task, timeout=2)
-        await asyncio.wait_for(finished.wait(), timeout=2)
-    finally:
-        release.set()
+    adb_device.forward.side_effect = forward
+    with patch("android_emu_agent.debugger.manager.socket.socket", return_value=_port_socket()):
+        task = asyncio.create_task(manager._setup_forward(123, adb_device))
+        try:
+            await asyncio.wait_for(entered.wait(), timeout=2)
+            task.cancel("cancel forwarding")
+            if cancel_twice:
+                await asyncio.sleep(0)
+                task.cancel("second cancellation")
+            release.set()
+            with pytest.raises(asyncio.CancelledError, match="cancel forwarding"):
+                await asyncio.wait_for(task, timeout=2)
+            await asyncio.wait_for(finished.wait(), timeout=2)
+        finally:
+            release.set()
 
     if allocation_fails:
         adb_device.forward_remove.assert_not_called()
@@ -327,15 +335,276 @@ async def test_cancelled_ping_keeps_established_debug_session() -> None:
 
 
 @pytest.mark.asyncio
+async def test_transient_ping_retires_bridge_before_concurrent_attach() -> None:
+    """A scheduled ping cleanup must not stop an attach's newly acquired bridge."""
+    manager = DebugManager()
+    bridge = _bridge()
+    bridge.request.return_value = {"status": "attached"}
+    replacement = _bridge()
+    replacement.request.return_value = {"status": "attached"}
+    manager._bridges["s-test"] = bridge
+    forwarding = asyncio.Event()
+    release_forward = asyncio.Event()
+
+    async def setup(_pid: int, _device: object) -> int:
+        forwarding.set()
+        await release_forward.wait()
+        return 54321
+
+    async def ping() -> dict[str, bool]:
+        # Queue the attaching caller before ping queues its cleanup task.
+        release_forward.set()
+        return {"pong": True}
+
+    bridge.ping.side_effect = ping
+    with (
+        patch.object(manager, "_find_pid", AsyncMock(return_value=(123, "com.example.app"))),
+        patch.object(manager, "_setup_forward", side_effect=setup),
+        patch.object(manager, "_find_java", return_value=Path("java")),
+        patch.object(manager, "_find_jar", return_value=Path("bridge.jar")),
+        patch.object(manager, "_monitor_events", AsyncMock()),
+        patch("android_emu_agent.debugger.manager.BridgeClient", return_value=replacement),
+    ):
+        attach = asyncio.create_task(
+            manager.attach("s-test", "emulator-5554", "com.example.app", MagicMock())
+        )
+        await asyncio.wait_for(forwarding.wait(), timeout=2)
+        assert await manager.ping("s-test") == {"pong": True}
+        result = await asyncio.wait_for(attach, timeout=2)
+        await asyncio.gather(*manager._event_tasks.values())
+
+    assert result["status"] == "attached"
+    bridge.stop.assert_awaited_once_with()
+    bridge.request.assert_not_awaited()
+    replacement.start.assert_awaited_once_with()
+    replacement.stop.assert_not_awaited()
+    assert manager._bridges == {"s-test": replacement}
+    assert manager._debug_sessions["s-test"].state == "attached"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cancel_waiter", [False, True])
+async def test_concurrent_attach_waiter_preserves_successful_attachment(
+    cancel_waiter: bool,
+) -> None:
+    """A queued attach must not borrow or roll back an attachment that just committed."""
+    manager = DebugManager()
+    bridge = _bridge()
+    manager._bridges["s-test"] = bridge
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    waiter: asyncio.Task[dict[str, object]] | None = None
+
+    async def request(_method: str, params: dict[str, object]) -> dict[str, str]:
+        if params["port"] == 54321:
+            entered.set()
+            await release.wait()
+            if cancel_waiter:
+                assert waiter is not None
+                # The first attach commits before this cancellation is delivered.
+                loop.call_soon(waiter.cancel, "cancel queued attach")
+            return {"status": "attached"}
+        await asyncio.Future[None]()
+        raise AssertionError("Concurrent attach must not reach the bridge")
+
+    bridge.request.side_effect = request
+    with (
+        patch.object(
+            manager, "_find_pid", AsyncMock(return_value=(123, "com.example.app"))
+        ) as find_pid,
+        patch.object(manager, "_setup_forward", AsyncMock(side_effect=[54321, 54322])) as setup,
+        patch.object(manager, "_monitor_events", AsyncMock()),
+    ):
+        first = asyncio.create_task(
+            manager.attach("s-test", "emulator-5554", "com.example.app", MagicMock())
+        )
+        await asyncio.wait_for(entered.wait(), timeout=2)
+        waiter = asyncio.create_task(
+            manager.attach("s-test", "emulator-5554", "com.example.app", MagicMock())
+        )
+        await asyncio.sleep(0)
+        release.set()
+        result = await asyncio.wait_for(first, timeout=2)
+        if cancel_waiter:
+            with pytest.raises(asyncio.CancelledError, match="cancel queued attach"):
+                await asyncio.wait_for(waiter, timeout=2)
+        else:
+            with pytest.raises(AgentError) as exc_info:
+                await asyncio.wait_for(waiter, timeout=2)
+            assert exc_info.value.code == "ERR_ALREADY_ATTACHED"
+        await asyncio.gather(*manager._event_tasks.values())
+
+    assert result["status"] == "attached"
+    bridge.stop.assert_not_awaited()
+    assert manager._bridges == {"s-test": bridge}
+    assert manager._debug_sessions["s-test"].state == "attached"
+    find_pid.assert_awaited_once()
+    setup.assert_awaited_once()
+    bridge.request.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_attach_locks_do_not_serialize_different_sessions_or_retain_finished_locks() -> None:
+    manager = DebugManager()
+    first_bridge = _bridge()
+    second_bridge = _bridge()
+    manager._bridges = {"s-first": first_bridge, "s-second": second_bridge}
+    entered = 0
+    both_entered = asyncio.Event()
+    release = asyncio.Event()
+
+    async def request(_method: str, _params: dict[str, object]) -> dict[str, str]:
+        nonlocal entered
+        entered += 1
+        if entered == 2:
+            both_entered.set()
+        await release.wait()
+        return {"status": "attached"}
+
+    first_bridge.request.side_effect = request
+    second_bridge.request.side_effect = request
+    with (
+        patch.object(manager, "_find_pid", AsyncMock(return_value=(123, "com.example.app"))),
+        patch.object(manager, "_setup_forward", AsyncMock(side_effect=[54321, 54322])),
+        patch.object(manager, "_monitor_events", AsyncMock()),
+    ):
+        tasks = [
+            asyncio.create_task(
+                manager.attach(session_id, "emulator-5554", "com.example.app", MagicMock())
+            )
+            for session_id in ("s-first", "s-second")
+        ]
+        try:
+            await asyncio.wait_for(both_entered.wait(), timeout=2)
+            assert len(manager._attach_locks) == 2
+        finally:
+            release.set()
+        results = await asyncio.wait_for(asyncio.gather(*tasks), timeout=2)
+        await asyncio.gather(*manager._event_tasks.values())
+
+    assert [result["session_id"] for result in results] == ["s-first", "s-second"]
+    assert not manager._attach_locks
+    first_bridge.stop.assert_not_awaited()
+    second_bridge.stop.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_waiting_attach_starts_after_cancelled_predecessor_finishes_rollback() -> None:
+    manager = DebugManager()
+    bridge = _bridge()
+    replacement = _bridge()
+    replacement.request.return_value = {"status": "attached"}
+    manager._bridges["s-test"] = bridge
+    entered = asyncio.Event()
+    removing = asyncio.Event()
+    release_cleanup = asyncio.Event()
+
+    async def request(_method: str, _params: dict[str, object]) -> None:
+        entered.set()
+        await asyncio.Future[None]()
+
+    async def remove_forward(_port: int, _device: object) -> None:
+        removing.set()
+        await release_cleanup.wait()
+
+    bridge.request.side_effect = request
+    with (
+        patch.object(
+            manager, "_find_pid", AsyncMock(return_value=(123, "com.example.app"))
+        ) as find_pid,
+        patch.object(manager, "_setup_forward", AsyncMock(side_effect=[54321, 54322])),
+        patch.object(manager, "_remove_forward", side_effect=remove_forward),
+        patch.object(manager, "_find_java", return_value=Path("java")),
+        patch.object(manager, "_find_jar", return_value=Path("bridge.jar")),
+        patch.object(manager, "_monitor_events", AsyncMock()),
+        patch("android_emu_agent.debugger.manager.BridgeClient", return_value=replacement),
+    ):
+        first = asyncio.create_task(
+            manager.attach("s-test", "emulator-5554", "com.example.app", MagicMock())
+        )
+        await asyncio.wait_for(entered.wait(), timeout=2)
+        first.cancel("cancel first attach")
+        await asyncio.wait_for(removing.wait(), timeout=2)
+        waiter = asyncio.create_task(
+            manager.attach("s-test", "emulator-5554", "com.example.app", MagicMock())
+        )
+        await asyncio.sleep(0)
+        try:
+            find_pid.assert_awaited_once()
+        finally:
+            release_cleanup.set()
+        with pytest.raises(asyncio.CancelledError, match="cancel first attach"):
+            await asyncio.wait_for(first, timeout=2)
+        result = await asyncio.wait_for(waiter, timeout=2)
+        await asyncio.gather(*manager._event_tasks.values())
+
+    assert result["status"] == "attached"
+    assert result["local_port"] == 54322
+    bridge.stop.assert_awaited_once_with()
+    replacement.stop.assert_not_awaited()
+    assert manager._bridges == {"s-test": replacement}
+
+
+@pytest.mark.asyncio
 async def test_forward_failure_keeps_actionable_error() -> None:
     manager = DebugManager()
     adb_device = MagicMock()
-    adb_device.forward_port.side_effect = RuntimeError("device offline")
-    with pytest.raises(AgentError) as exc_info:
+    adb_device.forward.side_effect = RuntimeError("device offline")
+    with (
+        patch("android_emu_agent.debugger.manager.socket.socket", return_value=_port_socket()),
+        pytest.raises(AgentError) as exc_info,
+    ):
         await manager._setup_forward(123, adb_device)
 
     assert exc_info.value.code == "ERR_ADB_FORWARD_FAILED"
     adb_device.forward_remove.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("port_collision", [False, True])
+async def test_cancelled_forward_preserves_preexisting_rules(port_collision: bool) -> None:
+    """Rollback may remove its private rule, never a reused or colliding rule."""
+    manager = DebugManager()
+    adb_device = MagicMock()
+    rules = {"tcp:12345": "jdwp:123"}
+    if port_collision:
+        rules["tcp:54321"] = "jdwp:456"
+    original_rules = dict(rules)
+    loop = asyncio.get_running_loop()
+    entered = asyncio.Event()
+    release = threading.Event()
+
+    def forward(local: str, remote: str, *, norebind: bool) -> None:
+        assert norebind
+        loop.call_soon_threadsafe(entered.set)
+        assert release.wait(timeout=2), "Test must release the worker thread"
+        if local in rules:
+            raise RuntimeError("cannot rebind existing forward")
+        rules[local] = remote
+
+    def remove(local: str, _raise_non_found: bool) -> None:
+        rules.pop(local)
+
+    adb_device.forward.side_effect = forward
+    adb_device.forward_remove.side_effect = remove
+    with patch("android_emu_agent.debugger.manager.socket.socket", return_value=_port_socket()):
+        task = asyncio.create_task(manager._setup_forward(123, adb_device))
+        try:
+            await asyncio.wait_for(entered.wait(), timeout=2)
+            task.cancel("cancel private allocation")
+        finally:
+            release.set()
+        with pytest.raises(asyncio.CancelledError, match="cancel private allocation"):
+            await asyncio.wait_for(task, timeout=2)
+
+    assert rules == original_rules
+    adb_device.forward.assert_called_once_with("tcp:54321", "jdwp:123", norebind=True)
+    adb_device.forward_port.assert_not_called()
+    if port_collision:
+        adb_device.forward_remove.assert_not_called()
+    else:
+        adb_device.forward_remove.assert_called_once_with("tcp:54321", False)
 
 
 @pytest.mark.asyncio
@@ -451,8 +720,9 @@ async def test_cancelled_start_failure_still_stops_client_and_preserves_cancella
 @pytest.mark.asyncio
 @pytest.mark.parametrize("stop_fails", [False, True])
 @pytest.mark.parametrize("cancel_twice", [False, True])
+@pytest.mark.parametrize("rpc_error", [False, True])
 async def test_attach_failure_rollback_preserves_cancellation_during_forward_removal(
-    stop_fails: bool, cancel_twice: bool
+    stop_fails: bool, cancel_twice: bool, rpc_error: bool
 ) -> None:
     manager = DebugManager()
     bridge = _bridge()
@@ -474,7 +744,10 @@ async def test_attach_failure_rollback_preserves_cancellation_during_forward_rem
         if stop_fails:
             raise RuntimeError("stop failed after cancellation")
 
-    bridge.request.side_effect = RuntimeError("attach failed")
+    if rpc_error:
+        bridge.request.return_value = {"error": {"message": "attach failed"}}
+    else:
+        bridge.request.side_effect = RuntimeError("attach failed")
     bridge.stop.side_effect = stop
     with (
         patch.object(manager, "_find_pid", AsyncMock(return_value=(123, "com.example.app"))),

@@ -373,6 +373,7 @@ module.
 Cancelling a pending daemon attach or bridge start triggers resource cleanup before cancellation
 propagates. Cleanup waits for any in-flight ADB port allocation or subprocess creation; it is not an
 immediate-cancel deadline. Cancelling the CLI alone may leave its daemon request running.
+Each attach creates its own local forward without rebinding an existing route.
 
 When a mapping is loaded, stack traces and inspect output show deobfuscated names where the mapping
 provides them.
