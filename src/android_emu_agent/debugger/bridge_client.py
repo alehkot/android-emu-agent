@@ -26,6 +26,7 @@ class BridgeClient:
         self._process: asyncio.subprocess.Process | None = None
         self._request_id = 0
         self._lock = asyncio.Lock()
+        self._stop_lock = asyncio.Lock()
         self._pending: dict[int, asyncio.Future[dict[str, Any]]] = {}
         self._stderr_task: asyncio.Task[None] | None = None
         self._stdout_task: asyncio.Task[None] | None = None
@@ -63,6 +64,13 @@ class BridgeClient:
 
     async def stop(self) -> None:
         """Gracefully stop the bridge subprocess."""
+        # Several callers may have borrowed the same bridge. Serialize shutdown so
+        # one caller cannot clear _process while another still waits for its exit.
+        async with self._stop_lock:
+            await self._stop_process()
+
+    async def _stop_process(self) -> None:
+        """Stop the subprocess while holding the per-client shutdown lock."""
         if not self.is_alive or self._process is None:
             return
 

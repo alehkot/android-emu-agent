@@ -784,14 +784,50 @@ class TestForwarding:
     """Tests for ADB forwarding lifecycle."""
 
     @pytest.mark.asyncio
-    async def test_setup_forward_uses_forward_port(self) -> None:
+    async def test_setup_forward_allocates_private_port_without_rebinding(self) -> None:
         manager = DebugManager()
         mock_adb = MagicMock()
-        mock_adb.forward_port = MagicMock(return_value=54321)
+        port_socket = MagicMock()
+        port_socket.__enter__.return_value = port_socket
+        port_socket.getsockname.return_value = ("127.0.0.1", 54321)
 
-        port = await manager._setup_forward(12345, mock_adb)
+        def forward(_local: str, _remote: str, *, norebind: bool) -> None:
+            assert norebind
+            port_socket.__exit__.assert_called_once()
+
+        mock_adb.forward.side_effect = forward
+        with patch("android_emu_agent.debugger.manager.socket.socket", return_value=port_socket):
+            port = await manager._setup_forward(12345, mock_adb)
+
         assert port == 54321
-        mock_adb.forward_port.assert_called_once_with("jdwp:12345")
+        port_socket.bind.assert_called_once_with(("127.0.0.1", 0))
+        mock_adb.forward.assert_called_once_with("tcp:54321", "jdwp:12345", norebind=True)
+        mock_adb.forward_port.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_setup_forward_collision_preserves_existing_rule(self) -> None:
+        manager = DebugManager()
+        mock_adb = MagicMock()
+        port_socket = MagicMock()
+        port_socket.__enter__.return_value = port_socket
+        port_socket.getsockname.return_value = ("127.0.0.1", 54321)
+        rules = {"tcp:54321": "jdwp:456"}
+
+        def forward(local: str, _remote: str, *, norebind: bool) -> None:
+            assert norebind
+            assert local in rules
+            raise RuntimeError("cannot rebind existing forward")
+
+        mock_adb.forward.side_effect = forward
+        with (
+            patch("android_emu_agent.debugger.manager.socket.socket", return_value=port_socket),
+            pytest.raises(AgentError) as exc_info,
+        ):
+            await manager._setup_forward(12345, mock_adb)
+
+        assert exc_info.value.code == "ERR_ADB_FORWARD_FAILED"
+        assert rules == {"tcp:54321": "jdwp:456"}
+        mock_adb.forward_remove.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_remove_forward_uses_forward_remove(self) -> None:

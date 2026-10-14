@@ -123,6 +123,94 @@ class TestBridgeClientLifecycle:
         assert not client.is_alive
 
     @pytest.mark.asyncio
+    async def test_concurrent_stop_calls_share_one_shutdown(self) -> None:
+        """Two borrowers finishing together must not race over _process."""
+        client = BridgeClient(Path("java"), Path("bridge.jar"))
+        process = MagicMock(returncode=None, pid=12345)
+        entered = asyncio.Event()
+        release = asyncio.Event()
+
+        async def wait() -> int:
+            entered.set()
+            await release.wait()
+            process.returncode = 0
+            return 0
+
+        process.wait = AsyncMock(side_effect=wait)
+        client._process = process
+        with patch.object(client, "request", AsyncMock(return_value={})) as request:
+            first = asyncio.create_task(client.stop())
+            await asyncio.wait_for(entered.wait(), timeout=2)
+            second = asyncio.create_task(client.stop())
+            release.set()
+            await asyncio.wait_for(asyncio.gather(first, second), timeout=2)
+
+        request.assert_awaited_once_with("shutdown")
+        process.wait.assert_awaited_once_with()
+        assert client._process is None
+
+    @pytest.mark.asyncio
+    async def test_cancelled_stop_waiter_does_not_interrupt_shutdown(self) -> None:
+        client = BridgeClient(Path("java"), Path("bridge.jar"))
+        process = MagicMock(returncode=None, pid=12345)
+        entered = asyncio.Event()
+        release = asyncio.Event()
+
+        async def wait() -> int:
+            entered.set()
+            await release.wait()
+            process.returncode = 0
+            return 0
+
+        process.wait = AsyncMock(side_effect=wait)
+        client._process = process
+        with patch.object(client, "request", AsyncMock(return_value={})) as request:
+            owner = asyncio.create_task(client.stop())
+            await asyncio.wait_for(entered.wait(), timeout=2)
+            waiter = asyncio.create_task(client.stop())
+            await asyncio.sleep(0)
+            waiter.cancel("cancel waiter")
+            with pytest.raises(asyncio.CancelledError, match="cancel waiter"):
+                await waiter
+            release.set()
+            await asyncio.wait_for(owner, timeout=2)
+
+        request.assert_awaited_once_with("shutdown")
+        assert client._process is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("cancelled", [False, True])
+    async def test_interrupted_stop_releases_lock_for_retry(self, cancelled: bool) -> None:
+        client = BridgeClient(Path("java"), Path("bridge.jar"))
+        process = MagicMock(returncode=None, pid=12345)
+        entered = asyncio.Event()
+
+        async def wait() -> int:
+            entered.set()
+            if cancelled:
+                await asyncio.Future[None]()
+            raise RuntimeError("process wait failed")
+
+        process.wait = AsyncMock(side_effect=wait)
+        client._process = process
+        with patch.object(client, "request", AsyncMock(return_value={})) as request:
+            first = asyncio.create_task(client.stop())
+            await asyncio.wait_for(entered.wait(), timeout=2)
+            if cancelled:
+                first.cancel("cancel shutdown")
+                with pytest.raises(asyncio.CancelledError, match="cancel shutdown"):
+                    await first
+            else:
+                with pytest.raises(RuntimeError, match="process wait failed"):
+                    await first
+
+            process.wait = AsyncMock(return_value=0)
+            await asyncio.wait_for(client.stop(), timeout=2)
+
+        assert request.await_count == 2
+        assert client._process is None
+
+    @pytest.mark.asyncio
     async def test_unexpected_stdout_eof_emits_disconnect_event(self) -> None:
         """An exited bridge should wake the manager's lifecycle monitor."""
         client = BridgeClient(Path("/usr/bin/java"), Path("/tmp/fake.jar"))
