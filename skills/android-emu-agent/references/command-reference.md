@@ -383,6 +383,11 @@ provides them.
   `[--since <t>]` Capture filtered logcat.
 - `artifact bundle <session_id>` Save debug bundle.
 
+Automatically named screenshots, logs, saved snapshots, and debug bundles include a random UUID
+suffix. Repeated captures keep separate files even within the same second; use the returned path
+instead of constructing a filename from the session and timestamp. Bundles clean up only their own
+screenshot and log captures. Explicit output filenames retain replacement behavior.
+
 When `--pull` is set, screenshots are copied to `--output` or the current working directory.
 
 Use `--since` to limit logcat by line count, native logcat timestamp, ISO 8601, or relative time:

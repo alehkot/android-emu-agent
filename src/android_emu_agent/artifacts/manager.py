@@ -9,6 +9,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 import structlog
 
@@ -102,7 +103,12 @@ def resolve_logcat_since(since: str | int | None) -> tuple[str | None, bool]:
 
 
 class ArtifactManager:
-    """Manages artifact capture and storage."""
+    """Manages artifact capture and storage.
+
+    Automatically named captures use independent UUIDs so repeated or concurrent
+    requests never share a path merely because they occur in the same second.
+    Explicit filenames retain their caller-selected replacement semantics.
+    """
 
     def __init__(self, output_dir: Path | None = None) -> None:
         default_dir = Path.home() / ".android-emu-agent" / "artifacts"
@@ -121,7 +127,7 @@ class ArtifactManager:
         """Capture a screenshot from device."""
         if filename is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{session_id}_{timestamp}.png"
+            filename = f"{session_id}_{timestamp}_{uuid4().hex}.png"
 
         output_path = self.output_dir / filename
 
@@ -151,7 +157,7 @@ class ArtifactManager:
 
         if filename is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{session_id}_{timestamp}_logcat.txt"
+            filename = f"{session_id}_{timestamp}_{uuid4().hex}_logcat.txt"
 
         output_path = self.output_dir / filename
 
@@ -218,7 +224,7 @@ class ArtifactManager:
     ) -> Path:
         """Save a snapshot to disk."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{session_id}_gen{generation}_{timestamp}.json"
+        filename = f"{session_id}_gen{generation}_{timestamp}_{uuid4().hex}.json"
         output_path = self.output_dir / filename
 
         output_path.write_text(snapshot_json, encoding="utf-8")
@@ -234,7 +240,7 @@ class ArtifactManager:
     ) -> Path:
         """Create a debug bundle with screenshot, logs, and snapshot."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        bundle_name = f"{session_id}_{timestamp}_debug.zip"
+        bundle_name = f"{session_id}_{timestamp}_{uuid4().hex}_debug.zip"
         bundle_path = self.output_dir / bundle_name
 
         # Collect artifacts

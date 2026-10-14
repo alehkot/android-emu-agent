@@ -232,3 +232,10 @@ android-emu-agent daemon status --json
 
 For more recovery guidance, see the
 [troubleshooting reference](https://github.com/alehkot/android-emu-agent/blob/main/skills/android-emu-agent/references/troubleshooting.md).
+
+### Artifact filenames
+
+Automatically named screenshots, log captures, saved snapshots, and debug bundles include a random
+UUID suffix. Use the path returned by the command: repeated captures within one second keep their
+own files, and creating a bundle preserves earlier standalone captures. Explicit output filenames
+retain replacement behavior.
