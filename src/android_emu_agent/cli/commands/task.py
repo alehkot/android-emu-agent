@@ -98,7 +98,7 @@ def task_validate(
     path: str = typer.Argument(..., help="Task JSON or .aea script file"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Validate a task spec or script without running it."""
+    """Validate task structure and request fields without running it."""
     task = _load_task(path)
     client = DaemonClient()
     if task.is_script:
@@ -124,7 +124,7 @@ def task_run(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Run a task spec or script with verifiers."""
+    """Preflight every request, then run a task spec or script with verifiers."""
     task = _load_task(path)
     session_id = _resolve_session(task, session)
     client = DaemonClient()

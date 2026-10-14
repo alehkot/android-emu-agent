@@ -1112,7 +1112,7 @@ async def trace_export(req: TraceExportRequest) -> EndpointResponse:
 
 @app.post("/tasks/validate", response_model=None)
 async def task_validate(req: TaskValidateRequest) -> EndpointResponse:
-    """Validate a JSON task spec without running device actions."""
+    """Validate task structure and daemon request fields without device actions."""
     core: DaemonCore = app.state.core
     try:
         return core.task_manager.validate(req.task)

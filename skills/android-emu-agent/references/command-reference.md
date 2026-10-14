@@ -136,6 +136,11 @@ Task specs support action steps (`tap`, `long_tap`, `set_text`, `clear`, `back`,
 post-step checks and top-level `verifiers` for final checks. A failed verifier returns
 `status=failed` with the failing step or verifier payload.
 
+Both `task validate` and `task run` preflight every step and verifier against the daemon request
+models before any action is dispatched. Invalid request fields return `ERR_TASK_INVALID` with their
+task location, even with `--continue-on-failure`. This checks request types and modeled choices, not
+selector existence, installed packages, or all runtime operation constraints.
+
 Task scripts use one command per line and compile to the same task harness:
 
 ```text
