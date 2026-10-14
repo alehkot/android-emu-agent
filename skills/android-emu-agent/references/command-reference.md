@@ -370,6 +370,10 @@ Debugger startup requires JDK 17+; `ERR_JDK_NOT_FOUND` means `java` is not avail
 `PATH`/`JAVA_HOME`, while `ERR_JDK_UNSUPPORTED` reports an old runtime or a missing `jdk.jdi`
 module.
 
+Cancelling a pending daemon attach or bridge start triggers resource cleanup before cancellation
+propagates. Cleanup waits for any in-flight ADB port allocation or subprocess creation; it is not an
+immediate-cancel deadline. Cancelling the CLI alone may leave its daemon request running.
+
 When a mapping is loaded, stack traces and inspect output show deobfuscated names where the mapping
 provides them.
 

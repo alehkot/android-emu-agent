@@ -185,18 +185,35 @@ class DebugManager:
             jar_path = await asyncio.to_thread(self._find_jar)
 
             client = BridgeClient(java_path, jar_path)
-            await client.start()
+            start_task = asyncio.create_task(client.start())
+            cleanup_task: asyncio.Task[None] | None = None
+            try:
+                # Subprocess creation may complete even when its caller is cancelled.
+                # Keep the task alive so rollback can stop the resulting process.
+                await asyncio.shield(start_task)
+                if verify:
+                    try:
+                        raw_result = await client.ping()
+                        result = self._ensure_bridge_result(raw_result, method="ping")
+                        logger.info("bridge_ping_ok", session_id=session_id, result=result)
+                    except Exception as exc:
+                        cleanup_task = asyncio.create_task(client.stop())
+                        await asyncio.shield(cleanup_task)
+                        if isinstance(exc, AgentError):
+                            raise
+                        raise bridge_not_running_error("bridge started but ping failed") from None
+            except asyncio.CancelledError:
 
-            if verify:
-                try:
-                    raw_result = await client.ping()
-                    result = self._ensure_bridge_result(raw_result, method="ping")
-                    logger.info("bridge_ping_ok", session_id=session_id, result=result)
-                except Exception as exc:
-                    await client.stop()
-                    if isinstance(exc, AgentError):
-                        raise
-                    raise bridge_not_running_error("bridge started but ping failed") from None
+                async def rollback_start() -> None:
+                    try:
+                        await start_task
+                    finally:
+                        await client.stop()
+
+                if cleanup_task is None:
+                    cleanup_task = asyncio.create_task(rollback_start())
+                await self._finish_cancelled_cleanup(cleanup_task)
+                raise
 
             self._bridges[session_id] = client
             return client
@@ -228,12 +245,30 @@ class DebugManager:
     async def ping(self, session_id: str) -> dict[str, Any]:
         """Start a bridge (if needed), ping it, and release transient bridges."""
         client = await self.start_bridge(session_id, verify=False)
+        cancelled = False
         try:
             result = await client.ping()
             return self._ensure_bridge_result(result, method="ping")
+        except asyncio.CancelledError:
+            cancelled = True
+            raise
         finally:
             if session_id not in self._debug_sessions:
-                await self.stop_bridge(session_id)
+                cleanup_task = asyncio.create_task(self._stop_owned_bridge(session_id, client))
+                if cancelled:
+                    await self._finish_cancelled_cleanup(cleanup_task)
+                else:
+                    try:
+                        await asyncio.shield(cleanup_task)
+                    except asyncio.CancelledError:
+                        await self._finish_cancelled_cleanup(cleanup_task)
+                        raise
+
+    async def _stop_owned_bridge(self, session_id: str, client: BridgeClient) -> None:
+        """Stop the captured client without removing another caller's replacement."""
+        if self._bridges.get(session_id) is client:
+            del self._bridges[session_id]
+        await client.stop()
 
     async def attach(
         self,
@@ -254,33 +289,51 @@ class DebugManager:
         pid, selected_process_name = await self._find_pid(package, adb_device, process_name)
         local_port = await self._setup_forward(pid, adb_device)
 
-        try:
-            bridge = await self.start_bridge(session_id)
-            result = await bridge.request(
-                "attach",
-                {
-                    "host": "localhost",
-                    "port": local_port,
-                    "keep_suspended": keep_suspended,
-                },
-            )
-        except Exception as exc:
-            await self._remove_forward(local_port, adb_device)
-            await self.stop_bridge(session_id)
-            if isinstance(exc, AgentError):
-                raise
-            if self._looks_not_debuggable(str(exc)):
-                raise app_not_debuggable_error(package) from None
-            raise bridge_not_running_error(f"attach failed: {exc}") from None
+        bridge: BridgeClient | None = None
+        cleanup_task: asyncio.Task[None] | None = None
 
-        if isinstance(result, dict) and "error" in result and result["error"] is not None:
-            await self._remove_forward(local_port, adb_device)
-            await self.stop_bridge(session_id)
-            err = result["error"]
-            error_message = str(err.get("message", err))
-            if self._looks_not_debuggable(error_message):
-                raise app_not_debuggable_error(package)
-            raise bridge_not_running_error(f"attach RPC error: {error_message}")
+        async def rollback_attach() -> None:
+            try:
+                await self._remove_forward(local_port, adb_device)
+            finally:
+                # Waiting for start_bridge's lock does not confer ownership.
+                if bridge is not None:
+                    await self._stop_owned_bridge(session_id, bridge)
+
+        try:
+            try:
+                bridge = await self.start_bridge(session_id)
+                result = await bridge.request(
+                    "attach",
+                    {
+                        "host": "localhost",
+                        "port": local_port,
+                        "keep_suspended": keep_suspended,
+                    },
+                )
+            except Exception as exc:
+                cleanup_task = asyncio.create_task(rollback_attach())
+                await asyncio.shield(cleanup_task)
+                if isinstance(exc, AgentError):
+                    raise
+                if self._looks_not_debuggable(str(exc)):
+                    raise app_not_debuggable_error(package) from None
+                raise bridge_not_running_error(f"attach failed: {exc}") from None
+
+            if isinstance(result, dict) and "error" in result and result["error"] is not None:
+                cleanup_task = asyncio.create_task(rollback_attach())
+                await asyncio.shield(cleanup_task)
+                err = result["error"]
+                error_message = str(err.get("message", err))
+                if self._looks_not_debuggable(error_message):
+                    raise app_not_debuggable_error(package)
+                raise bridge_not_running_error(f"attach RPC error: {error_message}")
+        except asyncio.CancelledError:
+            # Also covers cancellation while ordinary failure rollback is awaiting I/O.
+            if cleanup_task is None:
+                cleanup_task = asyncio.create_task(rollback_attach())
+            await self._finish_cancelled_cleanup(cleanup_task)
+            raise
 
         vm_name = str(result.get("vm_name", ""))
         vm_version = str(result.get("vm_version", ""))
@@ -938,11 +991,39 @@ class DebugManager:
 
     async def _setup_forward(self, pid: int, adb_device: Any) -> int:
         """Set up ADB forward from a local port to jdwp:<pid>. Returns local port."""
+        forward_task = asyncio.create_task(
+            asyncio.to_thread(adb_device.forward_port, f"jdwp:{pid}")
+        )
         try:
-            local_port = await asyncio.to_thread(adb_device.forward_port, f"jdwp:{pid}")
+            local_port = await asyncio.shield(forward_task)
             return int(local_port)
+        except asyncio.CancelledError:
+
+            async def rollback_forward() -> None:
+                # Cancelling to_thread cannot stop an already running ADB call.
+                # Wait for its actual port rather than abandoning the forward.
+                local_port = await forward_task
+                await self._remove_forward(int(local_port), adb_device)
+
+            await self._finish_cancelled_cleanup(asyncio.create_task(rollback_forward()))
+            raise
         except Exception as exc:
             raise adb_forward_failed_error(pid, str(exc)) from None
+
+    @staticmethod
+    async def _finish_cancelled_cleanup(task: asyncio.Task[None]) -> None:
+        """Finish rollback despite repeated cancellation; keep the caller's original error."""
+        while not task.done():
+            try:
+                await asyncio.shield(task)
+            except asyncio.CancelledError:
+                continue
+            except Exception:
+                break
+        try:
+            task.result()
+        except (asyncio.CancelledError, Exception):
+            logger.exception("debug_cancellation_cleanup_failed")
 
     async def _remove_forward(self, local_port: int, adb_device: Any) -> None:
         """Remove an ADB forward rule."""

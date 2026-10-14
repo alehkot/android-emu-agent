@@ -62,6 +62,12 @@ draining them; add `--drain-events` only when you intentionally want to consume 
 is missing, stopped, or does not answer its bounded health check. Retry once, then detach and attach
 again; do not treat `unresponsive` as an attached debugger.
 
+If the daemon's pending attach or bridge-start operation is cancelled, it attempts to release the
+acquired ADB forward and bridge before propagating cancellation. In-flight ADB allocation or
+subprocess creation must finish first so cleanup can identify the resource; this is not an
+immediate-cancel deadline. Cancelling a health ping on an established debug session keeps that
+session attached. Stopping the CLI alone does not guarantee that the daemon request is cancelled.
+
 ## Deferred Breakpoints
 
 `debug break set` may return `status=pending` when the class is not loaded yet. This is expected.
