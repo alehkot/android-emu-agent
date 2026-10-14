@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 from starlette.responses import Response
 
@@ -234,3 +235,53 @@ def test_task_dispatcher_wraps_raw_snapshot_response() -> None:
         result = asyncio.run(server._dispatch_task_call(call))
 
     assert result == {"status": "done", "mode": "raw", "xml": "<hierarchy />"}
+
+
+@pytest.mark.parametrize("route", ["validate", "run"])
+@pytest.mark.parametrize("scope", ["step", "attached-verifier", "final-verifier"])
+@pytest.mark.parametrize("stop_on_failure", [True, False])
+def test_invalid_task_request_returns_400_without_device_actions(
+    route: str,
+    scope: str,
+    stop_on_failure: bool,
+) -> None:
+    device = MagicMock()
+    task: dict[str, Any] = {"steps": [{"action": "home"}]}
+    invalid_wait = {"type": "idle", "timeout_ms": "later"}
+    if scope == "step":
+        task["steps"].append({"wait": "idle", "timeout_ms": "later"})
+    elif scope == "attached-verifier":
+        task["steps"][0]["verify"] = [invalid_wait]
+    else:
+        task["verifiers"] = [invalid_wait]
+    body: dict[str, Any] = {"task": task}
+    if route == "run":
+        body.update(session_id="s-abc123", stop_on_failure=stop_on_failure)
+
+    with _client_with_core(device) as client:
+        response = client.post(f"/tasks/{route}", json=body)
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "ERR_TASK_INVALID"
+    assert "timeout_ms" in response.json()["error"]["message"]
+    assert device.mock_calls == []
+
+
+@pytest.mark.parametrize("route", ["validate", "run"])
+@pytest.mark.parametrize(
+    "script",
+    ["home\nsnapshot mode=xml\n", "home\nlaunch com.example.app wait_debugger=maybe\n"],
+)
+def test_invalid_compiled_request_returns_400_without_device_actions(
+    route: str, script: str
+) -> None:
+    device = MagicMock()
+    body: dict[str, Any] = {"script": script, "source_name": "invalid.aea"}
+    if route == "run":
+        body["session_id"] = "s-abc123"
+    with _client_with_core(device) as client:
+        response = client.post(f"/tasks/script/{route}", json=body)
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "ERR_TASK_INVALID"
+    assert "steps[2]" in response.json()["error"]["message"]
+    assert device.mock_calls == []

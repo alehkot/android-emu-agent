@@ -1358,12 +1358,12 @@ android-emu-agent task [OPTIONS] COMMAND [ARGS]...
 
 **Commands**:
 
-- `validate`: Validate a task spec or script without...
-- `run`: Run a task spec or script with verifiers.
+- `validate`: Validate task structure and request fields...
+- `run`: Preflight every request, then run a task...
 
 ### `android-emu-agent task validate`
 
-Validate a task spec or script without running it.
+Validate task structure and request fields without running it.
 
 **Usage**:
 
@@ -1382,7 +1382,7 @@ android-emu-agent task validate [OPTIONS] PATH
 
 ### `android-emu-agent task run`
 
-Run a task spec or script with verifiers.
+Preflight every request, then run a task spec or script with verifiers.
 
 **Usage**:
 

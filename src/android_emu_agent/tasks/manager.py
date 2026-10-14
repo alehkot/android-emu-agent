@@ -7,6 +7,23 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, cast
 
+from pydantic import ValidationError
+
+from android_emu_agent.daemon.models import (
+    ActionRequest,
+    AppDeeplinkRequest,
+    AppForceStopRequest,
+    AppLaunchRequest,
+    RequestModel,
+    SessionRequest,
+    SetTextRequest,
+    SnapshotRequest,
+    SwipeRequest,
+    WaitActivityRequest,
+    WaitIdleRequest,
+    WaitSelectorRequest,
+    WaitTextRequest,
+)
 from android_emu_agent.errors import AgentError
 from android_emu_agent.tasks.dsl import parse_task_script
 
@@ -17,6 +34,27 @@ WAIT_OPERATIONS = {"idle", "activity", "text", "exists", "gone"}
 APP_OPERATIONS = {"launch", "force_stop", "deeplink"}
 UI_OPERATIONS = {"snapshot"}
 STEP_KINDS = {"action", "wait", "app", "ui"}
+
+# Use the same request schemas as the daemon dispatcher, including its coercions.
+_TASK_REQUEST_MODELS: dict[tuple[str, str], type[RequestModel]] = {
+    ("action", "tap"): ActionRequest,
+    ("action", "long_tap"): ActionRequest,
+    ("action", "set_text"): SetTextRequest,
+    ("action", "clear"): ActionRequest,
+    ("action", "back"): SessionRequest,
+    ("action", "home"): SessionRequest,
+    ("action", "recents"): SessionRequest,
+    ("action", "swipe"): SwipeRequest,
+    ("wait", "idle"): WaitIdleRequest,
+    ("wait", "activity"): WaitActivityRequest,
+    ("wait", "text"): WaitTextRequest,
+    ("wait", "exists"): WaitSelectorRequest,
+    ("wait", "gone"): WaitSelectorRequest,
+    ("app", "launch"): AppLaunchRequest,
+    ("app", "force_stop"): AppForceStopRequest,
+    ("app", "deeplink"): AppDeeplinkRequest,
+    ("ui", "snapshot"): SnapshotRequest,
+}
 
 
 @dataclass(frozen=True)
@@ -202,6 +240,7 @@ class TaskManager:
             self._normalize_verifier(
                 self._as_mapping(verifier, f"verifiers[{index}]"),
                 index=index,
+                source_label=f"verifiers[{index}]",
             )
             for index, verifier in enumerate(verifiers_value, start=1)
         ]
@@ -228,15 +267,19 @@ class TaskManager:
                 self._normalize_verifier(
                     self._as_mapping(verifier, f"steps[{index}].verify[{verifier_index}]"),
                     index=verifier_index,
+                    source_label=f"steps[{index}].verify[{verifier_index}]",
                 )
                 for verifier_index, verifier in enumerate(verifiers_value, start=1)
             ],
         }
         self._validate_call_source(normalized, source_label=f"steps[{index}]")
+        self._validate_request(normalized, kind=kind, source_label=f"steps[{index}]")
         return normalized
 
-    def _normalize_verifier(self, verifier: Mapping[str, Any], *, index: int) -> dict[str, Any]:
-        operation = self._required_string(verifier, "type", source_label=f"verifiers[{index}]")
+    def _normalize_verifier(
+        self, verifier: Mapping[str, Any], *, index: int, source_label: str
+    ) -> dict[str, Any]:
+        operation = self._required_string(verifier, "type", source_label=source_label)
         if operation not in WAIT_OPERATIONS:
             raise self._unsupported(f"Unsupported verifier type: {operation}")
         normalized = {
@@ -245,8 +288,25 @@ class TaskManager:
             "operation": operation,
             "source": dict(verifier),
         }
-        self._validate_wait_source(normalized, source_label=f"verifiers[{index}]")
+        self._validate_wait_source(normalized, source_label=source_label)
+        self._validate_request(normalized, kind="wait", source_label=source_label)
         return normalized
+
+    def _validate_request(
+        self, normalized: dict[str, Any], *, kind: str, source_label: str
+    ) -> None:
+        """Reject malformed payloads before running any step or verifier."""
+        operation = cast(str, normalized["operation"])
+        source = cast(dict[str, Any], normalized["source"])
+        # Validation needs no real session or device. The session is supplied at run time.
+        payload = self._payload_for(kind, operation, source, session_id="task-validation")
+        try:
+            _TASK_REQUEST_MODELS[kind, operation].model_validate(payload)
+        except ValidationError as exc:
+            error = exc.errors(include_url=False, include_context=False, include_input=False)[0]
+            field = ".".join(str(part) for part in error["loc"])
+            location = f"{source_label}.{field}" if field else source_label
+            raise self._invalid(f"{location}: {error['msg']}") from exc
 
     def _step_kind_operation(self, step: Mapping[str, Any]) -> tuple[str, str]:
         explicit_kind = self._optional_string(step, "kind")

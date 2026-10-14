@@ -47,7 +47,16 @@ android-emu-agent task validate checkout-smoke.aea
 ```
 
 Validation checks parser syntax, required arguments, supported operations, and the compiled task
-shape. It does not contact a device and does not prove that selectors exist in your app.
+shape. Every step and verifier is also checked against the daemon's request model, including field
+types and snapshot modes. For example, a JSON wait with `"timeout_ms": "later"` is rejected with
+`ERR_TASK_INVALID` and the field location before any step runs. Existing supported type conversions,
+such as a numeric string timeout, remain accepted.
+
+`task run` performs the same whole-task preflight before dispatching its first action, including
+when `--continue-on-failure` is set. Invalid fields in a later step, an attached verifier, or a
+final verifier therefore cannot cause earlier steps to run first. Validation does not contact a
+device and does not prove that selectors exist, packages are installed, or runtime operation
+constraints will be satisfied. Runtime failures can still occur after earlier steps have run.
 
 ## Run the Script
 
