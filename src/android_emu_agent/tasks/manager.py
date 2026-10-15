@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -301,12 +302,14 @@ class TaskManager:
         # Validation needs no real session or device. The session is supplied at run time.
         payload = self._payload_for(kind, operation, source, session_id="task-validation")
         try:
-            _TASK_REQUEST_MODELS[kind, operation].model_validate(payload)
+            request = _TASK_REQUEST_MODELS[kind, operation].model_validate(payload)
         except ValidationError as exc:
             error = exc.errors(include_url=False, include_context=False, include_input=False)[0]
             field = ".".join(str(part) for part in error["loc"])
             location = f"{source_label}.{field}" if field else source_label
             raise self._invalid(f"{location}: {error['msg']}") from exc
+        if isinstance(request, SwipeRequest) and not math.isfinite(request.distance):
+            raise self._invalid(f"{source_label}.distance: Input should be a finite number")
 
     def _step_kind_operation(self, step: Mapping[str, Any]) -> tuple[str, str]:
         explicit_kind = self._optional_string(step, "kind")

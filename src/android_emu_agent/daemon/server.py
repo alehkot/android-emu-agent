@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import time
 import zipfile
@@ -4174,13 +4175,15 @@ async def action_swipe(req: SwipeRequest) -> EndpointResponse:
             status_code=400,
         )
 
-    if req.distance <= 0 or req.distance > 1:
+    if not math.isfinite(req.distance) or req.distance <= 0 or req.distance > 1:
         return _error_response(
             AgentError(
                 code="ERR_INVALID_DISTANCE",
                 message=f"Invalid swipe distance: {req.distance}",
-                context={"distance": req.distance},
-                remediation="Use a distance greater than 0 and less than or equal to 1.",
+                context={
+                    "distance": req.distance if math.isfinite(req.distance) else str(req.distance)
+                },
+                remediation="Use a finite distance greater than 0 and less than or equal to 1.",
             ),
             status_code=400,
         )
