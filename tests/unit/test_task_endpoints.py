@@ -315,3 +315,33 @@ def test_invalid_script_number_returns_400_without_actions(route: str, line: str
     assert error["context"] == {"source": "bad.aea", "line": 3}
     assert "task validate" in error["remediation"]
     assert device.mock_calls == []
+
+
+@pytest.mark.parametrize("route", ["validate", "run"])
+@pytest.mark.parametrize(
+    "distance_json",
+    ['"NaN"', '"Infinity"', '"-inf"', '"1e999"', "NaN", "Infinity", "-Infinity", "1e999"],
+)
+def test_json_task_nonfinite_swipe_distance_is_rejected_before_actions(
+    route: str, distance_json: str
+) -> None:
+    device = MagicMock()
+    task_json = (
+        '{"steps":[{"action":"home"},{"action":"swipe","direction":"up","distance":'
+        + distance_json
+        + "}]}"
+    )
+    body = '{"task":' + task_json
+    if route == "run":
+        body += ',"session_id":"s-abc123","stop_on_failure":false'
+    body += "}"
+    with _client_with_core(device) as client:
+        response = client.post(
+            f"/tasks/{route}", content=body, headers={"Content-Type": "application/json"}
+        )
+    assert response.status_code == 400
+    error = response.json()["error"]
+    assert error["code"] == "ERR_TASK_INVALID"
+    assert "steps[2].distance" in error["message"]
+    assert "finite" in error["message"]
+    assert device.mock_calls == []

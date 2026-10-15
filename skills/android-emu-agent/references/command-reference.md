@@ -381,8 +381,8 @@ module.
 
 Cancelling a pending daemon attach or bridge start triggers resource cleanup before cancellation
 propagates. Cleanup waits for any in-flight ADB port allocation or subprocess creation; it is not an
-immediate-cancel deadline. Cancelling the CLI alone may leave its daemon request running.
-Each attach creates its own local forward without rebinding an existing route.
+immediate-cancel deadline. Cancelling the CLI alone may leave its daemon request running. Each
+attach creates its own local forward without rebinding an existing route.
 
 When a mapping is loaded, stack traces and inspect output show deobfuscated names where the mapping
 provides them.
@@ -532,7 +532,10 @@ Options:
 
 - `--in <target>`: Constrain the gesture to a container `^ref` or selector; `||` fallbacks are tried
   in order and stop on ambiguity
-- `--distance <0-1>`: Gesture distance as fraction of screen (default varies)
+- `--distance <0-1>`: Gesture distance as fraction of screen (default varies) Must be finite,
+  greater than zero, and at most one. Direct swipe requests reject NaN and infinity with
+  `ERR_INVALID_DISTANCE` before accessing the device. JSON tasks reject nonfinite swipe distances
+  during validation with `ERR_TASK_INVALID`, before any task action runs.
 - `--duration <ms>`: Swipe duration in milliseconds (swipe only)
 
 ## Wait Options

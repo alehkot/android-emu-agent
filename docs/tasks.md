@@ -195,3 +195,12 @@ and credentials with values from your app.
 | `ERR_NOT_FOUND`             | The selector did not match the current screen | Capture a fresh snapshot and update the selector.                      |
 | `ERR_TIMEOUT`               | A wait or verifier did not complete           | Check the screen state or increase `timeout_ms`.                       |
 | `ERR_EXPECTATION_FAILED`    | A final expectation failed                    | Inspect the failure payload and capture artifacts before retrying.     |
+
+### Nonfinite swipe distances
+
+JSON task swipe distances must be finite, including values supplied as numeric strings. NaN,
+infinity, and overflowing exponents such as `"1e999"` produce `ERR_TASK_INVALID` with the step and
+field location (for example, `steps[2].distance`). Validation and execution reject the entire task
+before any action runs, even with `--continue-on-failure`. Finite distance range checks remain
+runtime checks. Direct swipe requests return `ERR_INVALID_DISTANCE` for nonfinite or out-of-range
+distances.

@@ -216,3 +216,57 @@ def test_request_validation_error_omits_input_values() -> None:
         TaskManager().validate({"steps": [{"wait": "idle", "timeout_ms": value}]})
     assert value not in error.value.message
     assert value not in str(error.value.context)
+
+
+@pytest.mark.parametrize(
+    "distance", [float("nan"), float("inf"), -float("inf"), "NaN", "Infinity", "-inf", "1e999"]
+)
+@pytest.mark.parametrize("stop_on_failure", [True, False])
+async def test_nonfinite_swipe_distance_prevents_all_dispatch(
+    distance: object, stop_on_failure: bool
+) -> None:
+    calls: list[TaskCall] = []
+
+    async def dispatcher(call: TaskCall) -> dict[str, Any]:
+        calls.append(call)
+        return {"status": "done"}
+
+    spec = {
+        "steps": [{"action": "home"}, {"action": "swipe", "direction": "up", "distance": distance}]
+    }
+    manager = TaskManager()
+    for operation in ("validate", "run"):
+        with pytest.raises(AgentError) as caught:
+            if operation == "validate":
+                manager.validate(spec)
+            else:
+                await manager.run(
+                    spec,
+                    session_id="s-test",
+                    dispatcher=dispatcher,
+                    stop_on_failure=stop_on_failure,
+                )
+        assert caught.value.code == "ERR_TASK_INVALID"
+        assert "steps[2].distance" in caught.value.message
+        assert "finite" in caught.value.message
+    assert calls == []
+
+
+@pytest.mark.parametrize("distance", [0.8, 1, "0.5", "1e-2", True, False, 0, -1, 1.5, 1e308])
+async def test_finite_swipe_distance_preflight_preserves_coercions_and_runtime_ranges(
+    distance: object,
+) -> None:
+    calls: list[TaskCall] = []
+
+    async def dispatcher(call: TaskCall) -> dict[str, Any]:
+        calls.append(call)
+        return {"status": "done"}
+
+    spec = {"steps": [{"action": "swipe", "direction": "up", "distance": distance}]}
+    manager = TaskManager()
+    assert manager.validate(spec)["step_count"] == 1
+    result = await manager.run(spec, session_id="s-test", dispatcher=dispatcher)
+    assert result["passed"] is True
+    assert len(calls) == 1
+    assert calls[0].payload["distance"] == distance
+    assert type(calls[0].payload["distance"]) is type(distance)

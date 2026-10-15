@@ -671,3 +671,23 @@ def test_coordinate_text_failures_are_not_reported_as_success(
         device.clear_text.assert_not_called()
     else:
         assert mutation.call_count == 1
+
+
+@pytest.mark.parametrize(
+    "distance_json",
+    ['"NaN"', '"inf"', '"-Infinity"', '"1e999"', "NaN", "Infinity", "-Infinity", "1e999"],
+)
+def test_swipe_rejects_nonfinite_distance_before_device_access(distance_json: str) -> None:
+    device = MagicMock()
+    with _client_with_core(device) as (client, _ref_resolver):
+        response = client.post(
+            "/actions/swipe",
+            content='{"session_id":"s-abc123","direction":"up","distance":' + distance_json + "}",
+            headers={"Content-Type": "application/json"},
+        )
+    assert response.status_code == 400
+    error = response.json()["error"]
+    assert error["code"] == "ERR_INVALID_DISTANCE"
+    assert error["context"]["distance"] in ("nan", "inf", "-inf")
+    assert "finite" in error["remediation"]
+    assert device.mock_calls == []
