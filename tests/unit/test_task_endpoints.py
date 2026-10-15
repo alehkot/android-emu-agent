@@ -285,3 +285,33 @@ def test_invalid_compiled_request_returns_400_without_device_actions(
     assert response.json()["error"]["code"] == "ERR_TASK_INVALID"
     assert "steps[2]" in response.json()["error"]["message"]
     assert device.mock_calls == []
+
+
+@pytest.mark.parametrize("route", ["validate", "run"])
+@pytest.mark.parametrize(
+    "line",
+    [
+        "wait idle timeout_ms=later",
+        "swipe up duration_ms=slow",
+        "swipe up duration=1.5",
+        "swipe up distance=far",
+        "verify idle timeout_ms=",
+        "expect idle timeout_ms=bad",
+        "swipe up distance=nan",
+        "swipe up distance=Infinity",
+        "swipe up distance=1e999",
+    ],
+)
+def test_invalid_script_number_returns_400_without_actions(route: str, line: str) -> None:
+    device = MagicMock()
+    body: dict[str, Any] = {"script": f"# heading\nhome\n{line}\n", "source_name": "bad.aea"}
+    if route == "run":
+        body.update(session_id="s-abc123", stop_on_failure=False)
+    with _client_with_core(device) as client:
+        response = client.post(f"/tasks/script/{route}", json=body)
+    assert response.status_code == 400
+    error = response.json()["error"]
+    assert error["code"] == "ERR_TASK_SCRIPT_INVALID"
+    assert error["context"] == {"source": "bad.aea", "line": 3}
+    assert "task validate" in error["remediation"]
+    assert device.mock_calls == []
