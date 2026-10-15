@@ -141,6 +141,10 @@ models before any action is dispatched. Invalid request fields return `ERR_TASK_
 task location, even with `--continue-on-failure`. This checks request types and modeled choices, not
 selector existence, installed packages, or all runtime operation constraints.
 
+Malformed numeric options in `.aea` swipe/wait/verifier lines return `ERR_TASK_SCRIPT_INVALID` with
+the source file, line, and option name. Swipe distance must be finite. Fix the reported line and
+rerun validation; no device actions run for a script rejected during parsing.
+
 Task scripts use one command per line and compile to the same task harness:
 
 ```text

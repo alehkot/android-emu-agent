@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import shlex
 from pathlib import Path
 from typing import Any
@@ -94,7 +95,7 @@ def _parse_step(
     if keyword == "swipe":
         direction = _single_value(values, source_name, line_number, "swipe requires a direction")
         step = {"action": "swipe", "direction": direction, **options}
-        _normalize_numeric_options(step)
+        _normalize_numeric_options(step, source_name, line_number)
         return step
     if keyword == "launch":
         package = _single_value(values, source_name, line_number, "launch requires a package")
@@ -149,7 +150,7 @@ def _parse_wait(
     else:
         raise _script_error(source_name, line_number, f"unsupported wait operation: {operation}")
 
-    _normalize_numeric_options(payload)
+    _normalize_numeric_options(payload, source_name, line_number)
     return payload
 
 
@@ -174,14 +175,19 @@ def _option_value(value: str) -> Any:
     return value
 
 
-def _normalize_numeric_options(payload: dict[str, Any]) -> None:
-    for key in ("timeout_ms", "duration_ms"):
-        if key in payload and isinstance(payload[key], str):
-            payload[key] = int(payload[key])
-    if "duration" in payload and isinstance(payload["duration"], str):
-        payload["duration"] = int(payload["duration"])
-    if "distance" in payload and isinstance(payload["distance"], str):
-        payload["distance"] = float(payload["distance"])
+def _normalize_numeric_options(payload: dict[str, Any], source_name: str, line_number: int) -> None:
+    for key in ("timeout_ms", "duration_ms", "duration", "distance"):
+        value = payload.get(key)
+        if not isinstance(value, str):
+            continue
+        expected = "a finite number" if key == "distance" else "an integer"
+        try:
+            converted = float(value) if key == "distance" else int(value)
+        except ValueError as exc:
+            raise _script_error(source_name, line_number, f"{key} must be {expected}") from exc
+        if isinstance(converted, float) and not math.isfinite(converted):
+            raise _script_error(source_name, line_number, f"{key} must be {expected}")
+        payload[key] = converted
 
 
 def _strip_comment(line: str) -> str:

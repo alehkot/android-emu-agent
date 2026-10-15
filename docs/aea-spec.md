@@ -47,6 +47,12 @@ A script is invalid when it contains no steps and no final verifiers.
 | Numbers     | Numeric coercion applies to `timeout_ms`, `duration_ms`, `duration`, and `distance`. | `distance=0.8`                                   |
 | Selectors   | Selector-like tokens are values even when they contain `=`.                          | `text:"Save" enabled:true`                       |
 
+Malformed numeric options on swipe, wait, verify, and expect lines report `ERR_TASK_SCRIPT_INVALID`
+with the source file, line number, and option name. Millisecond options and `duration` require
+integer syntax; `distance` requires a finite number (not `nan`, `inf`, or an overflowing exponent).
+Validation and execution reject these scripts before any device action runs. Valid numeric
+conversions and runtime range checks are unchanged.
+
 Selector-like tokens are recognized when they start with one of these prefixes:
 
 - `^`
