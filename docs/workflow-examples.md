@@ -309,6 +309,11 @@ android-emu-agent trace replay ./artifacts/checkout-flake.aea-trace.zip --until-
 android-emu-agent trace export ./artifacts/checkout-flake.aea-trace.zip --output ./artifacts/checkout-flake.md
 ```
 
+Diagnostics and traces redact `set_text` input in JSON tasks using `action`, `kind` plus
+`operation`, or `kind` plus `op`. This applies to newly recorded data; existing diagnostics and
+archives are not rewritten. Review traces, screenshots, and logs for sensitive app content before
+sharing them.
+
 Attach the `.aea-trace.zip`, exported Markdown, and any screenshots or logs collected during the
 same run.
 

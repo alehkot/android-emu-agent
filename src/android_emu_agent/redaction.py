@@ -23,12 +23,12 @@ AUTHORIZATION_PATTERN = re.compile(r"\b(Bearer|Basic)\s+[^\s,;]+", re.IGNORECASE
 def redact_sensitive_data(value: Any) -> Any:
     """Recursively redact credentials, typed input, and URI secrets."""
     if isinstance(value, dict):
-        operation = _operation_name(value)
+        is_text_input = _is_text_input(value)
         redacted: dict[str, Any] = {}
         for key, item in value.items():
             lowered = key.lower()
             if _contains_marker(lowered, SENSITIVE_KEY_MARKERS) or (
-                operation == "set_text" and lowered == "text"
+                is_text_input and lowered == "text"
             ):
                 redacted[key] = REDACTED
             else:
@@ -49,12 +49,15 @@ def redact_sensitive_data(value: Any) -> Any:
     return value
 
 
-def _operation_name(value: dict[str, Any]) -> str | None:
-    for key in ("action", "operation"):
+def _is_text_input(value: dict[str, Any]) -> bool:
+    # Task requests are logged even when validation rejects conflicting aliases.
+    # Redact conservatively if any supported alias identifies typed input, rather
+    # than letting an ignored or invalid field mask a set_text operation.
+    for key in ("action", "operation", "op"):
         operation = value.get(key)
-        if isinstance(operation, str):
-            return operation.replace("-", "_").lower()
-    return None
+        if isinstance(operation, str) and operation.replace("-", "_").lower() == "set_text":
+            return True
+    return False
 
 
 def _contains_marker(value: str, markers: tuple[str, ...]) -> bool:
