@@ -11,6 +11,7 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
+from uuid import uuid4
 
 import structlog
 
@@ -46,7 +47,12 @@ class FileMatch(TypedDict):
 
 
 class FileManager:
-    """Push and pull files via adb."""
+    """Push and pull files via adb.
+
+    Independent UUIDs isolate automatic pull destinations and on-device staging
+    paths across repeated or concurrent transfers. Explicit destinations retain
+    their existing replacement or directory-merge semantics.
+    """
 
     _FIND_DELIMITER = "|"
     _FIND_FORMAT = "%n|%F|%s|%u|%g|%a|%Y"
@@ -332,7 +338,7 @@ class FileManager:
         timestamp = self._timestamp()
         base = Path(remote_path).name or "artifact"
         prefix_value = prefix or ""
-        filename = f"{prefix_value}{serial}_{timestamp}_{base}"
+        filename = self._unique_name(f"{prefix_value}{serial}_{timestamp}_{base}")
         return self.output_dir / filename
 
     def _resolve_app_path(self, package: str, remote_path: str) -> str:
@@ -354,7 +360,17 @@ class FileManager:
     def _stage_name(self, package: str, suffix: str | None = None) -> str:
         safe_pkg = package.replace(".", "_")
         suffix_part = f"_{suffix}" if suffix else ""
-        return f"stage_{safe_pkg}_{self._timestamp()}{suffix_part}"
+        return self._unique_name(f"stage_{safe_pkg}_{self._timestamp()}{suffix_part}")
+
+    @staticmethod
+    def _unique_name(description: str) -> str:
+        # Keep the random component intact and stay within the usual Android/host
+        # NAME_MAX of 255 bytes, even when descriptive components contain Unicode.
+        token = uuid4().hex
+        readable = description.encode("utf-8")[: 255 - len(token) - 1].decode(
+            "utf-8", errors="ignore"
+        )
+        return f"{token}_{readable}"
 
     def _parse_find_output(self, output: str) -> list[FileMatch]:
         matches: list[FileMatch] = []

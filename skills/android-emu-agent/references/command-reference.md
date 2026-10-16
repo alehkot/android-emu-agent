@@ -493,6 +493,10 @@ to preserve heap files on-device after pulling:
 - `file app pull <pkg> <remote> --device <serial>` Pull from app-private storage via root or
   `run-as` for a debuggable app.
 
+Pulls without `--local` return a timestamp-and-UUID path, preserving repeated and concurrent
+results. App-private staging paths are also independent per transfer. Explicit destinations retain
+their existing replacement or directory-merge behavior.
+
 See `references/reliability.md` for reliability triage workflows and output interpretation. See
 `references/files.md` for file transfer workflows. See `references/workflow-examples.md` for
 multi-command examples covering visual grounding, traces, capabilities, intent preflight, and
