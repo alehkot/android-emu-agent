@@ -148,7 +148,7 @@ class FileManager:
             destination = local / Path(remote_abs).name if local.is_dir() else local
             await self._run_adb_to_file(
                 serial,
-                ["exec-out", "run-as", package, "cat", remote_abs],
+                ["shell", "-T", "-n", shlex.join(["run-as", package, "cat", remote_abs])],
                 destination,
             )
             return
@@ -164,7 +164,7 @@ class FileManager:
         remote_abs: str,
         local: Path,
     ) -> None:
-        """Stream and safely extract an app-private directory through adb exec-out."""
+        """Stream and safely extract an app-private directory with remote exit status."""
 
         def _extract(archive_path: Path, extract_root: Path) -> None:
             with tarfile.open(archive_path, mode="r:*") as archive:
@@ -195,15 +195,10 @@ class FileManager:
             await self._run_adb_to_file(
                 serial,
                 [
-                    "exec-out",
-                    "run-as",
-                    package,
-                    "tar",
-                    "-C",
-                    remote_abs,
-                    "-cf",
-                    "-",
-                    ".",
+                    "shell",
+                    "-T",
+                    "-n",
+                    shlex.join(["run-as", package, "tar", "-C", remote_abs, "-cf", "-", "."]),
                 ],
                 archive_path,
             )
@@ -518,7 +513,14 @@ class FileManager:
         *,
         timeout_s: float = ADB_TRANSFER_TIMEOUT_S,
     ) -> None:
-        """Run adb with binary stdout written directly to a host file."""
+        """Run adb with binary stdout written directly to a host file.
+
+        App pulls use shell -T -n: no PTY, no stdin, and shell-v2 exit status with
+        stderr separate from the payload. Unlike exec-out, remote failures then
+        reach check=True. Explicit -T also rejects devices without shell-v2.
+        Shell commands must be joined with shlex.join because adb does not quote
+        its command arguments before passing them to the remote shell.
+        """
 
         def _run() -> None:
             adb_path = shutil.which("adb")
