@@ -190,11 +190,10 @@ async def test_app_pull_streams_file_via_run_as_without_root(tmp_path: Path) -> 
     run_adb_to_file.assert_awaited_once_with(
         "emulator-5554",
         [
-            "exec-out",
-            "run-as",
-            "com.example.app",
-            "cat",
-            "/data/data/com.example.app/files/config.json",
+            "shell",
+            "-T",
+            "-n",
+            "run-as com.example.app cat /data/data/com.example.app/files/config.json",
         ],
         tmp_path / "config.json",
     )

@@ -23,7 +23,14 @@ android-emu-agent file pull /sdcard/Download/sample.json --device emulator-5554
 ## App-Private Storage
 
 Rooted targets can access any app sandbox. On non-root targets, the app must be debuggable so
-Android's `run-as` command can enter its sandbox.
+Android's `run-as` command can enter its sandbox. Non-root pulls also require ADB shell-v2 support
+on the target. They use a non-PTY shell stream so binary output stays intact, stderr stays separate,
+and a failed `run-as`, `cat`, or `tar` command is reported as an error. Targets without shell-v2
+fail rather than falling back to a stream that cannot report remote exit status.
+
+A failed file pull may leave an empty or partial local file, including replacing an existing
+`--local` file. Directory archives are extracted only after the remote transfer succeeds; this does
+not make the subsequent directory merge atomic.
 
 ```bash
 # Push into app files/ (default)

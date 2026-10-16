@@ -37,7 +37,7 @@ async def test_automatic_pull_destinations_preserve_each_transfer(
         await write_payload(args[1], Path(args[2]))
 
     async def adb_to_file(_serial: str, args: list[str], destination: Path) -> None:
-        await write_payload(args[-1], destination)
+        await write_payload(shlex.split(args[-1])[-1], destination)
 
     async def pull(remote: str) -> Path:
         transfer_manager = FileManager(output_dir=tmp_path) if independent_managers else manager
