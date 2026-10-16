@@ -36,7 +36,16 @@ android-emu-agent file app push com.example.app ./config.json --device emulator-
 android-emu-agent file app pull com.example.app files/ --device emulator-5554
 ```
 
-Outputs land in `~/.android-emu-agent/artifacts/files` unless you provide `--local`.
+Outputs land in `~/.android-emu-agent/artifacts/files` unless you provide `--local`. Automatically
+generated pull paths include a random UUID, so repeated or concurrent pulls keep separate files or
+directories even within the same second. Use the returned path rather than reconstructing a
+timestamp-based filename. Long descriptive names are shortened to keep generated filename components
+within 255 UTF-8 bytes while retaining the full UUID. An explicit `--local` retains the existing
+replacement or directory-merge behavior; choose different destinations to preserve each result.
+
+App-private transfers that require on-device staging use a separate random name for each transfer.
+Cleanup removes only that transfer's staging path. This does not serialize transfers to an
+explicitly shared destination or make a directory copy atomic.
 
 ## Find Files/Folders
 
