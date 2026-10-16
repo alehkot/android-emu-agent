@@ -122,7 +122,10 @@ runtime permission rules for the target app and device.
 Trace archives record daemon request/response exchanges for the active session, including
 `diagnostic_id`, request payloads with sensitive fields redacted, response payloads, status codes,
 errors, and artifact paths. Replay is currently a dry-run plan so it never mutates a device by
-surprise.
+surprise. Diagnostics and traces redact typed `set_text` input for all JSON task forms: `action`
+shorthand, `kind` with `operation`, and `kind` with `op`. If aliases conflict, typed input is
+conservatively redacted even for rejected requests. Existing logs and archives are not rewritten;
+review artifacts for sensitive app content before sharing.
 
 ### Task
 
