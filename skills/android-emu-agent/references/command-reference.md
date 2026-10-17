@@ -162,6 +162,11 @@ expect activity MainActivity
 
 The formal parser contract is documented at <https://alehkot.github.io/android-emu-agent/aea-spec/>.
 
+In scripts, quote literal `=` text, such as `set-text id:com.example:id/search "x=y"` or
+`wait text "Total=5" timeout_ms=1000`. A fully quoted `"timeout_ms=5000"` is literal text;
+`timeout_ms="5000"` is an option. Deep-link query URLs retain their parameters, for example
+`deeplink "https://example.com/search?q=android&sort=date"`. Quote URLs containing `#` too.
+
 Validate a script before running it:
 
 ```bash

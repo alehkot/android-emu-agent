@@ -219,6 +219,58 @@ def test_task_script_set_text_selector_executes() -> None:
     element.set_text.assert_called_once_with("agent@example.com")
 
 
+@pytest.mark.parametrize("text", ["x=y", "timeout_ms=5000", "first x=y last"])
+def test_task_script_set_text_literal_equals_executes(text: str) -> None:
+    device = MagicMock()
+    element = MagicMock()
+    element.count = 1
+    device.return_value = element
+
+    with _client_with_core(device) as client:
+        response = client.post(
+            "/tasks/script/run",
+            json={
+                "session_id": "s-abc123",
+                "script": f'set-text id:com.example:id/input "{text}"',
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["passed"] is True
+    device.assert_called_once_with(resourceId="com.example:id/input")
+    element.set_text.assert_called_once_with(text)
+
+
+def test_task_script_query_link_and_literal_verifiers_dispatch() -> None:
+    from android_emu_agent.daemon import server
+
+    script = (
+        'deeplink "https://example.com/search?q=android&sort=date"\n'
+        'verify text "Total=5" timeout_ms=1000\n'
+        'expect text "timeout_ms=5000" timeout_ms=1000\n'
+    )
+    dispatch = AsyncMock(return_value={"status": "done", "passed": True})
+    with (
+        _client_with_core(MagicMock()) as client,
+        patch.object(server, "_dispatch_task_call", dispatch),
+    ):
+        validated = client.post("/tasks/script/validate", json={"script": script})
+        assert validated.status_code == 200
+        dispatch.assert_not_called()
+        response = client.post(
+            "/tasks/script/run", json={"session_id": "s-abc123", "script": script}
+        )
+
+    assert response.status_code == 200
+    assert response.json()["passed"] is True
+    calls = [call.args[0] for call in dispatch.await_args_list]
+    assert len(calls) == 3
+    assert calls[0].operation == "deeplink"
+    assert calls[0].payload["uri"] == "https://example.com/search?q=android&sort=date"
+    assert [call.payload["text"] for call in calls[1:]] == ["Total=5", "timeout_ms=5000"]
+    assert [call.payload["timeout_ms"] for call in calls[1:]] == [1000, 1000]
+
+
 def test_task_dispatcher_wraps_raw_snapshot_response() -> None:
     """Raw snapshot task steps should return JSON task evidence instead of failing to decode XML."""
     from android_emu_agent.daemon import server

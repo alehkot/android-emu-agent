@@ -3,13 +3,40 @@
 from __future__ import annotations
 
 import math
+import re
 import shlex
+from io import StringIO
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from android_emu_agent.errors import AgentError
 
 SCRIPT_SUFFIXES = {".aea", ".aea-task", ".aea-replay"}
+_OPTION_PREFIX = re.compile(r"[A-Za-z_][A-Za-z0-9_-]*=")
+
+
+class _Token(NamedTuple):
+    value: str
+    is_option: bool
+
+
+def _tokenize(line: str) -> list[_Token]:
+    """Keep option-key quoting while delegating value decoding to shlex."""
+    stream = StringIO(line)
+    lexer = shlex.shlex(stream, posix=True)
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    tokens: list[_Token] = []
+    while True:
+        start = stream.tell()
+        value = lexer.get_token()
+        if value is None:
+            return tokens
+        # With whitespace splitting and no punctuation tokens, shlex consumes one
+        # token plus its delimiter. Inspect its original spelling before quotes
+        # and escapes disappear: "x=y" is data, but timeout_ms="500" is an option.
+        raw = line[start : stream.tell()].lstrip()
+        tokens.append(_Token(value, _OPTION_PREFIX.match(raw) is not None))
 
 
 def is_task_script_path(path: str | Path) -> bool:
@@ -39,20 +66,22 @@ def parse_task_script(script: str, *, source_name: str = "<script>") -> dict[str
             continue
 
         try:
-            tokens = shlex.split(line, comments=False, posix=True)
+            tokens = _tokenize(line)
         except ValueError as exc:
             raise _script_error(source_name, line_number, str(exc)) from exc
         if not tokens:
             continue
 
-        keyword = tokens[0].lower()
+        keyword = tokens[0].value.lower()
         args = tokens[1:]
         if keyword == "name":
-            spec["name"] = _joined_value(args, source_name, line_number)
+            spec["name"] = _joined_value([arg.value for arg in args], source_name, line_number)
         elif keyword == "description":
-            spec["description"] = _joined_value(args, source_name, line_number)
+            spec["description"] = _joined_value(
+                [arg.value for arg in args], source_name, line_number
+            )
         elif keyword == "session":
-            spec["session_id"] = _single_arg(args, source_name, line_number)
+            spec["session_id"] = _single_arg([arg.value for arg in args], source_name, line_number)
         elif keyword == "expect":
             task_verifiers.append(_parse_verifier(args, source_name, line_number))
         elif keyword == "verify":
@@ -77,7 +106,7 @@ def parse_task_script(script: str, *, source_name: str = "<script>") -> dict[str
 
 def _parse_step(
     keyword: str,
-    args: list[str],
+    args: list[_Token],
     source_name: str,
     line_number: int,
 ) -> dict[str, Any]:
@@ -115,7 +144,7 @@ def _parse_step(
 
 
 def _parse_verifier(
-    args: list[str],
+    args: list[_Token],
     source_name: str,
     line_number: int,
 ) -> dict[str, Any]:
@@ -154,15 +183,15 @@ def _parse_wait(
     return payload
 
 
-def _split_options(args: list[str]) -> tuple[dict[str, Any], list[str]]:
+def _split_options(args: list[_Token]) -> tuple[dict[str, Any], list[str]]:
     options: dict[str, Any] = {}
     values: list[str] = []
     for arg in args:
-        if "=" in arg and not arg.startswith(("^", "text:", "id:", "desc:", "class:", "coords:")):
-            key, raw_value = arg.split("=", 1)
+        if arg.is_option:
+            key, raw_value = arg.value.split("=", 1)
             options[key.replace("-", "_")] = _option_value(raw_value)
         else:
-            values.append(arg)
+            values.append(arg.value)
     return options, values
 
 

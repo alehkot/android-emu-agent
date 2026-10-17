@@ -41,11 +41,24 @@ A script is invalid when it contains no steps and no final verifiers.
 | ----------- | ------------------------------------------------------------------------------------ | ------------------------------------------------ |
 | Comments    | `#` starts a comment outside single or double quotes.                                | `tap text:"Pay #1" # comment`                    |
 | Quoting     | Single or double quotes preserve spaces.                                             | `description "Open checkout and verify payment"` |
-| Options     | Options use `key=value` syntax.                                                      | `wait idle timeout_ms=5000`                      |
+| Options     | Options start with an unquoted `key=` prefix.                                        | `wait idle timeout_ms="5000"`                    |
 | Option keys | `-` normalizes to `_`.                                                               | `duration-ms=300` becomes `duration_ms`.         |
 | Booleans    | `true` and `false` become booleans.                                                  | `wait_debugger=true`                             |
 | Numbers     | Numeric coercion applies to `timeout_ms`, `duration_ms`, `duration`, and `distance`. | `distance=0.8`                                   |
 | Selectors   | Selector-like tokens are values even when they contain `=`.                          | `text:"Save" enabled:true`                       |
+
+Option keys start with an ASCII letter or `_`, followed by ASCII letters, digits, `_`, or `-`. Quote
+the whole token to use `key=value` as literal text: `"timeout_ms=5000"` is text, whereas
+`timeout_ms="5000"` is an option. Escaping the `=` also makes a token literal (`x\=y`). Options can
+appear before or after positional values. Query URLs and selector tokens are values because their
+prefixes are not option keys. For URLs containing `#`, quote the URL to preserve its fragment.
+
+```text
+deeplink "https://example.com/search?q=android&sort=date#results"
+set-text id:com.example:id/search "x=y"
+wait text "Total=5" timeout_ms=5000
+expect text "timeout_ms=5000" timeout_ms=1000
+```
 
 Malformed numeric options on swipe, wait, verify, and expect lines report `ERR_TASK_SCRIPT_INVALID`
 with the source file, line number, and option name. Millisecond options and `duration` require
