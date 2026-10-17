@@ -125,6 +125,11 @@ recents
 the selector and the rest of the line as text, so use a single selector token such as a ref or
 resource ID.
 
+Quote literal text containing `=` so it is not treated as an option, for example
+`set-text id:com.example:id/search "x=y"`. Deep links can contain query parameters:
+`deeplink "https://example.com/search?q=android&sort=date"`. Quoting an entire token makes it
+literal; quoting just an option value, as in `timeout_ms="5000"`, still sets the option.
+
 ### Waits and Verifiers
 
 ```text
