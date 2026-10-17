@@ -5,7 +5,7 @@ from __future__ import annotations
 import typer
 
 from android_emu_agent.cli.daemon_client import DaemonClient
-from android_emu_agent.cli.utils import handle_response
+from android_emu_agent.cli.utils import handle_response, wait_http_timeout
 
 app = typer.Typer(help="Wait/synchronization commands")
 
@@ -55,7 +55,7 @@ def wait_idle(
     android-emu-agent wait idle s-abc123 --timeout-ms 5000
     ```
     """
-    client = DaemonClient()
+    client = DaemonClient(timeout=wait_http_timeout(timeout_ms))
     resp = client.request(
         "POST",
         "/wait/idle",
@@ -73,7 +73,7 @@ def wait_activity(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Wait for an activity to appear."""
-    client = DaemonClient()
+    client = DaemonClient(timeout=wait_http_timeout(timeout_ms))
     resp = client.request(
         "POST",
         "/wait/activity",
@@ -102,7 +102,7 @@ def wait_text(
     android-emu-agent wait text s-abc123 "Welcome" --timeout-ms 15000
     ```
     """
-    client = DaemonClient()
+    client = DaemonClient(timeout=wait_http_timeout(timeout_ms))
     resp = client.request(
         "POST",
         "/wait/text",
@@ -143,7 +143,7 @@ def wait_exists(
         class_name,
     )
 
-    client = DaemonClient()
+    client = DaemonClient(timeout=wait_http_timeout(timeout_ms))
     resp = client.request(
         "POST",
         "/wait/exists",
@@ -189,7 +189,7 @@ def wait_gone(
         class_name,
     )
 
-    client = DaemonClient()
+    client = DaemonClient(timeout=wait_http_timeout(timeout_ms))
     resp = client.request(
         "POST",
         "/wait/gone",

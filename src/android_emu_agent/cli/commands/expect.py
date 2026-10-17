@@ -5,7 +5,7 @@ from __future__ import annotations
 import typer
 
 from android_emu_agent.cli.daemon_client import DaemonClient
-from android_emu_agent.cli.utils import handle_response
+from android_emu_agent.cli.utils import handle_response, wait_http_timeout
 
 app = typer.Typer(help="Expectation and assertion commands")
 
@@ -44,7 +44,7 @@ def expect_idle(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Assert that the UI becomes idle."""
-    client = DaemonClient()
+    client = DaemonClient(timeout=wait_http_timeout(timeout_ms))
     resp = client.request(
         "POST",
         "/expect/idle",
@@ -62,7 +62,7 @@ def expect_text(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Assert that text appears."""
-    client = DaemonClient()
+    client = DaemonClient(timeout=wait_http_timeout(timeout_ms))
     resp = client.request(
         "POST",
         "/expect/text",
@@ -80,7 +80,7 @@ def expect_activity(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Assert that the current activity appears."""
-    client = DaemonClient()
+    client = DaemonClient(timeout=wait_http_timeout(timeout_ms))
     resp = client.request(
         "POST",
         "/expect/activity",
@@ -125,7 +125,7 @@ def expect_exists(
     android-emu-agent expect exists s-abc123 --id com.example:id/home_root --json
     ```
     """
-    client = DaemonClient()
+    client = DaemonClient(timeout=wait_http_timeout(timeout_ms))
     resp = client.request(
         "POST",
         "/expect/exists",
@@ -169,7 +169,7 @@ def expect_gone(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Assert that an element is gone."""
-    client = DaemonClient()
+    client = DaemonClient(timeout=wait_http_timeout(timeout_ms))
     resp = client.request(
         "POST",
         "/expect/gone",
