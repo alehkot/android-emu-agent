@@ -22,6 +22,16 @@ EMULATOR_STOP_TIMEOUT = 60.0
 EMULATOR_RESTORE_TIMEOUT = 180.0
 
 
+def wait_http_timeout(timeout_ms: int | None) -> float:
+    """Allow the daemon's wait deadline plus ten seconds for a response.
+
+    None and zero select the daemon's default ten-second wait. Keep the usual
+    ten-second transport floor for short or invalid negative wait values; the
+    request payload and daemon validation/behavior remain unchanged.
+    """
+    return max(10.0, (timeout_ms or 10000) / 1000 + 10.0)
+
+
 def _parse_response_json(resp: Any) -> dict[str, Any]:
     try:
         return cast(dict[str, Any], resp.json())

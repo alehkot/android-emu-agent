@@ -242,6 +242,12 @@ instead of extending that polling deadline; a result received after the deadline
 The underlying device call may still finish in its bounded per-device worker pool after the wait
 returns. This does not forcibly stop the device operation or its driver's recovery work.
 
+For standalone `wait` and timed `expect` commands, the CLI's HTTP timeout allows the requested wait
+duration plus 10 seconds for the daemon response (with a 10-second transport minimum). Omitted or
+zero `--timeout-ms` uses the daemon's 10-second default, so its HTTP budget is 20 seconds. This
+response allowance does not extend the daemon's condition-wait deadline and does not apply to the
+aggregate `task run` request.
+
 ### Expect
 
 - `expect idle <session_id>` Assert that UI becomes idle.
