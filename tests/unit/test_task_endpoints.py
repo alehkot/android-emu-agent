@@ -419,3 +419,87 @@ def test_json_task_nonfinite_swipe_distance_is_rejected_before_actions(
     assert "steps[2].distance" in error["message"]
     assert "finite" in error["message"]
     assert device.mock_calls == []
+
+
+@pytest.mark.parametrize("scope", ["wait", "verify", "expect"])
+@pytest.mark.parametrize("operation", ["exists", "gone"])
+@pytest.mark.parametrize(
+    ("target", "kwargs"),
+    [
+        (
+            'text:"Sign in" enabled:true checked:false',
+            {"text": "Sign in", "enabled": True, "checked": False},
+        ),
+        ('desc:"Don\'t stop: A || B"', {"description": "Don't stop: A || B"}),
+        (r'text-matches:"^Order \d+$"', {"textMatches": r"^Order \d+$"}),
+        ("id:com.example:id/payment", {"resourceId": "com.example:id/payment"}),
+        ('label:"Open menu"', {"description": "Open menu"}),
+    ],
+)
+def test_task_script_wait_selector_executes(
+    scope: str, operation: str, target: str, kwargs: dict[str, str | bool]
+) -> None:
+    """All task condition scopes must reach the device with parsed selector kwargs."""
+    device = MagicMock()
+    device.return_value.exists.return_value = operation == "exists"
+    prefix = "" if scope == "wait" else "home\n"
+    script = f"{prefix}{scope} {operation} {target} timeout_ms=100"
+
+    with _client_with_core(device) as client:
+        response = client.post(
+            "/tasks/script/run", json={"session_id": "s-abc123", "script": script}
+        )
+
+    assert response.status_code == 200
+    assert response.json()["passed"] is True
+    device.assert_called_once_with(**kwargs)
+
+
+@pytest.mark.parametrize("scope", ["wait", "verify", "expect"])
+@pytest.mark.parametrize("operation", ["exists", "gone"])
+def test_task_script_wait_snapshot_ref_still_resolves(scope: str, operation: str) -> None:
+    from android_emu_agent.daemon import server
+    from android_emu_agent.ui.ref_resolver import LocatorBundle
+
+    device = MagicMock()
+    device.return_value.exists.return_value = operation == "exists"
+    locator = LocatorBundle.from_dict(
+        {"ref": "^g1a1", "generation": 1, "resource_id": "com.example:id/payment"}
+    )
+    prefix = "" if scope == "wait" else "home\n"
+    script = f"{prefix}{scope} {operation} ^g1a1 timeout_ms=100"
+    resolver = AsyncMock(return_value=(locator, None))
+
+    with patch.object(server, "_resolve_ref_target", resolver), _client_with_core(device) as client:
+        response = client.post(
+            "/tasks/script/run", json={"session_id": "s-abc123", "script": script}
+        )
+
+    assert response.status_code == 200
+    assert response.json()["passed"] is True
+    resolver.assert_awaited_once()
+    assert resolver.call_args.args[1:] == ("s-abc123", "^g1a1", 1)
+    device.assert_called_once_with(resourceId="com.example:id/payment")
+
+
+@pytest.mark.parametrize("scope", ["wait", "verify", "expect"])
+@pytest.mark.parametrize("operation", ["exists", "gone"])
+@pytest.mark.parametrize("target", ["coords:10,20", "text:Ready || id:ready", "unknown:Ready"])
+def test_task_script_invalid_wait_selector_prevents_all_actions(
+    scope: str, operation: str, target: str
+) -> None:
+    device = MagicMock()
+    script = f"home\n{scope} {operation} {target} timeout_ms=100"
+
+    with _client_with_core(device) as client:
+        response = client.post(
+            "/tasks/script/run", json={"session_id": "s-abc123", "script": script}
+        )
+
+    assert response.status_code == 400
+    error = response.json()["error"]
+    assert error["code"] == "ERR_TASK_INVALID"
+    assert ".ref:" in error["message"]
+    assert error["remediation"]
+    device.assert_not_called()
+    device.press.assert_not_called()

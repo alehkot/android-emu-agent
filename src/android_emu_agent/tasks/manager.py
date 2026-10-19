@@ -10,6 +10,12 @@ from typing import Any, cast
 
 from pydantic import ValidationError
 
+from android_emu_agent.actions.selector import (
+    CoordsSelector,
+    FallbackSelector,
+    RefSelector,
+    parse_selector,
+)
 from android_emu_agent.daemon.models import (
     ActionRequest,
     AppDeeplinkRequest,
@@ -375,8 +381,13 @@ class TaskManager:
             self._required_string(source, "activity", source_label=source_label)
         elif operation == "text":
             self._required_string(source, "text", source_label=source_label)
-        elif operation in {"exists", "gone"} and not self._selector_payload(source):
-            raise self._invalid(f"{source_label} requires ref, selector, text, id, or desc")
+        elif operation in {"exists", "gone"}:
+            try:
+                payload = self._selector_payload(source)
+            except AgentError as exc:
+                raise self._invalid(f"{source_label}.ref: {exc.message}") from exc
+            if not payload:
+                raise self._invalid(f"{source_label} requires ref, selector, text, id, or desc")
 
     def _validate_app_source(self, step: dict[str, Any], *, source_label: str) -> None:
         source = cast(dict[str, Any], step["source"])
@@ -452,9 +463,6 @@ class TaskManager:
 
     def _selector_payload(self, source: Mapping[str, Any]) -> dict[str, Any]:
         payload: dict[str, Any] = {}
-        ref = source.get("ref")
-        if isinstance(ref, str) and ref:
-            payload["ref"] = ref
         selector = source.get("selector")
         if isinstance(selector, Mapping):
             payload["selector"] = dict(selector)
@@ -483,6 +491,23 @@ class TaskManager:
             inline_selector["className"] = class_name
         if inline_selector and "selector" not in payload:
             payload["selector"] = inline_selector
+
+        ref = source.get("ref")
+        if isinstance(ref, str) and ref:
+            try:
+                target = parse_selector(ref)
+            except AgentError as exc:
+                raise self._invalid("Invalid wait selector expression") from exc
+            if isinstance(target, RefSelector):
+                payload["ref"] = target.ref
+            elif isinstance(target, (CoordsSelector, FallbackSelector)):
+                raise self._invalid(
+                    "Wait conditions require a snapshot ref or a single element selector; "
+                    "coordinate selectors and fallback chains are not supported"
+                )
+            else:
+                # Like snapshot refs, a direct target takes precedence over selector fields.
+                payload["selector"] = target.to_u2_kwargs()
         return payload
 
     @staticmethod

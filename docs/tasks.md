@@ -153,6 +153,12 @@ tap text:"Continue" || id:com.example:id/continue
 verify exists text:"Welcome" timeout_ms=5000
 ```
 
+For `exists` and `gone`, task waits and verifiers accept snapshot refs or direct element
+selectors, including quoted values, regexes, and compound state filters such as
+`text:"Welcome" enabled:true`. Coordinate selectors and `||` fallback chains are rejected during
+validation, before any device actions run. JSON tasks can use the same selector expression in
+`ref`, or a `selector` dictionary with string and boolean values.
+
 `expect` adds a final task-level verifier:
 
 ```text

@@ -270,3 +270,11 @@ async def test_finite_swipe_distance_preflight_preserves_coercions_and_runtime_r
     assert len(calls) == 1
     assert calls[0].payload["distance"] == distance
     assert type(calls[0].payload["distance"]) is type(distance)
+
+
+@pytest.mark.parametrize("value", [0, 1, 0.0, 1.0, 123])
+def test_selector_boolean_support_does_not_coerce_numbers(value: int | float) -> None:
+    with pytest.raises(AgentError) as caught:
+        TaskManager().validate({"steps": [{"wait": "exists", "selector": {"enabled": value}}]})
+    assert caught.value.code == "ERR_TASK_INVALID"
+    assert "selector.enabled" in caught.value.message

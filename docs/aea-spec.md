@@ -167,6 +167,12 @@ wait exists text:"Payment" timeout_ms=5000
 wait gone text:"Loading" timeout_ms=10000
 ```
 
+`exists` and `gone` accept a snapshot ref or one element selector, including quoted values,
+regex selectors, and compound boolean state filters such as `text:"Payment" enabled:true`.
+The compiled `ref` string is normalized to a selector dictionary before dispatch unless it is a
+snapshot ref. Coordinates and `||` fallback chains are action targets, not wait conditions;
+using either in a wait or verifier fails task validation before any steps run.
+
 ### UI Steps
 
 | Script form             | Compiled operation                      | Notes                         |
@@ -197,9 +203,10 @@ A `verify` line before any step is invalid.
 
 ## Selector Values
 
-Script selectors pass through to the same selector parser used by action, wait, and expectation
-commands. Snapshot refs use `^g<generation>a<element>`; copy the complete token from the latest
-snapshot. Common forms:
+Script selector expressions use the same parser as action targets. Actions support the forms
+below; `wait`, `verify`, and `expect` conditions support the single-element forms and snapshot
+refs, but not coordinates or `||` fallback chains. Snapshot refs use `^g<generation>a<element>`;
+copy the complete token from the latest snapshot. Common forms:
 
 ```text
 ^g1a1

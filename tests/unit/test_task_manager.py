@@ -197,3 +197,37 @@ def test_task_validate_rejects_unsupported_operations() -> None:
         manager.validate({"steps": [{"action": "pinch", "ref": "^g1a1"}]})
 
     assert exc_info.value.code == "ERR_TASK_UNSUPPORTED_STEP"
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ({"ref": 'text:"Ready" enabled:true'}, {"selector": {"text": "Ready", "enabled": True}}),
+        (
+            {"ref": "text:Ready", "selector": {"text": "Ignored"}, "text": "Also ignored"},
+            {"selector": {"text": "Ready"}},
+        ),
+        (
+            {"ref": "^g1a1", "selector": {"text": "Fallback"}},
+            {"ref": "^g1a1", "selector": {"text": "Fallback"}},
+        ),
+        (
+            {"selector": {"text": "Ready", "enabled": False}},
+            {"selector": {"text": "Ready", "enabled": False}},
+        ),
+        ({"text_contains": "Ready"}, {"selector": {"textContains": "Ready"}}),
+    ],
+)
+async def test_task_condition_selector_payloads(
+    source: dict[str, Any], expected: dict[str, Any]
+) -> None:
+    calls: list[TaskCall] = []
+
+    async def dispatcher(call: TaskCall) -> dict[str, Any]:
+        calls.append(call)
+        return {"status": "done"}
+
+    spec = {"steps": [{"wait": "exists", **source}]}
+    result = await TaskManager().run(spec, session_id="s-test", dispatcher=dispatcher)
+    assert result["passed"] is True
+    assert calls[0].payload == {"session_id": "s-test", **expected}

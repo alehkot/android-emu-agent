@@ -7,7 +7,7 @@ import math
 import os
 import time
 import zipfile
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from hashlib import md5
@@ -1874,7 +1874,7 @@ async def wait_exists(req: WaitSelectorRequest) -> EndpointResponse:
     if not device:
         return _error_response(device_offline_error(session.device_serial), status_code=404)
 
-    selector = req.selector
+    selector: Mapping[str, str | bool] | None = req.selector
     warning: str | None = None
     if req.ref:
         locator, warning = await _resolve_ref_target(
@@ -1914,7 +1914,7 @@ async def wait_gone(req: WaitSelectorRequest) -> EndpointResponse:
     if not device:
         return _error_response(device_offline_error(session.device_serial), status_code=404)
 
-    selector = req.selector
+    selector: Mapping[str, str | bool] | None = req.selector
     warning: str | None = None
     if req.ref:
         locator, warning = await _resolve_ref_target(

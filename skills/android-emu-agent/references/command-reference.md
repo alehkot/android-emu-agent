@@ -160,6 +160,12 @@ verify exists text:"Email"
 expect activity MainActivity
 ```
 
+Task `wait exists/gone`, step `verify exists/gone`, and final `expect exists/gone` accept a
+snapshot ref or a single element selector, including quoted strings, regexes, and compound
+boolean filters (`text:"Sign in" enabled:true`). Coordinate targets and `||` fallback chains
+are not wait conditions and fail task validation before execution. JSON task selector dictionaries
+accept string and boolean values.
+
 The formal parser contract is documented at <https://alehkot.github.io/android-emu-agent/aea-spec/>.
 
 In scripts, quote literal `=` text, such as `set-text id:com.example:id/search "x=y"` or
