@@ -242,6 +242,15 @@ Run this command when an automation planner needs to discover supported selector
 android-emu-agent device capabilities --session <session-id> --json
 ```
 
+### Literal Quotes in Selector Values
+
+Selector values lose only their matching outer quote pair. For example, `tap text:"James'"` keeps
+the trailing apostrophe, and `tap text:"'Accept'" enabled:true` selects the label `'Accept'`,
+including both apostrophes. Use double quotes around literal apostrophes or single quotes around
+literal double quotes. The same rule applies to action targets, swipe containers, and
+`wait`/`verify`/`expect` element selectors. Empty quoted values are still invalid; this does not
+introduce additional escape processing.
+
 ## Compiled Shape
 
 This script:

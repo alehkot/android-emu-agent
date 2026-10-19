@@ -503,3 +503,41 @@ def test_task_script_invalid_wait_selector_prevents_all_actions(
     assert error["remediation"]
     device.assert_not_called()
     device.press.assert_not_called()
+
+
+@pytest.mark.parametrize("scope", ["wait", "verify", "expect"])
+@pytest.mark.parametrize("operation", ["exists", "gone"])
+def test_task_condition_preserves_trailing_apostrophe(scope: str, operation: str) -> None:
+    device = MagicMock()
+    device.return_value.exists.return_value = operation == "exists"
+    prefix = "" if scope == "wait" else "home\n"
+    script = f'{prefix}{scope} {operation} text:"James\'" enabled:true timeout_ms=100'
+
+    with _client_with_core(device) as client:
+        response = client.post(
+            "/tasks/script/run", json={"session_id": "s-abc123", "script": script}
+        )
+
+    assert response.status_code == 200
+    assert response.json()["passed"] is True
+    device.assert_called_once_with(text="James'", enabled=True)
+
+
+def test_task_tap_selects_quoted_label_instead_of_unquoted_neighbor() -> None:
+    device = MagicMock()
+    quoted = MagicMock()
+    plain = MagicMock()
+    quoted.count = plain.count = 1
+    device.side_effect = lambda **kwargs: quoted if kwargs.get("text") == "'Accept'" else plain
+
+    with _client_with_core(device) as client:
+        response = client.post(
+            "/tasks/script/run",
+            json={"session_id": "s-abc123", "script": "tap text:\"'Accept'\" enabled:true"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["passed"] is True
+    device.assert_called_once_with(text="'Accept'", enabled=True)
+    quoted.click.assert_called_once_with()
+    plain.click.assert_not_called()

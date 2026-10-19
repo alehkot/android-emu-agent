@@ -543,6 +543,11 @@ Element-targeted action commands accept these selector formats:
 - `text:"Sign in" || id:com.example:id/login`: try fallback selectors in order.
 - `coords:540,1200`: target absolute coordinates.
 
+Selector-value quotes remove exactly one matching outer pair. Literal quotes inside are preserved:
+`text:"James'"` matches `James'`, and `text:"'Accept'"` matches `'Accept'`, including its
+apostrophes. Use the other quote style around a value containing literal quotes. This applies to
+direct, compound, fallback, and `.aea` task selectors; empty quoted values remain invalid.
+
 Tap and swipe-container selectors must match exactly one node. If a selector is ambiguous, add
 compound id/class/text/state filters or use a fresh snapshot `^ref`; fallback selectors do not skip
 an ambiguous earlier alternative.
