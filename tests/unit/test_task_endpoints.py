@@ -219,6 +219,28 @@ def test_task_script_set_text_selector_executes() -> None:
     element.set_text.assert_called_once_with("agent@example.com")
 
 
+def test_task_script_quoted_compound_selector_executes() -> None:
+    """Quote preservation must reach the real action selector handler."""
+    device = MagicMock()
+    element = MagicMock()
+    element.count = 1
+    device.return_value = element
+
+    with _client_with_core(device) as client:
+        response = client.post(
+            "/tasks/script/run",
+            json={
+                "session_id": "s-abc123",
+                "script": 'tap text:"Sign in" enabled:true\n',
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["passed"] is True
+    device.assert_called_once_with(text="Sign in", enabled=True)
+    element.click.assert_called_once_with()
+
+
 @pytest.mark.parametrize("text", ["x=y", "timeout_ms=5000", "first x=y last"])
 def test_task_script_set_text_literal_equals_executes(text: str) -> None:
     device = MagicMock()

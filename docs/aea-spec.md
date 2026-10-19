@@ -214,6 +214,21 @@ text:"Sign in" || id:com.example:id/login
 text:"Sign in" enabled:true clickable:true
 ```
 
+Quotes around selector values are retained when the script is compiled. This keeps spaces,
+apostrophes, colons, and literal `||` inside labels from becoming selector syntax:
+
+```text
+tap text:"Sign in" enabled:true
+tap desc:"Don't stop" || text:"Continue: next step"
+tap text:"A || B"
+set-text 'text:"Email address" enabled:true' "agent@example.com"
+swipe up container='desc:"Message list" scrollable:true'
+```
+
+For `set-text` and `container=`, wrap a complete compound or fallback selector in single quotes to
+keep it in one argument. Shell-style decoding still applies to data and backslash escapes;
+`set-text` content and `wait text` values are ordinary text, not selector expressions.
+
 Run this command when an automation planner needs to discover supported selector forms:
 
 ```bash

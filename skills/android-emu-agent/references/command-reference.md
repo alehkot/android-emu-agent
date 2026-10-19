@@ -167,6 +167,13 @@ In scripts, quote literal `=` text, such as `set-text id:com.example:id/search "
 `timeout_ms="5000"` is an option. Deep-link query URLs retain their parameters, for example
 `deeplink "https://example.com/search?q=android&sort=date"`. Quote URLs containing `#` too.
 
+Selector-value quotes survive script compilation: `tap text:"Sign in" enabled:true`,
+`tap desc:"Don't stop"`, and `tap text:"A || B"` preserve the complete label. For a compound
+`set-text` target or swipe container, quote the entire selector too, for example
+`set-text 'text:"Email address" enabled:true' "agent@example.com"` or
+`swipe up container='desc:"Message list" scrollable:true'`. Ordinary text and option values still
+use shell-style decoding.
+
 Validate a script before running it:
 
 ```bash

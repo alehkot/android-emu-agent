@@ -9,15 +9,62 @@ from io import StringIO
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from android_emu_agent.actions.selector import _split_fallbacks
 from android_emu_agent.errors import AgentError
 
 SCRIPT_SUFFIXES = {".aea", ".aea-task", ".aea-replay"}
 _OPTION_PREFIX = re.compile(r"[A-Za-z_][A-Za-z0-9_-]*=")
+_QUOTED_SELECTOR_PREFIX = re.compile(
+    r"((?:text(?:-contains|-matches)?|label|id(?:-matches)?|"
+    r"desc(?:-contains|-matches)?|class):)([\"'])"
+)
 
 
 class _Token(NamedTuple):
     value: str
     is_option: bool
+    raw: str
+
+
+def _selector_token_value(token: _Token) -> str:
+    """Restore selector-value delimiters without undoing shlex's data decoding.
+
+    ``text:"Sign in"`` needs its quotes when a state filter is appended. A
+    whole-token wrapper such as ``'text:"Sign in" enabled:true'`` is already
+    decoded correctly, as are escaped unquoted spaces like ``text:Sign\\ in``.
+    """
+    if "\\'" in token.raw:
+        # Shell single quotes treat backslashes literally, unlike the selector
+        # grammar. Avoid changing the meaning of ambiguous quote concatenation.
+        return token.value
+    parts = _split_fallbacks(token.raw)
+    if len(parts) > 1:
+        try:
+            decoded_parts = ["".join(shlex.split(part)) for part in parts]
+        except ValueError:
+            # Selector and shell quoting differ for escapes inside single quotes.
+            # The original token already passed shlex; keep it if a split cannot.
+            return token.value
+        return "||".join(
+            _selector_token_value(_Token(value, False, raw))
+            for value, raw in zip(decoded_parts, parts, strict=True)
+        )
+    match = _QUOTED_SELECTOR_PREFIX.match(token.raw)
+    if match is None:
+        return token.value
+    prefix, quote = match.groups()
+    value = token.value[len(prefix) :]
+    if (len(value) - len(value.rstrip("\\"))) % 2:
+        # An unmatched trailing escape would consume the new closing delimiter.
+        return token.value
+    if quote in value:
+        # Reusing an embedded delimiter could expose literal || as a fallback.
+        # The selector parser does not decode escaped quotes, so use the other
+        # delimiter when possible and otherwise retain the existing decoded form.
+        quote = "'" if quote == '"' else '"'
+        if quote in value:
+            return token.value
+    return f"{prefix}{quote}{value}{quote}"
 
 
 def _tokenize(line: str) -> list[_Token]:
@@ -36,7 +83,7 @@ def _tokenize(line: str) -> list[_Token]:
         # token plus its delimiter. Inspect its original spelling before quotes
         # and escapes disappear: "x=y" is data, but timeout_ms="500" is an option.
         raw = line[start : stream.tell()].lstrip()
-        tokens.append(_Token(value, _OPTION_PREFIX.match(raw) is not None))
+        tokens.append(_Token(value, _OPTION_PREFIX.match(raw) is not None, raw))
 
 
 def is_task_script_path(path: str | Path) -> bool:
@@ -110,14 +157,20 @@ def _parse_step(
     source_name: str,
     line_number: int,
 ) -> dict[str, Any]:
-    options, values = _split_options(args)
+    options, value_tokens = _split_options(args)
+    values = [token.value for token in value_tokens]
     if keyword in {"tap", "long-tap", "clear"}:
-        ref = _selector_arg(values, source_name, line_number)
+        ref = _selector_arg(value_tokens, source_name, line_number)
         return {"action": keyword.replace("-", "_"), "ref": ref, **options}
     if keyword == "set-text":
         if len(values) < 2:
             raise _script_error(source_name, line_number, "set-text requires selector and text")
-        return {"action": "set_text", "ref": values[0], "text": " ".join(values[1:]), **options}
+        return {
+            "action": "set_text",
+            "ref": _selector_token_value(value_tokens[0]),
+            "text": " ".join(values[1:]),
+            **options,
+        }
     if keyword in {"back", "home", "recents"}:
         _no_values(values, source_name, line_number)
         return {"action": keyword, **options}
@@ -136,7 +189,7 @@ def _parse_step(
         uri = _single_value(values, source_name, line_number, "deeplink requires a URI")
         return {"app": "deeplink", "uri": uri, **options}
     if keyword == "wait":
-        return _parse_wait(values, options, source_name, line_number)
+        return _parse_wait(value_tokens, options, source_name, line_number)
     if keyword == "snapshot":
         _no_values(values, source_name, line_number)
         return {"ui": "snapshot", **options}
@@ -153,7 +206,7 @@ def _parse_verifier(
 
 
 def _parse_wait(
-    values: list[str],
+    values: list[_Token],
     options: dict[str, Any],
     source_name: str,
     line_number: int,
@@ -162,8 +215,8 @@ def _parse_wait(
 ) -> dict[str, Any]:
     if not values:
         raise _script_error(source_name, line_number, "wait/verify requires an operation")
-    operation = values[0].replace("-", "_")
-    args = values[1:]
+    operation = values[0].value.replace("-", "_")
+    args = [token.value for token in values[1:]]
     payload: dict[str, Any] = {"type" if verifier else "wait": operation, **options}
 
     if operation == "idle":
@@ -175,7 +228,7 @@ def _parse_wait(
     elif operation == "text":
         payload["text"] = _joined_value(args, source_name, line_number)
     elif operation in {"exists", "gone"}:
-        payload["ref"] = _selector_arg(args, source_name, line_number)
+        payload["ref"] = _selector_arg(values[1:], source_name, line_number)
     else:
         raise _script_error(source_name, line_number, f"unsupported wait operation: {operation}")
 
@@ -183,15 +236,19 @@ def _parse_wait(
     return payload
 
 
-def _split_options(args: list[_Token]) -> tuple[dict[str, Any], list[str]]:
+def _split_options(args: list[_Token]) -> tuple[dict[str, Any], list[_Token]]:
     options: dict[str, Any] = {}
-    values: list[str] = []
+    values: list[_Token] = []
     for arg in args:
         if arg.is_option:
             key, raw_value = arg.value.split("=", 1)
+            if key.replace("-", "_") == "container":
+                raw_value = _selector_token_value(
+                    _Token(raw_value, False, arg.raw.split("=", 1)[1])
+                )
             options[key.replace("-", "_")] = _option_value(raw_value)
         else:
-            values.append(arg.value)
+            values.append(arg)
     return options, values
 
 
@@ -254,10 +311,10 @@ def _single_value(
     return values[0]
 
 
-def _selector_arg(values: list[str], source_name: str, line_number: int) -> str:
+def _selector_arg(values: list[_Token], source_name: str, line_number: int) -> str:
     if not values:
         raise _script_error(source_name, line_number, "selector argument is required")
-    return " ".join(values)
+    return " ".join(_selector_token_value(token) for token in values)
 
 
 def _joined_value(args: list[str], source_name: str, line_number: int) -> str:

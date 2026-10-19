@@ -33,12 +33,12 @@ def test_task_script_parses_to_existing_task_spec_shape() -> None:
     assert spec["steps"][0] == {"app": "launch", "package": "com.example.app"}
     assert spec["steps"][1] == {
         "wait": "exists",
-        "ref": "text:Sign in",
+        "ref": 'text:"Sign in"',
         "timeout_ms": 5000,
     }
     assert spec["steps"][2]["action"] == "tap"
-    assert spec["steps"][2]["ref"] == "text:Sign in || id:com.example:id/login"
-    assert spec["steps"][2]["verify"] == [{"type": "exists", "ref": "text:Email"}]
+    assert spec["steps"][2]["ref"] == 'text:"Sign in" || id:com.example:id/login'
+    assert spec["steps"][2]["verify"] == [{"type": "exists", "ref": 'text:"Email"'}]
     assert spec["verifiers"] == [{"type": "activity", "activity": "MainActivity"}]
 
     plan = manager.validate(spec)
