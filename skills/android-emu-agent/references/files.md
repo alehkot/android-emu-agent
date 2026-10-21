@@ -28,9 +28,13 @@ on the target. They use a non-PTY shell stream so binary output stays intact, st
 and a failed `run-as`, `cat`, or `tar` command is reported as an error. Targets without shell-v2
 fail rather than falling back to a stream that cannot report remote exit status.
 
-A failed file pull may leave an empty or partial local file, including replacing an existing
-`--local` file. Directory archives are extracted only after the remote transfer succeeds; this does
-not make the subsequent directory merge atomic.
+Non-root app-private pulls spool the remote output to a private temporary file before writing the
+destination. A failed or timed-out ADB transfer leaves an existing local file unchanged and does not
+create a partial destination. Temporary storage must have room for the complete payload. Successful
+file pulls retain existing symlink, hard-link, and file-mode behavior. The final host write is not
+atomic: a local write failure or crash can still leave a partial file. Directory archives are
+extracted only after the remote transfer succeeds; the subsequent directory merge is not atomic.
+Root-based app pulls and shared-storage pulls are unchanged and may leave partial files on failure.
 
 ```bash
 # Push into app files/ (default)

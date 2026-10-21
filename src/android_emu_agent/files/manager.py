@@ -513,7 +513,7 @@ class FileManager:
         *,
         timeout_s: float = ADB_TRANSFER_TIMEOUT_S,
     ) -> None:
-        """Run adb with binary stdout written directly to a host file.
+        """Spool binary stdout and write the host file only after adb succeeds.
 
         App pulls use shell -T -n: no PTY, no stdin, and shell-v2 exit status with
         stderr separate from the payload. Unlike exec-out, remote failures then
@@ -527,7 +527,10 @@ class FileManager:
             if not adb_path:
                 raise adb_not_found_error()
             destination.parent.mkdir(parents=True, exist_ok=True)
-            with destination.open("wb") as output:
+            # Do not truncate an existing backup on remote failure or timeout.
+            # Copying after success retains symlink, hard-link, and mode behavior;
+            # the final host write itself is not atomic.
+            with tempfile.TemporaryFile(mode="w+b") as output:
                 subprocess.run(
                     [adb_path, "-s", serial, *args],
                     check=True,
@@ -535,6 +538,9 @@ class FileManager:
                     stderr=subprocess.PIPE,
                     timeout=timeout_s,
                 )
+                output.seek(0)
+                with destination.open("wb") as target:
+                    shutil.copyfileobj(output, target)
 
         try:
             await asyncio.to_thread(_run)

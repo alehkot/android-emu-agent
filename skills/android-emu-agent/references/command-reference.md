@@ -526,6 +526,10 @@ Pulls without `--local` return a timestamp-and-UUID path, preserving repeated an
 results. App-private staging paths are also independent per transfer. Explicit destinations retain
 their existing replacement or directory-merge behavior.
 
+Non-root app-private pulls leave local files unchanged if the ADB transfer fails or times out; they
+need temporary storage for the complete payload before writing the destination. The final local
+write or directory merge is not atomic. Root-based and shared-storage pulls are unchanged.
+
 See `references/reliability.md` for reliability triage workflows and output interpretation. See
 `references/files.md` for file transfer workflows. See `references/workflow-examples.md` for
 multi-command examples covering visual grounding, traces, capabilities, intent preflight, and
