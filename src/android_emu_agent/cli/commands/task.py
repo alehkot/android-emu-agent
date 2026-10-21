@@ -124,7 +124,7 @@ def task_run(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Preflight every request, then run a task spec or script with verifiers."""
+    """Preflight and run a task; exit 1 if any step or verifier fails."""
     task = _load_task(path)
     session_id = _resolve_session(task, session)
     client = DaemonClient()
@@ -151,3 +151,5 @@ def task_run(
         )
     client.close()
     handle_response(resp, json_output=json_output)
+    if resp.json().get("status") == "failed":
+        raise typer.Exit(code=1)

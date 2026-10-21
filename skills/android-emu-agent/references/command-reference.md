@@ -137,7 +137,9 @@ Task specs support action steps (`tap`, `long_tap`, `set_text`, `clear`, `back`,
 `swipe`), wait/verifier operations (`idle`, `activity`, `text`, `exists`, `gone`), app steps
 (`launch`, `force_stop`, `deeplink`), and `ui` `snapshot` steps. Use `verify` on a step for
 post-step checks and top-level `verifiers` for final checks. A failed verifier returns
-`status=failed` with the failing step or verifier payload.
+`status=failed` with the failing step or verifier payload. `task run` exits `1` after printing the
+complete report if any step or verifier fails, including with `--json` or `--continue-on-failure`;
+successful runs exit `0`.
 
 Both `task validate` and `task run` preflight every step and verifier against the daemon request
 models before any action is dispatched. Invalid request fields return `ERR_TASK_INVALID` with their

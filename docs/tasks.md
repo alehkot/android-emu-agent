@@ -85,7 +85,10 @@ first failed action or verifier.
 ## Verify the Result
 
 A successful run returns `status: done` and `passed: true` in JSON output. A failed run returns
-`status: failed` with the failing step, verifier, operation, and response payload.
+`status: failed` with the failing step, verifier, operation, and response payload. `task run` exits
+with code `0` on success and `1` when a step or verifier fails, in both human and `--json` output
+modes. The complete failure report is printed before exiting. `--continue-on-failure` continues
+collecting results; it does not turn a failed run into a successful exit.
 
 After a failed run, capture evidence before changing the screen:
 
