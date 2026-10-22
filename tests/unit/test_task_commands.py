@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
+import httpx
+
 
 class DummyResponse:
     """Simple response stub for CLI handlers."""
@@ -84,7 +86,15 @@ def test_task_run_uses_session_override_and_continue_flag(tmp_path: Path) -> Non
         def __init__(self, *_: Any, **__: Any) -> None:
             pass
 
-        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+        def request(
+            self,
+            method: str,
+            path: str,
+            json_body: dict[str, Any] | None = None,
+            *,
+            timeout: httpx.Timeout | None = None,
+        ):
+            assert timeout == httpx.Timeout(10.0)
             calls.append((method, path, json_body))
             return DummyResponse({"status": "done"})
 
@@ -123,7 +133,15 @@ def test_task_run_script_uses_script_endpoint(tmp_path: Path) -> None:
         def __init__(self, *_: Any, **__: Any) -> None:
             pass
 
-        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+        def request(
+            self,
+            method: str,
+            path: str,
+            json_body: dict[str, Any] | None = None,
+            *,
+            timeout: httpx.Timeout | None = None,
+        ):
+            assert timeout == httpx.Timeout(10.0)
             calls.append((method, path, json_body))
             return DummyResponse({"status": "done"})
 
@@ -163,7 +181,15 @@ def test_task_run_script_uses_session_directive(tmp_path: Path) -> None:
         def __init__(self, *_: Any, **__: Any) -> None:
             pass
 
-        def request(self, method: str, path: str, json_body: dict[str, Any] | None = None):
+        def request(
+            self,
+            method: str,
+            path: str,
+            json_body: dict[str, Any] | None = None,
+            *,
+            timeout: httpx.Timeout | None = None,
+        ):
+            assert timeout == httpx.Timeout(10.0)
             calls.append((method, path, json_body))
             return DummyResponse({"status": "done"})
 

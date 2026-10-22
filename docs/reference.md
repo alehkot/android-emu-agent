@@ -1399,6 +1399,8 @@ android-emu-agent task run [OPTIONS] PATH
 - `-s, --session TEXT`: Session ID override
 - `--continue-on-failure`: Continue after failed steps or verifiers
 - `--json`: Output JSON
+- `--http-timeout-seconds FLOAT`: HTTP response wait in seconds, not a task deadline or cancellation
+  timeout [default: 10.0]
 - `--help`: Show this message and exit.
 
 ## `android-emu-agent trace`

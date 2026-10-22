@@ -131,7 +131,7 @@ review artifacts for sensitive app content before sharing.
 
 - `task validate <task.json|task.aea>` Validate a JSON task spec or human-editable `.aea` script.
 - `task run <task.json|task.aea> [--session <session_id>] [--continue-on-failure]` Run ordered task
-  steps and verifiers.
+  steps and verifiers. Add `--http-timeout-seconds <seconds>` to choose the HTTP response wait.
 
 Task specs support action steps (`tap`, `long_tap`, `set_text`, `clear`, `back`, `home`, `recents`,
 `swipe`), wait/verifier operations (`idle`, `activity`, `text`, `exists`, `gone`), app steps
@@ -140,6 +140,13 @@ post-step checks and top-level `verifiers` for final checks. A failed verifier r
 `status=failed` with the failing step or verifier payload. `task run` exits `1` after printing the
 complete report if any step or verifier fails, including with `--json` or `--continue-on-failure`;
 successful runs exit `0`.
+
+For long task sequences, set `--http-timeout-seconds 120` (or another finite positive budget
+covering all steps and verifiers). The default remains `10` seconds. This overrides only the run
+request's HTTP read timeout, not individual `timeout_ms` values, other transport timeouts, or
+startup health checks. It is not a task deadline and does not cancel daemon execution. After a
+transport timeout, inspect device state before rerunning; possibly delivered tasks are not
+automatically replayed. Task validation is unchanged.
 
 Both `task validate` and `task run` preflight every step and verifier against the daemon request
 models before any action is dispatched. Invalid request fields return `ERR_TASK_INVALID` with their

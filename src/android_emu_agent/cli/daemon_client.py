@@ -187,19 +187,26 @@ class DaemonClient:
         self._client.close()
 
     def request(
-        self, method: str, path: str, json_body: dict[str, Any] | None = None
+        self,
+        method: str,
+        path: str,
+        json_body: dict[str, Any] | None = None,
+        *,
+        timeout: httpx.Timeout | None = None,
     ) -> httpx.Response:
+        # None preserves the client timeout; an override applies only to this request.
+        request_options: dict[str, Any] = {} if timeout is None else {"timeout": timeout}
         # Issue the request directly rather than preflighting /health: the daemon is up
         # for all but the first command, so a preflight doubles the round trips on every
         # invocation to detect a case the failure path already handles.
         try:
-            return self._client.request(method, path, json=json_body)
+            return self._client.request(method, path, json=json_body, **request_options)
         except httpx.TransportError as exc:
             if not self.auto_start or not self._is_safe_to_replay(method, exc):
                 raise
             self.controller.start()
             self._wait_for_health()
-            return self._client.request(method, path, json=json_body)
+            return self._client.request(method, path, json=json_body, **request_options)
 
     @staticmethod
     def _is_safe_to_replay(method: str, exc: httpx.TransportError) -> bool:
