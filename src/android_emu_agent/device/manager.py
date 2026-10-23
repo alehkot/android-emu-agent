@@ -487,8 +487,9 @@ class DeviceManager:
             if not target_activity:
                 raise RuntimeError(f"Could not resolve launcher activity for {package}")
 
-            # Normalize activity name
-            if not target_activity.startswith(".") and "/" not in target_activity:
+            # Only bare names need package-relative shorthand. A leading dot on
+            # a fully qualified class would make Android prepend the app package incorrectly.
+            if "." not in target_activity and "/" not in target_activity:
                 target_activity = f".{target_activity}"
 
             component = f"{package}/{target_activity}"

@@ -2151,7 +2151,10 @@ android-emu-agent app reset [OPTIONS] SESSION_ID PACKAGE
 
 Launch an app.
 
-Follow this with a wait so the app is ready before the first snapshot.
+Follow this with a wait so the app is ready before the first snapshot. Activity names may be bare
+(MainActivity), package-relative (.ui.MainActivity), or fully qualified
+(org.example.ui.MainActivity). Fully qualified names are preserved even when the activity's class
+namespace differs from the app package.
 
 Examples:
 

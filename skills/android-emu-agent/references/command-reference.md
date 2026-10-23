@@ -307,7 +307,10 @@ debugger to the app at startup:
 - `app list --session <session_id>` List packages via an active session.
 - `app uninstall <package> --session <session_id> [--keep-data]` Uninstall package via an active
   session.
-- `app launch <session_id> <package> --activity <activity>` Launch a specific activity.
+- `app launch <session_id> <package> --activity <activity>` Launch a specific activity. Accepts a
+  bare class (`MainActivity`), a package-relative class (`.ui.MainActivity`), or a fully qualified
+  class (`org.example.ui.MainActivity`). Fully qualified names, including automatically resolved
+  launcher names, keep their original class namespace.
 - `app launch <session_id> <package> --wait-debugger` Wait for debugger before app start.
 - `app deeplink <session_id> <uri> --wait-debugger` Wait for debugger before intent start.
 - `app intent <session_id> ... --wait-debugger` Wait for debugger before intent start.
