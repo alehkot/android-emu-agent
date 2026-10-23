@@ -1072,7 +1072,7 @@ android-emu-agent session [OPTIONS] COMMAND [ARGS]...
 Start a new session on a device.
 
 Returns a session_id that every ui, action, wait, and expect command needs. Get the serial from
-'device list'.
+'device list'. Structured daemon errors exit 1, including with --json.
 
 Examples:
 
@@ -1550,6 +1550,8 @@ Modes (mutually exclusive):
 - Default (compact): Interactive elements only, JSON format
 - --full: All elements, JSON format
 - --raw: Original XML hierarchy string
+
+Structured daemon errors retain their JSON output and exit 1 in every mode.
 
 Examples:
 

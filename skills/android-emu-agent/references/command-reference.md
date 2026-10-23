@@ -103,6 +103,9 @@ runtime permission rules for the target app and device.
 
 ### Session
 
+`session start` exits `1` on a structured daemon error, including with `--json`. The JSON error
+payload is preserved; successful human output remains the session ID.
+
 - `session start -d <device_serial>` Create a new session.
 - `session stop <session_id>` End a session, archive any active trace, detach its debugger, and
   remove its ADB forward.
@@ -206,6 +209,9 @@ Ready-made scripts to copy: <https://github.com/alehkot/android-emu-agent/tree/m
   Capture screen image (optionally copy to local path).
 - `ui ground <session_id> [--ref <ref>] [--no-screenshot] [--pull]` Create optional
   screenshot-to-ref grounding metadata from the latest snapshot.
+
+`ui snapshot` exits `1` on a structured daemon error in compact, full, and raw modes. Errors remain
+JSON even with `--format text` or `--raw`; successful text/XML output is unchanged.
 
 Default compact snapshots are actionable and work well on classic XML views plus modern frameworks
 such as Compose and Litho. Use `--full` when the target element is not in the default actionable

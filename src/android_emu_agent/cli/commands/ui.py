@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import typer
 
-from android_emu_agent.cli.daemon_client import DaemonClient, format_json
+from android_emu_agent.cli.daemon_client import DaemonClient
 from android_emu_agent.cli.utils import (
+    handle_response,
     handle_response_with_pull,
     require_target,
     resolve_session_id,
@@ -50,6 +51,8 @@ def ui_snapshot(
     - Default (compact): Interactive elements only, JSON format
     - --full: All elements, JSON format
     - --raw: Original XML hierarchy string
+
+    Structured daemon errors retain their JSON output and exit 1 in every mode.
 
     Examples:
 
@@ -98,7 +101,7 @@ def ui_snapshot(
             typer.echo(f"{elem['ref']} {role} '{label}' id={rid} bounds={elem.get('bounds')}")
         return
 
-    typer.echo(format_json(data))
+    handle_response(resp, json_output=True)
 
 
 @app.command("screenshot")
