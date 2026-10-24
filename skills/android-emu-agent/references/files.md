@@ -7,6 +7,13 @@
 Commands to push/pull files to shared storage (sdcard) and app-private storage. All commands accept
 **either** `--device <serial>` **or** `--session <session_id>`.
 
+Local push sources and explicit pull `--local` paths are relative to the directory where you invoke
+the CLI, not the directory where the daemon was started. Home-directory shortcuts such as
+`~/Downloads/sample.json` are expanded before the request is sent. Symlinks and `..` retain their
+filesystem meaning; device-side paths are not changed. Pushing `.` uses the current directory's
+name for the default remote destination. Omitting `--local` keeps the automatic artifact destination
+described below.
+
 ## Shared Storage (sdcard)
 
 ```bash

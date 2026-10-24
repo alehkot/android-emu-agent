@@ -3218,6 +3218,9 @@ android-emu-agent file [OPTIONS] COMMAND [ARGS]...
 
 Push a local file to shared storage (sdcard).
 
+Local paths expand ~ and are relative to your current directory, even if the daemon started
+elsewhere.
+
 **Usage**:
 
 ```console
@@ -3239,6 +3242,9 @@ android-emu-agent file push [OPTIONS] LOCAL_PATH
 ### `android-emu-agent file pull`
 
 Pull a file from shared storage (sdcard).
+
+Explicit local paths expand ~ and are relative to your current directory. Omit --local to save in
+the daemon's file artifacts directory.
 
 **Usage**:
 
@@ -3327,6 +3333,9 @@ android-emu-agent file app [OPTIONS] COMMAND [ARGS]...
 
 Push into app-private storage via root or run-as.
 
+Local paths expand ~ and are relative to your current directory, even if the daemon started
+elsewhere.
+
 **Usage**:
 
 ```console
@@ -3349,6 +3358,9 @@ android-emu-agent file app push [OPTIONS] PACKAGE LOCAL_PATH
 #### `android-emu-agent file app pull`
 
 Pull from app-private storage via root or run-as.
+
+Explicit local paths expand ~ and are relative to your current directory. Omit --local to save in
+the daemon's file artifacts directory.
 
 **Usage**:
 

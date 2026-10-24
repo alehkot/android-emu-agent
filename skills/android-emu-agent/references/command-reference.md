@@ -541,6 +541,10 @@ to preserve heap files on-device after pulling:
 - `file app pull <pkg> <remote> --device <serial>` Pull from app-private storage via root or
   `run-as` for a debuggable app.
 
+Local push sources and explicit pull `--local` paths use the invoking CLI's current directory, not
+the daemon's startup directory. Home-directory shortcuts are expanded; symlink traversal and
+device-side paths are preserved.
+
 Pulls without `--local` return a timestamp-and-UUID path, preserving repeated and concurrent
 results. App-private staging paths are also independent per transfer. Explicit destinations retain
 their existing replacement or directory-merge behavior.

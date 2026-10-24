@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 
 from android_emu_agent.cli.daemon_client import DaemonClient
@@ -30,9 +32,15 @@ def file_push(
     session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Push a local file to shared storage (sdcard)."""
+    """Push a local file to shared storage (sdcard).
+
+    Local paths expand ~ and are relative to your current directory, even if the
+    daemon started elsewhere.
+    """
     payload = require_target(device, session_id)
-    payload.update({"local_path": local_path, "remote_path": remote_path})
+    payload.update(
+        {"local_path": str(Path(local_path).expanduser().absolute()), "remote_path": remote_path}
+    )
     client = DaemonClient(timeout=FILE_TRANSFER_TIMEOUT)
     resp = client.request("POST", "/files/push", json_body=payload)
     client.close()
@@ -47,9 +55,20 @@ def file_pull(
     session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Pull a file from shared storage (sdcard)."""
+    """Pull a file from shared storage (sdcard).
+
+    Explicit local paths expand ~ and are relative to your current directory.
+    Omit --local to save in the daemon's file artifacts directory.
+    """
     payload = require_target(device, session_id)
-    payload.update({"remote_path": remote_path, "local_path": local_path})
+    payload.update(
+        {
+            "remote_path": remote_path,
+            "local_path": str(Path(local_path).expanduser().absolute())
+            if local_path
+            else local_path,
+        }
+    )
     client = DaemonClient(timeout=FILE_TRANSFER_TIMEOUT)
     resp = client.request("POST", "/files/pull", json_body=payload)
     client.close()
@@ -112,9 +131,19 @@ def file_app_push(
     session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Push into app-private storage via root or run-as."""
+    """Push into app-private storage via root or run-as.
+
+    Local paths expand ~ and are relative to your current directory, even if the
+    daemon started elsewhere.
+    """
     payload = require_target(device, session_id)
-    payload.update({"package": package, "local_path": local_path, "remote_path": remote_path})
+    payload.update(
+        {
+            "package": package,
+            "local_path": str(Path(local_path).expanduser().absolute()),
+            "remote_path": remote_path,
+        }
+    )
     client = DaemonClient(timeout=FILE_APP_TRANSFER_TIMEOUT)
     resp = client.request("POST", "/files/app_push", json_body=payload)
     client.close()
@@ -130,9 +159,21 @@ def file_app_pull(
     session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Pull from app-private storage via root or run-as."""
+    """Pull from app-private storage via root or run-as.
+
+    Explicit local paths expand ~ and are relative to your current directory.
+    Omit --local to save in the daemon's file artifacts directory.
+    """
     payload = require_target(device, session_id)
-    payload.update({"package": package, "remote_path": remote_path, "local_path": local_path})
+    payload.update(
+        {
+            "package": package,
+            "remote_path": remote_path,
+            "local_path": str(Path(local_path).expanduser().absolute())
+            if local_path
+            else local_path,
+        }
+    )
     client = DaemonClient(timeout=FILE_APP_TRANSFER_TIMEOUT)
     resp = client.request("POST", "/files/app_pull", json_body=payload)
     client.close()
