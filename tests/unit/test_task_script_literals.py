@@ -78,9 +78,7 @@ def test_options_keep_quoted_values_booleans_and_order() -> None:
 @pytest.mark.parametrize("selector", ['text:"x=y"', 'text-contains:"x=y"', 'label:"x=y"'])
 def test_selectors_with_equals_are_values(selector: str) -> None:
     spec = TaskManager().parse_script(f"tap {selector} || id:com.example:id/input")
-    assert spec["steps"] == [
-        {"action": "tap", "ref": f"{selector.replace(chr(34), '')} || id:com.example:id/input"}
-    ]
+    assert spec["steps"] == [{"action": "tap", "ref": f"{selector} || id:com.example:id/input"}]
 
 
 def test_metadata_and_whitespace_are_unchanged() -> None:

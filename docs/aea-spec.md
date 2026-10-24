@@ -167,6 +167,12 @@ wait exists text:"Payment" timeout_ms=5000
 wait gone text:"Loading" timeout_ms=10000
 ```
 
+`exists` and `gone` accept a snapshot ref or one element selector, including quoted values,
+regex selectors, and compound boolean state filters such as `text:"Payment" enabled:true`.
+The compiled `ref` string is normalized to a selector dictionary before dispatch unless it is a
+snapshot ref. Coordinates and `||` fallback chains are action targets, not wait conditions;
+using either in a wait or verifier fails task validation before any steps run.
+
 ### UI Steps
 
 | Script form             | Compiled operation                      | Notes                         |
@@ -197,9 +203,10 @@ A `verify` line before any step is invalid.
 
 ## Selector Values
 
-Script selectors pass through to the same selector parser used by action, wait, and expectation
-commands. Snapshot refs use `^g<generation>a<element>`; copy the complete token from the latest
-snapshot. Common forms:
+Script selector expressions use the same parser as action targets. Actions support the forms
+below; `wait`, `verify`, and `expect` conditions support the single-element forms and snapshot
+refs, but not coordinates or `||` fallback chains. Snapshot refs use `^g<generation>a<element>`;
+copy the complete token from the latest snapshot. Common forms:
 
 ```text
 ^g1a1
@@ -214,11 +221,35 @@ text:"Sign in" || id:com.example:id/login
 text:"Sign in" enabled:true clickable:true
 ```
 
+Quotes around selector values are retained when the script is compiled. This keeps spaces,
+apostrophes, colons, and literal `||` inside labels from becoming selector syntax:
+
+```text
+tap text:"Sign in" enabled:true
+tap desc:"Don't stop" || text:"Continue: next step"
+tap text:"A || B"
+set-text 'text:"Email address" enabled:true' "agent@example.com"
+swipe up container='desc:"Message list" scrollable:true'
+```
+
+For `set-text` and `container=`, wrap a complete compound or fallback selector in single quotes to
+keep it in one argument. Shell-style decoding still applies to data and backslash escapes;
+`set-text` content and `wait text` values are ordinary text, not selector expressions.
+
 Run this command when an automation planner needs to discover supported selector forms:
 
 ```bash
 android-emu-agent device capabilities --session <session-id> --json
 ```
+
+### Literal Quotes in Selector Values
+
+Selector values lose only their matching outer quote pair. For example, `tap text:"James'"` keeps
+the trailing apostrophe, and `tap text:"'Accept'" enabled:true` selects the label `'Accept'`,
+including both apostrophes. Use double quotes around literal apostrophes or single quotes around
+literal double quotes. The same rule applies to action targets, swipe containers, and
+`wait`/`verify`/`expect` element selectors. Empty quoted values are still invalid; this does not
+introduce additional escape processing.
 
 ## Compiled Shape
 

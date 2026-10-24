@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from pydantic import BaseModel as PydanticBaseModel
-from pydantic import ConfigDict, model_validator
+from pydantic import ConfigDict, StrictBool, model_validator
 
 
 class RequestModel(PydanticBaseModel):
@@ -112,7 +112,7 @@ class ExpectActivityRequest(RequestModel):
 class ExpectSelectorRequest(RequestModel):
     session_id: str
     ref: str | None = None
-    selector: dict[str, str] | None = None
+    selector: dict[str, str | StrictBool] | None = None
     timeout_ms: int | None = None
 
 
@@ -153,7 +153,7 @@ class WaitTextRequest(RequestModel):
 class WaitSelectorRequest(RequestModel):
     session_id: str
     ref: str | None = None
-    selector: dict[str, str] | None = None
+    selector: dict[str, str | StrictBool] | None = None
     timeout_ms: int | None = None
 
 

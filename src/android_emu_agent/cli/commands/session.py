@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import typer
 
-from android_emu_agent.cli.daemon_client import DaemonClient, format_json
+from android_emu_agent.cli.daemon_client import DaemonClient
 from android_emu_agent.cli.utils import handle_response
 
 app = typer.Typer(help="Session management commands")
@@ -18,7 +18,7 @@ def session_start(
     """Start a new session on a device.
 
     Returns a session_id that every ui, action, wait, and expect command needs. Get the serial
-    from 'device list'.
+    from 'device list'. Structured daemon errors exit 1, including with --json.
 
     Examples:
 
@@ -36,7 +36,7 @@ def session_start(
 
     data = resp.json()
     if json_output:
-        typer.echo(format_json(data))
+        handle_response(resp, json_output=True)
         return
 
     if data.get("status") == "done":

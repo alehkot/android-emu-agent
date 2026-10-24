@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
@@ -123,7 +124,7 @@ def test_file_push_builds_payload() -> None:
     assert path == "/files/push"
     assert payload == {
         "serial": "emulator-5554",
-        "local_path": "./local.txt",
+        "local_path": str(Path("local.txt").absolute()),
         "remote_path": "/sdcard/Download/local.txt",
     }
 

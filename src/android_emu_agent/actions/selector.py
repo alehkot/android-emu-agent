@@ -321,7 +321,10 @@ def parse_selector(target: str) -> Selector:
 
 
 def _selector_value(target: str, prefix: str) -> str:
-    value = target[len(prefix) :].strip().strip('"').strip("'")
+    value = target[len(prefix) :].strip()
+    if len(value) >= 2 and value[0] in {"'", '"'} and value[-1] == value[0]:
+        # Remove the delimiter pair, not literal quote characters inside the value.
+        value = value[1:-1]
     if not value:
         raise invalid_selector_error(target)
     return value

@@ -50,7 +50,8 @@ Verify that the response includes `status: done` and `session_id`.
 
 Use this flow when a run must start from a known app state.
 
-Install or replace the APK:
+Install or replace the APK. Relative APK paths are resolved from the CLI's current directory, not
+the directory where the daemon was started:
 
 ```bash
 android-emu-agent app install <apk-path> --session <session-id> --grant-permissions --json

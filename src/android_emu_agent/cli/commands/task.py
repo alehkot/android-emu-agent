@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import math
 import shlex
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Annotated, Any, cast
 
+import httpx
 import typer
 
 from android_emu_agent.cli.daemon_client import DaemonClient
@@ -123,8 +125,20 @@ def task_run(
         help="Continue after failed steps or verifiers",
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+    http_timeout_seconds: Annotated[
+        float,
+        typer.Option(
+            "--http-timeout-seconds",
+            help="HTTP response wait in seconds, not a task deadline or cancellation timeout",
+        ),
+    ] = 10.0,
 ) -> None:
-    """Preflight every request, then run a task spec or script with verifiers."""
+    """Preflight and run a task; exit 1 if any step or verifier fails."""
+    if not math.isfinite(http_timeout_seconds) or http_timeout_seconds <= 0:
+        raise typer.BadParameter(
+            "must be a finite number greater than zero", param_hint="--http-timeout-seconds"
+        )
+    timeout = httpx.Timeout(10.0, read=http_timeout_seconds)
     task = _load_task(path)
     session_id = _resolve_session(task, session)
     client = DaemonClient()
@@ -132,6 +146,7 @@ def task_run(
         resp = client.request(
             "POST",
             "/tasks/script/run",
+            timeout=timeout,
             json_body={
                 "session_id": session_id,
                 "script": _script_body(task),
@@ -143,6 +158,7 @@ def task_run(
         resp = client.request(
             "POST",
             "/tasks/run",
+            timeout=timeout,
             json_body={
                 "session_id": session_id,
                 "task": _json_body(task),
@@ -151,3 +167,5 @@ def task_run(
         )
     client.close()
     handle_response(resp, json_output=json_output)
+    if resp.json().get("status") == "failed":
+        raise typer.Exit(code=1)

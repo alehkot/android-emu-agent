@@ -13,6 +13,7 @@ from typing import Any
 
 import httpx
 
+from android_emu_agent.errors import daemon_start_error
 from android_emu_agent.security import (
     daemon_socket_path,
     migrate_private_tree,
@@ -128,9 +129,11 @@ class DaemonController:
         while time.monotonic() < deadline:
             if self._socket_healthy():
                 return
-            if process.poll() is not None:
-                return
+            returncode = process.poll()
+            if returncode is not None:
+                raise daemon_start_error(process.pid, f"process exited with exit code {returncode}")
             time.sleep(0.05)
+        raise daemon_start_error(process.pid, "did not become healthy within 5 seconds")
 
     def stop(self) -> bool:
         """Stop the daemon if running."""
@@ -187,19 +190,26 @@ class DaemonClient:
         self._client.close()
 
     def request(
-        self, method: str, path: str, json_body: dict[str, Any] | None = None
+        self,
+        method: str,
+        path: str,
+        json_body: dict[str, Any] | None = None,
+        *,
+        timeout: httpx.Timeout | None = None,
     ) -> httpx.Response:
+        # None preserves the client timeout; an override applies only to this request.
+        request_options: dict[str, Any] = {} if timeout is None else {"timeout": timeout}
         # Issue the request directly rather than preflighting /health: the daemon is up
         # for all but the first command, so a preflight doubles the round trips on every
         # invocation to detect a case the failure path already handles.
         try:
-            return self._client.request(method, path, json=json_body)
+            return self._client.request(method, path, json=json_body, **request_options)
         except httpx.TransportError as exc:
             if not self.auto_start or not self._is_safe_to_replay(method, exc):
                 raise
             self.controller.start()
             self._wait_for_health()
-            return self._client.request(method, path, json=json_body)
+            return self._client.request(method, path, json=json_body, **request_options)
 
     @staticmethod
     def _is_safe_to_replay(method: str, exc: httpx.TransportError) -> bool:

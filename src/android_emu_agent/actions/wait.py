@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any
@@ -161,7 +161,7 @@ class WaitEngine:
     async def wait_exists(
         self,
         device: u2.Device,
-        selector: dict[str, str],
+        selector: Mapping[str, str | bool],
         timeout: float | None = None,
     ) -> WaitResult:
         """Wait for an element to exist."""
@@ -176,7 +176,7 @@ class WaitEngine:
     async def wait_gone(
         self,
         device: u2.Device,
-        selector: dict[str, str],
+        selector: Mapping[str, str | bool],
         timeout: float | None = None,
     ) -> WaitResult:
         """Wait for an element to disappear."""
@@ -287,7 +287,7 @@ class WaitEngine:
         current = info.get("activity", "")
         return pattern in current
 
-    def _check_exists(self, device: u2.Device, selector: dict[str, str]) -> bool:
+    def _check_exists(self, device: u2.Device, selector: Mapping[str, str | bool]) -> bool:
         """Check if element exists."""
         return bool(device(**selector).exists())
 

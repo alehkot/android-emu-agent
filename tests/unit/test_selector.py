@@ -215,3 +215,56 @@ class TestInvalidSelectors:
         with pytest.raises(AgentError) as exc_info:
             parse_selector("text:OK ||")
         assert exc_info.value.code == "ERR_INVALID_SELECTOR"
+
+
+@pytest.mark.parametrize(
+    ("prefix", "key"),
+    [
+        ("text", "text"),
+        ("text-contains", "textContains"),
+        ("text-matches", "textMatches"),
+        ("label", "description"),
+        ("id", "resourceId"),
+        ("id-matches", "resourceIdMatches"),
+        ("desc", "description"),
+        ("desc-contains", "descriptionContains"),
+        ("desc-matches", "descriptionMatches"),
+        ("class", "className"),
+    ],
+)
+@pytest.mark.parametrize("value", ["James'", "'Accept'", "'"])
+def test_quoted_selector_preserves_literal_boundary_apostrophes(
+    prefix: str, key: str, value: str
+) -> None:
+    assert parse_selector(f'{prefix}:"{value}"').to_u2_kwargs() == {key: value}
+
+
+@pytest.mark.parametrize(
+    ("target", "expected"),
+    [
+        ("text:'\"Accept\"'", '"Accept"'),
+        ("text:'\"'", '"'),
+        ('text:"  Accept  "', "  Accept  "),
+        ("text:Accept", "Accept"),
+        ('text:"Accept"', "Accept"),
+        ("text:'Accept'", "Accept"),
+        (r'text-matches:"^Order \d+$"', r"^Order \d+$"),
+    ],
+)
+def test_selector_quote_delimiters_preserve_content(target: str, expected: str) -> None:
+    assert list(parse_selector(target).to_u2_kwargs().values()) == [expected]
+
+
+def test_compound_and_fallback_preserve_boundary_quotes() -> None:
+    result = parse_selector('text:"James\'" enabled:true || desc:"\'Accept\'"')
+    assert isinstance(result, FallbackSelector)
+    assert [option.to_u2_kwargs() for option in result.options] == [
+        {"text": "James'", "enabled": True},
+        {"description": "'Accept'"},
+    ]
+
+
+@pytest.mark.parametrize("target", ['text:""', "text:''", "text:", 'text:"unclosed'])
+def test_empty_or_unclosed_selector_remains_invalid(target: str) -> None:
+    with pytest.raises(AgentError):
+        parse_selector(target)

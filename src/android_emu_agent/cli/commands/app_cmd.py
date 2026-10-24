@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 
 from android_emu_agent.cli.daemon_client import DaemonClient
@@ -32,7 +34,8 @@ def app_install(
 ) -> None:
     """Install an APK on the target device.
 
-    Target the device by serial or by an active session.
+    Target the device by serial or by an active session. Relative APK paths are
+    interpreted from your current directory, even if the daemon started elsewhere.
 
     Examples:
 
@@ -47,7 +50,7 @@ def app_install(
     payload = require_target(device, session_id)
     payload.update(
         {
-            "apk_path": apk_path,
+            "apk_path": str(Path(apk_path).expanduser().absolute()),
             "replace": replace,
             "grant_permissions": grant_permissions,
             "allow_downgrade": allow_downgrade,
@@ -108,6 +111,9 @@ def app_launch(
     """Launch an app.
 
     Follow this with a wait so the app is ready before the first snapshot.
+    Activity names may be bare (MainActivity), package-relative (.ui.MainActivity),
+    or fully qualified (org.example.ui.MainActivity). Fully qualified names are
+    preserved even when the activity's class namespace differs from the app package.
 
     Examples:
 

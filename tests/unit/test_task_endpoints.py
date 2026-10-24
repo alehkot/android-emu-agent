@@ -219,6 +219,28 @@ def test_task_script_set_text_selector_executes() -> None:
     element.set_text.assert_called_once_with("agent@example.com")
 
 
+def test_task_script_quoted_compound_selector_executes() -> None:
+    """Quote preservation must reach the real action selector handler."""
+    device = MagicMock()
+    element = MagicMock()
+    element.count = 1
+    device.return_value = element
+
+    with _client_with_core(device) as client:
+        response = client.post(
+            "/tasks/script/run",
+            json={
+                "session_id": "s-abc123",
+                "script": 'tap text:"Sign in" enabled:true\n',
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["passed"] is True
+    device.assert_called_once_with(text="Sign in", enabled=True)
+    element.click.assert_called_once_with()
+
+
 @pytest.mark.parametrize("text", ["x=y", "timeout_ms=5000", "first x=y last"])
 def test_task_script_set_text_literal_equals_executes(text: str) -> None:
     device = MagicMock()
@@ -397,3 +419,125 @@ def test_json_task_nonfinite_swipe_distance_is_rejected_before_actions(
     assert "steps[2].distance" in error["message"]
     assert "finite" in error["message"]
     assert device.mock_calls == []
+
+
+@pytest.mark.parametrize("scope", ["wait", "verify", "expect"])
+@pytest.mark.parametrize("operation", ["exists", "gone"])
+@pytest.mark.parametrize(
+    ("target", "kwargs"),
+    [
+        (
+            'text:"Sign in" enabled:true checked:false',
+            {"text": "Sign in", "enabled": True, "checked": False},
+        ),
+        ('desc:"Don\'t stop: A || B"', {"description": "Don't stop: A || B"}),
+        (r'text-matches:"^Order \d+$"', {"textMatches": r"^Order \d+$"}),
+        ("id:com.example:id/payment", {"resourceId": "com.example:id/payment"}),
+        ('label:"Open menu"', {"description": "Open menu"}),
+    ],
+)
+def test_task_script_wait_selector_executes(
+    scope: str, operation: str, target: str, kwargs: dict[str, str | bool]
+) -> None:
+    """All task condition scopes must reach the device with parsed selector kwargs."""
+    device = MagicMock()
+    device.return_value.exists.return_value = operation == "exists"
+    prefix = "" if scope == "wait" else "home\n"
+    script = f"{prefix}{scope} {operation} {target} timeout_ms=100"
+
+    with _client_with_core(device) as client:
+        response = client.post(
+            "/tasks/script/run", json={"session_id": "s-abc123", "script": script}
+        )
+
+    assert response.status_code == 200
+    assert response.json()["passed"] is True
+    device.assert_called_once_with(**kwargs)
+
+
+@pytest.mark.parametrize("scope", ["wait", "verify", "expect"])
+@pytest.mark.parametrize("operation", ["exists", "gone"])
+def test_task_script_wait_snapshot_ref_still_resolves(scope: str, operation: str) -> None:
+    from android_emu_agent.daemon import server
+    from android_emu_agent.ui.ref_resolver import LocatorBundle
+
+    device = MagicMock()
+    device.return_value.exists.return_value = operation == "exists"
+    locator = LocatorBundle.from_dict(
+        {"ref": "^g1a1", "generation": 1, "resource_id": "com.example:id/payment"}
+    )
+    prefix = "" if scope == "wait" else "home\n"
+    script = f"{prefix}{scope} {operation} ^g1a1 timeout_ms=100"
+    resolver = AsyncMock(return_value=(locator, None))
+
+    with patch.object(server, "_resolve_ref_target", resolver), _client_with_core(device) as client:
+        response = client.post(
+            "/tasks/script/run", json={"session_id": "s-abc123", "script": script}
+        )
+
+    assert response.status_code == 200
+    assert response.json()["passed"] is True
+    resolver.assert_awaited_once()
+    assert resolver.call_args.args[1:] == ("s-abc123", "^g1a1", 1)
+    device.assert_called_once_with(resourceId="com.example:id/payment")
+
+
+@pytest.mark.parametrize("scope", ["wait", "verify", "expect"])
+@pytest.mark.parametrize("operation", ["exists", "gone"])
+@pytest.mark.parametrize("target", ["coords:10,20", "text:Ready || id:ready", "unknown:Ready"])
+def test_task_script_invalid_wait_selector_prevents_all_actions(
+    scope: str, operation: str, target: str
+) -> None:
+    device = MagicMock()
+    script = f"home\n{scope} {operation} {target} timeout_ms=100"
+
+    with _client_with_core(device) as client:
+        response = client.post(
+            "/tasks/script/run", json={"session_id": "s-abc123", "script": script}
+        )
+
+    assert response.status_code == 400
+    error = response.json()["error"]
+    assert error["code"] == "ERR_TASK_INVALID"
+    assert ".ref:" in error["message"]
+    assert error["remediation"]
+    device.assert_not_called()
+    device.press.assert_not_called()
+
+
+@pytest.mark.parametrize("scope", ["wait", "verify", "expect"])
+@pytest.mark.parametrize("operation", ["exists", "gone"])
+def test_task_condition_preserves_trailing_apostrophe(scope: str, operation: str) -> None:
+    device = MagicMock()
+    device.return_value.exists.return_value = operation == "exists"
+    prefix = "" if scope == "wait" else "home\n"
+    script = f'{prefix}{scope} {operation} text:"James\'" enabled:true timeout_ms=100'
+
+    with _client_with_core(device) as client:
+        response = client.post(
+            "/tasks/script/run", json={"session_id": "s-abc123", "script": script}
+        )
+
+    assert response.status_code == 200
+    assert response.json()["passed"] is True
+    device.assert_called_once_with(text="James'", enabled=True)
+
+
+def test_task_tap_selects_quoted_label_instead_of_unquoted_neighbor() -> None:
+    device = MagicMock()
+    quoted = MagicMock()
+    plain = MagicMock()
+    quoted.count = plain.count = 1
+    device.side_effect = lambda **kwargs: quoted if kwargs.get("text") == "'Accept'" else plain
+
+    with _client_with_core(device) as client:
+        response = client.post(
+            "/tasks/script/run",
+            json={"session_id": "s-abc123", "script": "tap text:\"'Accept'\" enabled:true"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["passed"] is True
+    device.assert_called_once_with(text="'Accept'", enabled=True)
+    quoted.click.assert_called_once_with()
+    plain.click.assert_not_called()

@@ -691,3 +691,14 @@ def test_swipe_rejects_nonfinite_distance_before_device_access(distance_json: st
     assert error["context"]["distance"] in ("nan", "inf", "-inf")
     assert "finite" in error["remediation"]
     assert device.mock_calls == []
+
+
+@pytest.mark.parametrize("target", ['text:"James\'"', 'text:"James\'" || id:backup'])
+def test_tap_preserves_trailing_apostrophe(target: str) -> None:
+    device = MagicMock()
+    device.return_value.count = 1
+    with _client_with_core(device) as (client, _resolver):
+        response = client.post("/actions/tap", json={"session_id": "s-abc123", "ref": target})
+    assert response.status_code == 200
+    device.assert_called_once_with(text="James'")
+    device.return_value.click.assert_called_once()

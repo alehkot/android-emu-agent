@@ -269,6 +269,19 @@ def invalid_emulator_port_error(port: int) -> AgentError:
     )
 
 
+def daemon_start_error(pid: int, reason: str) -> AgentError:
+    """Create an actionable error when a spawned daemon is not ready."""
+    return AgentError(
+        code="ERR_DAEMON_START_FAILED",
+        message=f"Daemon startup failed (pid {pid}): {reason}",
+        context={"pid": pid, "reason": reason},
+        remediation=(
+            "Inspect ~/.android-emu-agent/daemon.log and run 'daemon status' before retrying. "
+            "A process that has not become healthy may still be starting; it was not terminated."
+        ),
+    )
+
+
 def daemon_identity_error(pid: int) -> AgentError:
     """Create error when a PID file cannot be tied to the live daemon socket."""
     return AgentError(

@@ -75,7 +75,9 @@ android-emu-agent daemon [OPTIONS] COMMAND [ARGS]...
 Start the daemon process.
 
 Start this before any device, session, ui, action, app, or file command. The daemon owns device
-connections and session state.
+connections and session state. Exit 1 if the new process exits or does not become healthy within the
+startup wait. A timeout does not terminate the process; inspect daemon status and logs before
+retrying.
 
 Examples:
 
@@ -1072,7 +1074,7 @@ android-emu-agent session [OPTIONS] COMMAND [ARGS]...
 Start a new session on a device.
 
 Returns a session_id that every ui, action, wait, and expect command needs. Get the serial from
-'device list'.
+'device list'. Structured daemon errors exit 1, including with --json.
 
 Examples:
 
@@ -1359,7 +1361,7 @@ android-emu-agent task [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 - `validate`: Validate task structure and request fields...
-- `run`: Preflight every request, then run a task...
+- `run`: Preflight and run a task; exit 1 if any...
 
 ### `android-emu-agent task validate`
 
@@ -1382,7 +1384,7 @@ android-emu-agent task validate [OPTIONS] PATH
 
 ### `android-emu-agent task run`
 
-Preflight every request, then run a task spec or script with verifiers.
+Preflight and run a task; exit 1 if any step or verifier fails.
 
 **Usage**:
 
@@ -1399,6 +1401,8 @@ android-emu-agent task run [OPTIONS] PATH
 - `-s, --session TEXT`: Session ID override
 - `--continue-on-failure`: Continue after failed steps or verifiers
 - `--json`: Output JSON
+- `--http-timeout-seconds FLOAT`: HTTP response wait in seconds, not a task deadline or cancellation
+  timeout [default: 10.0]
 - `--help`: Show this message and exit.
 
 ## `android-emu-agent trace`
@@ -1548,6 +1552,8 @@ Modes (mutually exclusive):
 - Default (compact): Interactive elements only, JSON format
 - --full: All elements, JSON format
 - --raw: Original XML hierarchy string
+
+Structured daemon errors retain their JSON output and exit 1 in every mode.
 
 Examples:
 
@@ -2071,7 +2077,8 @@ android-emu-agent app [OPTIONS] COMMAND [ARGS]...
 
 Install an APK on the target device.
 
-Target the device by serial or by an active session.
+Target the device by serial or by an active session. Relative APK paths are interpreted from your
+current directory, even if the daemon started elsewhere.
 
 Examples:
 
@@ -2149,7 +2156,10 @@ android-emu-agent app reset [OPTIONS] SESSION_ID PACKAGE
 
 Launch an app.
 
-Follow this with a wait so the app is ready before the first snapshot.
+Follow this with a wait so the app is ready before the first snapshot. Activity names may be bare
+(MainActivity), package-relative (.ui.MainActivity), or fully qualified
+(org.example.ui.MainActivity). Fully qualified names are preserved even when the activity's class
+namespace differs from the app package.
 
 Examples:
 
@@ -3208,6 +3218,9 @@ android-emu-agent file [OPTIONS] COMMAND [ARGS]...
 
 Push a local file to shared storage (sdcard).
 
+Local paths expand ~ and are relative to your current directory, even if the daemon started
+elsewhere.
+
 **Usage**:
 
 ```console
@@ -3229,6 +3242,9 @@ android-emu-agent file push [OPTIONS] LOCAL_PATH
 ### `android-emu-agent file pull`
 
 Pull a file from shared storage (sdcard).
+
+Explicit local paths expand ~ and are relative to your current directory. Omit --local to save in
+the daemon's file artifacts directory.
 
 **Usage**:
 
@@ -3317,6 +3333,9 @@ android-emu-agent file app [OPTIONS] COMMAND [ARGS]...
 
 Push into app-private storage via root or run-as.
 
+Local paths expand ~ and are relative to your current directory, even if the daemon started
+elsewhere.
+
 **Usage**:
 
 ```console
@@ -3339,6 +3358,9 @@ android-emu-agent file app push [OPTIONS] PACKAGE LOCAL_PATH
 #### `android-emu-agent file app pull`
 
 Pull from app-private storage via root or run-as.
+
+Explicit local paths expand ~ and are relative to your current directory. Omit --local to save in
+the daemon's file artifacts directory.
 
 **Usage**:
 

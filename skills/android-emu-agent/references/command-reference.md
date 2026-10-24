@@ -68,7 +68,9 @@ by that installer.
 - `daemon status` Check daemon status.
 
 Daemon status reports both raw PID liveness and whether that PID owns the live daemon socket. Stop
-refuses to signal a live PID when socket ownership cannot be verified.
+refuses to signal a live PID when socket ownership cannot be verified. Start exits 1 when a new
+process exits or fails to become healthy within the startup wait. A startup timeout does not
+terminate the process; inspect `daemon status` and `~/.android-emu-agent/daemon.log` before retrying.
 
 ### Device
 
@@ -103,6 +105,9 @@ runtime permission rules for the target app and device.
 
 ### Session
 
+`session start` exits `1` on a structured daemon error, including with `--json`. The JSON error
+payload is preserved; successful human output remains the session ID.
+
 - `session start -d <device_serial>` Create a new session.
 - `session stop <session_id>` End a session, archive any active trace, detach its debugger, and
   remove its ADB forward.
@@ -131,13 +136,22 @@ review artifacts for sensitive app content before sharing.
 
 - `task validate <task.json|task.aea>` Validate a JSON task spec or human-editable `.aea` script.
 - `task run <task.json|task.aea> [--session <session_id>] [--continue-on-failure]` Run ordered task
-  steps and verifiers.
+  steps and verifiers. Add `--http-timeout-seconds <seconds>` to choose the HTTP response wait.
 
 Task specs support action steps (`tap`, `long_tap`, `set_text`, `clear`, `back`, `home`, `recents`,
 `swipe`), wait/verifier operations (`idle`, `activity`, `text`, `exists`, `gone`), app steps
 (`launch`, `force_stop`, `deeplink`), and `ui` `snapshot` steps. Use `verify` on a step for
 post-step checks and top-level `verifiers` for final checks. A failed verifier returns
-`status=failed` with the failing step or verifier payload.
+`status=failed` with the failing step or verifier payload. `task run` exits `1` after printing the
+complete report if any step or verifier fails, including with `--json` or `--continue-on-failure`;
+successful runs exit `0`.
+
+For long task sequences, set `--http-timeout-seconds 120` (or another finite positive budget
+covering all steps and verifiers). The default remains `10` seconds. This overrides only the run
+request's HTTP read timeout, not individual `timeout_ms` values, other transport timeouts, or
+startup health checks. It is not a task deadline and does not cancel daemon execution. After a
+transport timeout, inspect device state before rerunning; possibly delivered tasks are not
+automatically replayed. Task validation is unchanged.
 
 Both `task validate` and `task run` preflight every step and verifier against the daemon request
 models before any action is dispatched. Invalid request fields return `ERR_TASK_INVALID` with their
@@ -160,12 +174,25 @@ verify exists text:"Email"
 expect activity MainActivity
 ```
 
+Task `wait exists/gone`, step `verify exists/gone`, and final `expect exists/gone` accept a
+snapshot ref or a single element selector, including quoted strings, regexes, and compound
+boolean filters (`text:"Sign in" enabled:true`). Coordinate targets and `||` fallback chains
+are not wait conditions and fail task validation before execution. JSON task selector dictionaries
+accept string and boolean values.
+
 The formal parser contract is documented at <https://alehkot.github.io/android-emu-agent/aea-spec/>.
 
 In scripts, quote literal `=` text, such as `set-text id:com.example:id/search "x=y"` or
 `wait text "Total=5" timeout_ms=1000`. A fully quoted `"timeout_ms=5000"` is literal text;
 `timeout_ms="5000"` is an option. Deep-link query URLs retain their parameters, for example
 `deeplink "https://example.com/search?q=android&sort=date"`. Quote URLs containing `#` too.
+
+Selector-value quotes survive script compilation: `tap text:"Sign in" enabled:true`,
+`tap desc:"Don't stop"`, and `tap text:"A || B"` preserve the complete label. For a compound
+`set-text` target or swipe container, quote the entire selector too, for example
+`set-text 'text:"Email address" enabled:true' "agent@example.com"` or
+`swipe up container='desc:"Message list" scrollable:true'`. Ordinary text and option values still
+use shell-style decoding.
 
 Validate a script before running it:
 
@@ -184,6 +211,9 @@ Ready-made scripts to copy: <https://github.com/alehkot/android-emu-agent/tree/m
   Capture screen image (optionally copy to local path).
 - `ui ground <session_id> [--ref <ref>] [--no-screenshot] [--pull]` Create optional
   screenshot-to-ref grounding metadata from the latest snapshot.
+
+`ui snapshot` exits `1` on a structured daemon error in compact, full, and raw modes. Errors remain
+JSON even with `--format text` or `--raw`; successful text/XML output is unchanged.
 
 Default compact snapshots are actionable and work well on classic XML views plus modern frameworks
 such as Compose and Litho. Use `--full` when the target element is not in the default actionable
@@ -266,7 +296,8 @@ return `ERR_EXPECTATION_FAILED`; `current-app` without an expected package or ac
 ### App
 
 - `app list --device <serial>` List installed packages. Optional: `--scope all|system|third-party`.
-- `app install <apk_path> --device <serial>` Install APK on target device.
+- `app install <apk_path> --device <serial>` Install APK on target device. Relative APK paths use
+  the invoking CLI's current directory, not the daemon's startup directory.
 - `app uninstall <package> --device <serial>` Uninstall package from target device.
 - `app launch <session_id> <package>` Launch an app.
 - `app intent <session_id> [--action <action>] [--data <uri>]` Launch an intent.
@@ -285,7 +316,10 @@ debugger to the app at startup:
 - `app list --session <session_id>` List packages via an active session.
 - `app uninstall <package> --session <session_id> [--keep-data]` Uninstall package via an active
   session.
-- `app launch <session_id> <package> --activity <activity>` Launch a specific activity.
+- `app launch <session_id> <package> --activity <activity>` Launch a specific activity. Accepts a
+  bare class (`MainActivity`), a package-relative class (`.ui.MainActivity`), or a fully qualified
+  class (`org.example.ui.MainActivity`). Fully qualified names, including automatically resolved
+  launcher names, keep their original class namespace.
 - `app launch <session_id> <package> --wait-debugger` Wait for debugger before app start.
 - `app deeplink <session_id> <uri> --wait-debugger` Wait for debugger before intent start.
 - `app intent <session_id> ... --wait-debugger` Wait for debugger before intent start.
@@ -507,9 +541,17 @@ to preserve heap files on-device after pulling:
 - `file app pull <pkg> <remote> --device <serial>` Pull from app-private storage via root or
   `run-as` for a debuggable app.
 
+Local push sources and explicit pull `--local` paths use the invoking CLI's current directory, not
+the daemon's startup directory. Home-directory shortcuts are expanded; symlink traversal and
+device-side paths are preserved.
+
 Pulls without `--local` return a timestamp-and-UUID path, preserving repeated and concurrent
 results. App-private staging paths are also independent per transfer. Explicit destinations retain
 their existing replacement or directory-merge behavior.
+
+Non-root app-private pulls leave local files unchanged if the ADB transfer fails or times out; they
+need temporary storage for the complete payload before writing the destination. The final local
+write or directory merge is not atomic. Root-based and shared-storage pulls are unchanged.
 
 See `references/reliability.md` for reliability triage workflows and output interpretation. See
 `references/files.md` for file transfer workflows. See `references/workflow-examples.md` for
@@ -529,6 +571,11 @@ Element-targeted action commands accept these selector formats:
 - `text:"Sign in" enabled:true clickable:true`: add uiautomator2 state filters.
 - `text:"Sign in" || id:com.example:id/login`: try fallback selectors in order.
 - `coords:540,1200`: target absolute coordinates.
+
+Selector-value quotes remove exactly one matching outer pair. Literal quotes inside are preserved:
+`text:"James'"` matches `James'`, and `text:"'Accept'"` matches `'Accept'`, including its
+apostrophes. Use the other quote style around a value containing literal quotes. This applies to
+direct, compound, fallback, and `.aea` task selectors; empty quoted values remain invalid.
 
 Tap and swipe-container selectors must match exactly one node. If a selector is ambiguous, add
 compound id/class/text/state filters or use a fresh snapshot `^ref`; fallback selectors do not skip

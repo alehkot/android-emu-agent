@@ -7,7 +7,7 @@ from typing import Any
 import typer
 
 from android_emu_agent.cli.daemon_client import DaemonClient, DaemonController, format_json
-from android_emu_agent.errors import daemon_identity_error
+from android_emu_agent.errors import AgentError, daemon_identity_error
 
 app = typer.Typer(help="Daemon lifecycle commands")
 
@@ -17,7 +17,9 @@ def daemon_start() -> None:
     """Start the daemon process.
 
     Start this before any device, session, ui, action, app, or file command. The daemon owns
-    device connections and session state.
+    device connections and session state. Exit 1 if the new process exits or does not become
+    healthy within the startup wait. A timeout does not terminate the process; inspect daemon
+    status and logs before retrying.
 
     Examples:
 
@@ -35,7 +37,12 @@ def daemon_start() -> None:
     if controller.health():
         typer.echo("Daemon already running (pid unknown)")
         return
-    pid = controller.start()
+    try:
+        pid = controller.start()
+    except AgentError as error:
+        typer.echo(str(error), err=True)
+        typer.echo(f"Remediation: {error.remediation}", err=True)
+        raise typer.Exit(code=1) from None
     if pid == -1:
         typer.echo("Daemon already running (pid unknown)")
         return

@@ -82,10 +82,33 @@ android-emu-agent task run idle-snapshot.aea --json
 Use `--continue-on-failure` only when collecting all step failures matters more than stopping at the
 first failed action or verifier.
 
+### Long-running tasks
+
+The daemon returns one report after all sequential steps and verifiers finish. For a task that may
+take longer than ten seconds, explicitly allow a longer HTTP response wait:
+
+```bash
+android-emu-agent task run examples/tasks/login-flow.aea --session <session-id> --http-timeout-seconds 120 --json
+```
+
+`--http-timeout-seconds` accepts a finite positive number of seconds (default: `10`). Choose a
+budget covering the full sequence, including attached and final verifiers and device I/O, not just
+the longest individual wait. It changes only the run request's HTTP read timeout; connection, write,
+pool, and daemon-startup health checks retain their existing timeouts. Validation commands and
+per-condition `timeout_ms` values are unchanged.
+
+This is an HTTP inactivity timeout, not a total task deadline or a cancellation mechanism. A
+transport timeout can leave the daemon still executing the task. The CLI does not automatically
+replay a possibly delivered task; inspect device state before deciding whether to run it again. The
+timeout is not automatically inferred from the task.
+
 ## Verify the Result
 
 A successful run returns `status: done` and `passed: true` in JSON output. A failed run returns
-`status: failed` with the failing step, verifier, operation, and response payload.
+`status: failed` with the failing step, verifier, operation, and response payload. `task run` exits
+with code `0` on success and `1` when a step or verifier fails, in both human and `--json` output
+modes. The complete failure report is printed before exiting. `--continue-on-failure` continues
+collecting results; it does not turn a failed run into a successful exit.
 
 After a failed run, capture evidence before changing the screen:
 
@@ -152,6 +175,12 @@ be forcibly cancelled.
 tap text:"Continue" || id:com.example:id/continue
 verify exists text:"Welcome" timeout_ms=5000
 ```
+
+For `exists` and `gone`, task waits and verifiers accept snapshot refs or direct element
+selectors, including quoted values, regexes, and compound state filters such as
+`text:"Welcome" enabled:true`. Coordinate selectors and `||` fallback chains are rejected during
+validation, before any device actions run. JSON tasks can use the same selector expression in
+`ref`, or a `selector` dictionary with string and boolean values.
 
 `expect` adds a final task-level verifier:
 
