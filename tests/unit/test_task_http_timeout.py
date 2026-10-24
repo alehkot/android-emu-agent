@@ -8,6 +8,7 @@ from unittest.mock import Mock
 
 import httpx
 import pytest
+from click import unstyle
 from typer.testing import CliRunner
 
 from android_emu_agent.cli import daemon_client
@@ -99,7 +100,10 @@ def test_run_timeout_wiring_and_complete_execution_result(
 
 @pytest.mark.parametrize("script", [False, True])
 @pytest.mark.parametrize("budget", ["0", "-1", "nan", "inf", "-inf", "1e999", "bad"])
-def test_invalid_budget_rejected_before_client_creation(tmp_path, monkeypatch, script, budget):
+@pytest.mark.parametrize("color", [False, True])
+def test_invalid_budget_rejected_before_client_creation(
+    tmp_path, monkeypatch, script, budget, color
+):
     client = Mock()
     monkeypatch.setattr(task, "DaemonClient", client)
     result = CliRunner().invoke(
@@ -110,9 +114,10 @@ def test_invalid_budget_rejected_before_client_creation(tmp_path, monkeypatch, s
             "--http-timeout-seconds",
             budget,
         ],
+        color=color,
     )
     assert result.exit_code == 2
-    assert "--http-timeout-seconds" in result.output
+    assert "--http-timeout-seconds" in unstyle(result.output)
     client.assert_not_called()
 
 
