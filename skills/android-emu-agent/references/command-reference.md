@@ -68,7 +68,9 @@ by that installer.
 - `daemon status` Check daemon status.
 
 Daemon status reports both raw PID liveness and whether that PID owns the live daemon socket. Stop
-refuses to signal a live PID when socket ownership cannot be verified.
+refuses to signal a live PID when socket ownership cannot be verified. Start exits 1 when a new
+process exits or fails to become healthy within the startup wait. A startup timeout does not
+terminate the process; inspect `daemon status` and `~/.android-emu-agent/daemon.log` before retrying.
 
 ### Device
 

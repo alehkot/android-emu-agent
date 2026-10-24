@@ -75,7 +75,9 @@ android-emu-agent daemon [OPTIONS] COMMAND [ARGS]...
 Start the daemon process.
 
 Start this before any device, session, ui, action, app, or file command. The daemon owns device
-connections and session state.
+connections and session state. Exit 1 if the new process exits or does not become healthy within the
+startup wait. A timeout does not terminate the process; inspect daemon status and logs before
+retrying.
 
 Examples:
 

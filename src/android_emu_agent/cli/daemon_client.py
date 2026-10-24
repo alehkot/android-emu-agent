@@ -13,6 +13,7 @@ from typing import Any
 
 import httpx
 
+from android_emu_agent.errors import daemon_start_error
 from android_emu_agent.security import (
     daemon_socket_path,
     migrate_private_tree,
@@ -128,9 +129,11 @@ class DaemonController:
         while time.monotonic() < deadline:
             if self._socket_healthy():
                 return
-            if process.poll() is not None:
-                return
+            returncode = process.poll()
+            if returncode is not None:
+                raise daemon_start_error(process.pid, f"process exited with exit code {returncode}")
             time.sleep(0.05)
+        raise daemon_start_error(process.pid, "did not become healthy within 5 seconds")
 
     def stop(self) -> bool:
         """Stop the daemon if running."""
