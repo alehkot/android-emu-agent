@@ -2077,7 +2077,8 @@ android-emu-agent app [OPTIONS] COMMAND [ARGS]...
 
 Install an APK on the target device.
 
-Target the device by serial or by an active session.
+Target the device by serial or by an active session. Relative APK paths are interpreted from your
+current directory, even if the daemon started elsewhere.
 
 Examples:
 

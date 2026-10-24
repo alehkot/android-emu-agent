@@ -296,7 +296,8 @@ return `ERR_EXPECTATION_FAILED`; `current-app` without an expected package or ac
 ### App
 
 - `app list --device <serial>` List installed packages. Optional: `--scope all|system|third-party`.
-- `app install <apk_path> --device <serial>` Install APK on target device.
+- `app install <apk_path> --device <serial>` Install APK on target device. Relative APK paths use
+  the invoking CLI's current directory, not the daemon's startup directory.
 - `app uninstall <package> --device <serial>` Uninstall package from target device.
 - `app launch <session_id> <package>` Launch an app.
 - `app intent <session_id> [--action <action>] [--data <uri>]` Launch an intent.
