@@ -15,6 +15,14 @@ need to parse structured results programmatically).
 JSON responses also include `diagnostic_id`, and the same value is returned in the `x-diagnostic-id`
 header for request-level tracing.
 
+Commands using the standard response handlers exit `1` on HTTP client/server errors, including
+FastAPI request-validation failures that contain `detail` rather than an `error` object. For
+example, `reliability compile com.example --device emulator-5554 --mode speeed` is rejected, not a
+successful compile. With `--json`, the original response (including validation details and
+`diagnostic_id`) is preserved. Fix the rejected arguments before retrying. Failed HTTP responses do
+not trigger artifact copies with `--pull`; successful output and structured daemon-error handling
+are unchanged.
+
 Emulator lifecycle commands expect `adb` and `emulator` to be available via `PATH` or discoverable
 through `ANDROID_SDK_ROOT` / `ANDROID_HOME`. `avdmanager` is recommended when you need to create or
 inspect AVD definitions outside `android-emu-agent`.

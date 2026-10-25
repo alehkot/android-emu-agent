@@ -52,9 +52,22 @@ def _maybe_render_error(data: dict[str, Any]) -> None:
     raise typer.Exit(code=1)
 
 
-def _exit_if_error(data: dict[str, Any]) -> None:
+def _is_http_error(resp: Any) -> bool:
+    """Recognize HTTP failures even without the daemon's AgentError envelope."""
+    status_code = getattr(resp, "status_code", None)
+    return isinstance(status_code, int) and 400 <= status_code < 600
+
+
+def _exit_if_error(data: dict[str, Any], resp: Any) -> None:
     """Return a failure exit code after machine-readable output is emitted."""
-    if data.get("error"):
+    if data.get("error") or _is_http_error(resp):
+        raise typer.Exit(code=1)
+
+
+def _render_http_error(resp: Any, data: dict[str, Any]) -> None:
+    """Keep validation details visible without rendering a failed response as success."""
+    if _is_http_error(resp):
+        typer.echo(format_json(data))
         raise typer.Exit(code=1)
 
 
@@ -84,10 +97,11 @@ def handle_response(resp: Any, json_output: bool = False) -> None:
     data = _parse_response_json(resp)
     if json_output:
         typer.echo(format_json(data))
-        _exit_if_error(data)
+        _exit_if_error(data, resp)
         return
 
     _maybe_render_error(data)
+    _render_http_error(resp, data)
     if _maybe_render_done(data):
         return
     typer.echo(format_json(data))
@@ -97,10 +111,11 @@ def handle_output_response(resp: Any, json_output: bool = False) -> None:
     data = _parse_response_json(resp)
     if json_output:
         typer.echo(format_json(data))
-        _exit_if_error(data)
+        _exit_if_error(data, resp)
         return
 
     _maybe_render_error(data)
+    _render_http_error(resp, data)
     if _maybe_render_output(data):
         return
     if _maybe_render_done(data):
@@ -118,7 +133,7 @@ def handle_response_with_pull(
     data = _parse_response_json(resp)
     pulled_path: Path | None = None
 
-    if pull and not data.get("error"):
+    if pull and not data.get("error") and not _is_http_error(resp):
         try:
             path = data.get("path")
             if not path:
@@ -131,10 +146,11 @@ def handle_response_with_pull(
 
     if json_output:
         typer.echo(format_json(data))
-        _exit_if_error(data)
+        _exit_if_error(data, resp)
         return
 
     _maybe_render_error(data)
+    _render_http_error(resp, data)
     if _maybe_render_done(data):
         if pulled_path:
             typer.echo(f"✓ Pulled -> {pulled_path}")

@@ -225,7 +225,10 @@ adb devices
 android-emu-agent daemon status --json
 ```
 
-Errors report a code and a remediation hint. The
+Structured daemon errors report a code and a remediation hint. Request-validation failures (for
+example, an unsupported `reliability compile --mode`) instead include field-level `detail` and exit
+with status `1`, including with `--json`. Correct the rejected arguments before retrying; JSON
+output preserves the daemon's validation details and diagnostic ID. The
 [installation guide](https://alehkot.github.io/android-emu-agent/installation/#troubleshooting)
 lists every error code and its next action.
 
