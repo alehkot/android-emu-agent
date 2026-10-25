@@ -124,6 +124,11 @@ payload is preserved; successful human output remains the session ID.
 - `trace replay <path> [--until-failure]` Return a dry-run replay plan from an archive.
 - `trace export <path> [--output <path>]` Export a trace archive to Markdown.
 
+Trace archive inputs and explicit output paths expand `~` and are relative to the CLI's current
+directory, even if the daemon started elsewhere. Omitting `trace stop --output` preserves the
+daemon's default archive directory. For `trace export`, omit `--output` and use `--json` to read
+the Markdown response without writing a report file.
+
 Trace archives record daemon request/response exchanges for the active session, including
 `diagnostic_id`, request payloads with sensitive fields redacted, response payloads, status codes,
 errors, and artifact paths. Replay is currently a dry-run plan so it never mutates a device by

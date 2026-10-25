@@ -1451,6 +1451,9 @@ android-emu-agent trace start [OPTIONS] SESSION_ID
 
 Stop recording and write a trace archive.
 
+Explicit output paths expand ~ and are relative to your current directory. Omit --output to use the
+daemon's default archive directory.
+
 **Usage**:
 
 ```console
@@ -1487,6 +1490,9 @@ android-emu-agent trace status [OPTIONS]
 
 Return a dry-run replay plan from a trace archive.
 
+Archive paths expand ~ and are relative to your current directory, even if the daemon started
+elsewhere.
+
 **Usage**:
 
 ```console
@@ -1506,6 +1512,9 @@ android-emu-agent trace replay [OPTIONS] PATH
 ### `android-emu-agent trace export`
 
 Export a trace archive to Markdown.
+
+Archive and explicit output paths expand ~ and are relative to your current directory. Omit --output
+and use --json to read the Markdown response without writing a report file.
 
 **Usage**:
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 
 from android_emu_agent.cli.daemon_client import DaemonClient
@@ -38,12 +40,19 @@ def trace_stop(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Stop recording and write a trace archive."""
+    """Stop recording and write a trace archive.
+
+    Explicit output paths expand ~ and are relative to your current directory.
+    Omit --output to use the daemon's default archive directory.
+    """
     client = DaemonClient()
     resp = client.request(
         "POST",
         "/trace/stop",
-        json_body={"session_id": session_id, "output_path": output},
+        json_body={
+            "session_id": session_id,
+            "output_path": str(Path(output).expanduser().absolute()) if output else output,
+        },
     )
     client.close()
     handle_response(resp, json_output=json_output)
@@ -74,12 +83,19 @@ def trace_replay(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Return a dry-run replay plan from a trace archive."""
+    """Return a dry-run replay plan from a trace archive.
+
+    Archive paths expand ~ and are relative to your current directory, even if
+    the daemon started elsewhere.
+    """
     client = DaemonClient()
     resp = client.request(
         "POST",
         "/trace/replay",
-        json_body={"path": path, "until_failure": until_failure},
+        json_body={
+            "path": str(Path(path).expanduser().absolute()),
+            "until_failure": until_failure,
+        },
     )
     client.close()
     handle_response(resp, json_output=json_output)
@@ -91,12 +107,21 @@ def trace_export(
     output: str | None = typer.Option(None, "--output", "-o", help="Markdown output path"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Export a trace archive to Markdown."""
+    """Export a trace archive to Markdown.
+
+    Archive and explicit output paths expand ~ and are relative to your current
+    directory. Omit --output and use --json to read the Markdown response without
+    writing a report file.
+    """
     client = DaemonClient()
     resp = client.request(
         "POST",
         "/trace/export",
-        json_body={"path": path, "output_path": output, "format": "markdown"},
+        json_body={
+            "path": str(Path(path).expanduser().absolute()),
+            "output_path": str(Path(output).expanduser().absolute()) if output else output,
+            "format": "markdown",
+        },
     )
     client.close()
     handle_response(resp, json_output=json_output)
