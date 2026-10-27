@@ -63,6 +63,10 @@ Optional: clear app data:
 android-emu-agent app reset <session-id> com.example.app
 ```
 
+Check the exit status before continuing: if Android rejects `pm clear` (for example, for a missing
+package or a user restriction), reset returns `ERR_ADB_COMMAND` rather than reporting success. The
+original app data may still be present.
+
 Launch the app:
 
 ```bash

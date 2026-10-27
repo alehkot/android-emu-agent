@@ -87,7 +87,7 @@ def app_reset(
     package: str = typer.Argument(..., help="Package name"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Clear app data for a package."""
+    """Clear app data for a package; fail if Android rejects the reset."""
     client = DaemonClient()
     resp = client.request(
         "POST",

@@ -307,7 +307,11 @@ class DeviceManager:
             raise RuntimeError(f"Device not found: {serial}")
 
         def _apply() -> None:
-            device.shell(f"pm clear {shlex.quote(package)}")
+            command = f"pm clear {shlex.quote(package)}"
+            result = device.shell2(command)
+            if result.returncode != 0:
+                reason = result.output.strip() or f"Exit status {result.returncode}"
+                raise adb_command_error(command, reason)
 
         await run_device_io(device, _apply)
 

@@ -2072,7 +2072,7 @@ android-emu-agent app [OPTIONS] COMMAND [ARGS]...
 
 - `install`: Install an APK on the target device.
 - `uninstall`: Uninstall a package from the target device.
-- `reset`: Clear app data for a package.
+- `reset`: Clear app data for a package; fail if...
 - `launch`: Launch an app.
 - `force-stop`: Force stop an app.
 - `deeplink`: Open a deeplink URI.
@@ -2143,7 +2143,7 @@ android-emu-agent app uninstall [OPTIONS] PACKAGE
 
 ### `android-emu-agent app reset`
 
-Clear app data for a package.
+Clear app data for a package; fail if Android rejects the reset.
 
 **Usage**:
 

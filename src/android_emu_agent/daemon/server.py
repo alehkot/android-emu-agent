@@ -3078,6 +3078,8 @@ async def app_reset(req: AppResetRequest) -> EndpointResponse:
 
     try:
         await core.device_manager.app_reset(session.device_serial, req.package)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
     except Exception:
         return _error_response(device_offline_error(session.device_serial), status_code=404)
 

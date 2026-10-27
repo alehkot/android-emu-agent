@@ -384,11 +384,12 @@ class TestAppReset:
 
         manager = DeviceManager()
         mock_device = MagicMock()
+        mock_device.shell2.return_value.returncode = 0
 
         with patch.object(manager, "get_adb_device", return_value=mock_device):
             await manager.app_reset("emulator-5554", "com.example.app;id")
 
-        call_arg = mock_device.shell.call_args[0][0]
+        call_arg = mock_device.shell2.call_args[0][0]
         assert call_arg == "pm clear 'com.example.app;id'"
 
 

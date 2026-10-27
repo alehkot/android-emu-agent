@@ -319,7 +319,8 @@ return `ERR_EXPECTATION_FAILED`; `current-app` without an expected package or ac
 - `app resolve-intent --session <session_id> [--action <action>] [--data <uri>]` Resolve an intent
   without launching it.
 - `app force-stop <session_id> <package>` Force stop app.
-- `app reset <session_id> <package>` Clear app data.
+- `app reset <session_id> <package>` Clear app data. A rejected Android `pm clear` returns
+  `ERR_ADB_COMMAND` and a nonzero CLI exit status; do not assume the app data was cleared.
 - `app deeplink <session_id> <uri>` Open a deep link, including opaque Android URIs such as
   `mailto:`, `tel:`, `content:`, and `market:`.
 
