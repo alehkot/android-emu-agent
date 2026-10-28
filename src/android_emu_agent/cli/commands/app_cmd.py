@@ -108,7 +108,7 @@ def app_launch(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Launch an app.
+    """Launch an app; fail if Android rejects the activity start.
 
     Follow this with a wait so the app is ready before the first snapshot.
     Activity names may be bare (MainActivity), package-relative (.ui.MainActivity),
@@ -170,7 +170,7 @@ def app_deeplink(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Open a deeplink URI."""
+    """Open a deeplink URI; fail if Android cannot start a matching activity."""
     client = DaemonClient()
     resp = client.request(
         "POST",
@@ -199,7 +199,7 @@ def app_intent(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Launch an explicit or implicit intent."""
+    """Launch an explicit or implicit intent; fail if Android rejects the start."""
     client = DaemonClient()
     resp = client.request(
         "POST",

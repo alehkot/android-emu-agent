@@ -327,6 +327,12 @@ return `ERR_EXPECTATION_FAILED`; `current-app` without an expected package or ac
 - `app deeplink <session_id> <uri>` Open a deep link, including opaque Android URIs such as
   `mailto:`, `tel:`, `content:`, and `market:`.
 
+Rejected `app launch`, `app intent`, and `app deeplink` starts return `ERR_LAUNCH_FAILED` and a
+nonzero CLI exit status, including on Android versions that print an error with a zero shell status.
+Check the installed activity, intent handler, and export/permission requirements before retrying. A
+normal already-running/task-to-front warning is not a launch failure. A successful start still needs
+an appropriate wait before interacting with the app.
+
 Use `--activity` to launch a specific screen directly. Use `--wait-debugger` when attaching a
 debugger to the app at startup:
 

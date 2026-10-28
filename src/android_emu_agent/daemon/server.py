@@ -3106,6 +3106,8 @@ async def app_launch(req: AppLaunchRequest) -> EndpointResponse:
             req.activity,
             wait_for_debugger=req.wait_debugger,
         )
+    except AgentError as e:
+        return _error_response(e, status_code=500)
     except Exception as e:
         return _error_response(
             AgentError(
@@ -3163,6 +3165,8 @@ async def app_deeplink(req: AppDeeplinkRequest) -> EndpointResponse:
         await core.device_manager.app_deeplink(
             session.device_serial, req.uri, wait_for_debugger=req.wait_debugger
         )
+    except AgentError as e:
+        return _error_response(e, status_code=400)
     except Exception:
         return _error_response(device_offline_error(session.device_serial), status_code=404)
 

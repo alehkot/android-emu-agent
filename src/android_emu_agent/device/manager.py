@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -501,7 +502,7 @@ class DeviceManager:
             if wait_for_debugger:
                 command_parts.append("-D")
             command_parts.extend(["-n", component])
-            device.shell(" ".join(shlex.quote(part) for part in command_parts))
+            self._start_activity(device, command_parts)
             return target_activity
 
         return await run_device_io(device, _launch)
@@ -564,10 +565,32 @@ class DeviceManager:
             if package:
                 command_parts.append(package)
 
-            command = " ".join(shlex.quote(part) for part in command_parts)
-            device.shell(command)
+            self._start_activity(device, command_parts)
 
         await run_device_io(device, _start)
+
+    @staticmethod
+    def _start_activity(device: AdbDevice, command_parts: list[str]) -> None:
+        """Check both shell status and older Android's zero-status launch errors."""
+        command = " ".join(shlex.quote(part) for part in command_parts)
+        result = device.shell2(command)
+        output = result.output.strip()
+        # Older ActivityManager implementations print rejection diagnostics but
+        # return zero. Match diagnostic lines, not words in an echoed URI/intent.
+        rejected = any(
+            re.match(r"^(?:Error:|Error type \d+\b)", line.strip()) for line in output.splitlines()
+        )
+        if result.returncode != 0 or rejected:
+            reason = output or f"Exit status {result.returncode}"
+            raise AgentError(
+                code="ERR_LAUNCH_FAILED",
+                message=f"Android rejected the activity start: {reason}",
+                context={"command": command, "exit_code": result.returncode, "output": output},
+                remediation=(
+                    "Verify the activity or intent handler is installed, enabled, and accessible "
+                    "with the required permissions"
+                ),
+            )
 
     async def app_current(self, serial: str) -> dict[str, str | None]:
         """Get the current foreground app/activity."""

@@ -2073,10 +2073,10 @@ android-emu-agent app [OPTIONS] COMMAND [ARGS]...
 - `install`: Install an APK on the target device.
 - `uninstall`: Uninstall a package from the target device.
 - `reset`: Clear app data for a package; fail if...
-- `launch`: Launch an app.
+- `launch`: Launch an app; fail if Android rejects the...
 - `force-stop`: Force stop an app.
-- `deeplink`: Open a deeplink URI.
-- `intent`: Launch an explicit or implicit intent.
+- `deeplink`: Open a deeplink URI; fail if Android...
+- `intent`: Launch an explicit or implicit intent;...
 - `list`: List installed packages.
 - `current`: Show current foreground app/activity.
 - `task-stack`: Show current task stack.
@@ -2163,7 +2163,7 @@ android-emu-agent app reset [OPTIONS] SESSION_ID PACKAGE
 
 ### `android-emu-agent app launch`
 
-Launch an app.
+Launch an app; fail if Android rejects the activity start.
 
 Follow this with a wait so the app is ready before the first snapshot. Activity names may be bare
 (MainActivity), package-relative (.ui.MainActivity), or fully qualified
@@ -2224,7 +2224,7 @@ android-emu-agent app force-stop [OPTIONS] SESSION_ID PACKAGE
 
 ### `android-emu-agent app deeplink`
 
-Open a deeplink URI.
+Open a deeplink URI; fail if Android cannot start a matching activity.
 
 **Usage**:
 
@@ -2245,7 +2245,7 @@ android-emu-agent app deeplink [OPTIONS] SESSION_ID URI
 
 ### `android-emu-agent app intent`
 
-Launch an explicit or implicit intent.
+Launch an explicit or implicit intent; fail if Android rejects the start.
 
 **Usage**:
 
