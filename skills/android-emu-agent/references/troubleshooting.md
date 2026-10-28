@@ -22,29 +22,30 @@ Match your symptom to the right section:
 
 ## Error Reference
 
-| Error                         | Cause                        | Solution                                               | Recovery        |
-| ----------------------------- | ---------------------------- | ------------------------------------------------------ | --------------- |
-| `ERR_STALE_REF`               | Ref from outdated snapshot   | Re-snapshot; if auto-healed, use warning as the cue    | Level 1 (auto)  |
-| `ERR_NOT_FOUND`               | Element not in current UI    | Verify correct screen, try different selector          | Level 1 (auto)  |
-| `ERR_BLOCKED_INPUT`           | Dialog/keyboard blocking     | Dismiss blocker with `back`, or `wait idle`            | Level 1 (auto)  |
-| `ERR_ACTION_FAILED`           | Action dispatched but failed | Re-snapshot, verify target state, retry                | Level 1 (auto)  |
-| `ERR_TIMEOUT`                 | Wait condition never met     | Increase `--timeout-ms` or verify condition is correct | Level 2 (auto)  |
-| `ERR_NO_LOCATOR`              | No locator strategy found    | Use `--full` snapshot, try coordinate-based action     | Level 2 (auto)  |
-| `ERR_EXPECTATION_FAILED`      | Expect assertion failed      | Inspect actual state, selector, or timeout             | Level 2 (auto)  |
-| `ERR_TASK_INVALID`            | Task JSON is invalid         | Fix the spec and run `task validate`                   | Manual          |
-| `ERR_TASK_UNSUPPORTED_STEP`   | Unsupported task operation   | Use supported action/wait/app/ui operations            | Manual          |
-| `ERR_SNAPSHOT_REQUIRED`       | No latest UI snapshot        | Run `ui snapshot` before visual grounding              | Manual          |
-| `ERR_VISUAL_REF_NOT_FOUND`    | Ref missing from snapshot    | Use refs from the latest snapshot generation           | Manual          |
-| `ERR_VISUAL_SNAPSHOT_INVALID` | Bad snapshot metadata        | Re-run `ui snapshot` before grounding                  | Manual          |
-| `ERR_INVALID_PERMISSION`      | Invalid permission name      | Use a fully-qualified Android permission name          | Manual          |
-| `ERR_SYSTEM_COMMAND_FAILED`   | Android system shell failed  | Verify device state and system service support         | Manual          |
-| `ERR_DEVICE_OFFLINE`          | Device disconnected          | Run `device list`, reconnect device                    | Not recoverable |
-| `ERR_SDK_TOOL_NOT_FOUND`      | Android SDK CLI missing      | Add `adb` / `emulator` / `avdmanager` to PATH          | Not recoverable |
-| `ERR_JDK_NOT_FOUND`           | Java runtime missing         | Install JDK 17+ or set `JAVA_HOME`                     | Not recoverable |
-| `ERR_JDK_UNSUPPORTED`         | Java too old or lacks JDI    | Point `JAVA_HOME` to a full JDK 17+                    | Not recoverable |
-| `ERR_SESSION_EXPIRED`         | Session timed out            | Create new session with `session start`                | Not recoverable |
-| `ERR_DAEMON_START_FAILED`     | Startup exited or timed out  | Inspect daemon logs and `daemon status` before retrying | Manual          |
-| `ERR_DAEMON_OFFLINE`          | Daemon not running           | Run `daemon start`                                     | Not recoverable |
+| Error                          | Cause                                | Solution                                                                             | Recovery        |
+| ------------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------ | --------------- |
+| `ERR_STALE_REF`                | Ref from outdated snapshot           | Re-snapshot; if auto-healed, use warning as the cue                                  | Level 1 (auto)  |
+| `ERR_NOT_FOUND`                | Element not in current UI            | Verify correct screen, try different selector                                        | Level 1 (auto)  |
+| `ERR_BLOCKED_INPUT`            | Dialog/keyboard blocking             | Dismiss blocker with `back`, or `wait idle`                                          | Level 1 (auto)  |
+| `ERR_ACTION_FAILED`            | Action dispatched but failed         | Re-snapshot, verify target state, retry                                              | Level 1 (auto)  |
+| `ERR_TIMEOUT`                  | Wait condition never met             | Increase `--timeout-ms` or verify condition is correct                               | Level 2 (auto)  |
+| `ERR_NO_LOCATOR`               | No locator strategy found            | Use `--full` snapshot, try coordinate-based action                                   | Level 2 (auto)  |
+| `ERR_EXPECTATION_FAILED`       | Expect assertion failed              | Inspect actual state, selector, or timeout                                           | Level 2 (auto)  |
+| `ERR_TASK_INVALID`             | Task JSON is invalid                 | Fix the spec and run `task validate`                                                 | Manual          |
+| `ERR_TASK_UNSUPPORTED_STEP`    | Unsupported task operation           | Use supported action/wait/app/ui operations                                          | Manual          |
+| `ERR_SNAPSHOT_REQUIRED`        | No latest UI snapshot                | Run `ui snapshot` before visual grounding                                            | Manual          |
+| `ERR_VISUAL_REF_NOT_FOUND`     | Ref missing from snapshot            | Use refs from the latest snapshot generation                                         | Manual          |
+| `ERR_VISUAL_SNAPSHOT_INVALID`  | Bad snapshot metadata                | Re-run `ui snapshot` before grounding                                                | Manual          |
+| `ERR_INVALID_PERMISSION`       | Invalid permission name              | Use a fully-qualified Android permission name                                        | Manual          |
+| `ERR_PERMISSION_CHANGE_FAILED` | Android rejected a permission change | Check the reported error, app runtime permission declaration, and user/device policy | Manual          |
+| `ERR_SYSTEM_COMMAND_FAILED`    | Android system shell failed          | Verify device state and system service support                                       | Manual          |
+| `ERR_DEVICE_OFFLINE`           | Device disconnected                  | Run `device list`, reconnect device                                                  | Not recoverable |
+| `ERR_SDK_TOOL_NOT_FOUND`       | Android SDK CLI missing              | Add `adb` / `emulator` / `avdmanager` to PATH                                        | Not recoverable |
+| `ERR_JDK_NOT_FOUND`            | Java runtime missing                 | Install JDK 17+ or set `JAVA_HOME`                                                   | Not recoverable |
+| `ERR_JDK_UNSUPPORTED`          | Java too old or lacks JDI            | Point `JAVA_HOME` to a full JDK 17+                                                  | Not recoverable |
+| `ERR_SESSION_EXPIRED`          | Session timed out                    | Create new session with `session start`                                              | Not recoverable |
+| `ERR_DAEMON_START_FAILED`      | Startup exited or timed out          | Inspect daemon logs and `daemon status` before retrying                              | Manual          |
+| `ERR_DAEMON_OFFLINE`           | Daemon not running                   | Run `daemon start`                                                                   | Not recoverable |
 
 > **Note:** Infrastructure errors (device offline, session expired, daemon offline) cannot be
 > recovered automatically. Stop and report to the user.

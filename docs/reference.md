@@ -1276,8 +1276,8 @@ android-emu-agent system permissions [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 - `list`: List requested and granted package...
-- `grant`: Grant a runtime permission.
-- `revoke`: Revoke a runtime permission.
+- `grant`: Grant a runtime permission; Android...
+- `revoke`: Revoke a runtime permission; Android...
 
 #### `android-emu-agent system permissions list`
 
@@ -1302,7 +1302,7 @@ android-emu-agent system permissions list [OPTIONS] PACKAGE
 
 #### `android-emu-agent system permissions grant`
 
-Grant a runtime permission.
+Grant a runtime permission; Android rejections exit 1, including with --json.
 
 **Usage**:
 
@@ -1324,7 +1324,7 @@ android-emu-agent system permissions grant [OPTIONS] PACKAGE PERMISSION
 
 #### `android-emu-agent system permissions revoke`
 
-Revoke a runtime permission.
+Revoke a runtime permission; Android rejections exit 1, including with --json.
 
 **Usage**:
 

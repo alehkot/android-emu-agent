@@ -109,7 +109,10 @@ terminate the process; inspect `daemon status` and `~/.android-emu-agent/daemon.
 
 System commands use validated package and permission names before invoking shell-backed Android
 services. Permission changes are useful for deterministic setup but still depend on Android's
-runtime permission rules for the target app and device.
+runtime permission rules for the target app and device. If Android rejects `pm grant` or
+`pm revoke`, the command reports `ERR_PERMISSION_CHANGE_FAILED` and exits `1`, including with
+`--json`; it does not claim that the permission was changed. Check the error output, the app's
+declared runtime permissions, and applicable user/device policy before retrying.
 
 ### Session
 
