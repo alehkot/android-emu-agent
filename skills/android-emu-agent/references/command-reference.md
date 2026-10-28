@@ -369,7 +369,8 @@ debugger to the app at startup:
 - `debug eval <expression> --session <session_id> [--thread <name>] [--frame <idx>]` Evaluate a
   constrained expression (field access or `toString()`).
 - `debug mapping load <path> --session <session_id>` Load ProGuard/R8 mapping for deobfuscated
-  class/method/field names.
+  class/method/field names. Relative paths use the invoking CLI directory; `~` expands to the
+  caller's home before the path reaches the daemon/JVM.
 - `debug mapping clear --session <session_id>` Clear loaded mapping from the active debug bridge.
 - `debug step-over --session <session_id> [--thread <name>] [--timeout-seconds <sec>]` Step to the
   next line and return stopped location + locals.

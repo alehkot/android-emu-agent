@@ -642,7 +642,7 @@ android-emu-agent debug mapping load [OPTIONS] PATH
 
 **Arguments**:
 
-- `PATH`: Path to ProGuard/R8 mapping.txt [required]
+- `PATH`: Path to ProGuard/R8 mapping.txt (relative to the invoking CLI directory) [required]
 
 **Options**:
 

@@ -14,6 +14,7 @@ most useful for state validation, breakpoint-driven tracing, and crash root-caus
 - Conditional Breakpoints and Logpoints
 - Exception Breakpoints
 - Event Types to Watch
+- Deobfuscation Mapping
 - Token Budget Controls
 - Coroutine Tip
 - ANR Safety
@@ -136,6 +137,18 @@ On hit, `debug events` returns `exception_hit` with throw/catch locations and st
 - `exception_breakpoint_resolved`, `exception_hit`
 - `vm_disconnected`
 - `bridge_disconnected` when the local debugger bridge exits unexpectedly
+
+## Deobfuscation Mapping
+
+Use the mapping file for the app build being debugged:
+
+```bash
+android-emu-agent debug mapping load app/build/outputs/mapping/release/mapping.txt --session <id>
+```
+
+Relative paths are interpreted from the directory where you invoke the CLI, not where the daemon was
+started. `~` expands to your home directory. Absolute paths work unchanged. The bridge still checks
+that the file is readable; the CLI does not upload or copy it.
 
 ## Token Budget Controls
 
