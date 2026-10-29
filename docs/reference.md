@@ -2570,12 +2570,12 @@ android-emu-agent emulator snapshot [OPTIONS] COMMAND [ARGS]...
 
 **Commands**:
 
-- `save`: Save emulator snapshot.
+- `save`: Save emulator snapshot, allowing up to 60...
 - `restore`: Restore emulator snapshot and restart by...
 
 #### `android-emu-agent emulator snapshot save`
 
-Save emulator snapshot.
+Save emulator snapshot, allowing up to 60 seconds for the daemon response.
 
 **Usage**:
 
@@ -2596,6 +2596,9 @@ android-emu-agent emulator snapshot save [OPTIONS] SERIAL NAME
 #### `android-emu-agent emulator snapshot restore`
 
 Restore emulator snapshot and restart by default.
+
+Allow up to 180 seconds for the daemon response, or 60 seconds with --no-restart. These HTTP limits
+do not change the emulator console deadlines.
 
 **Usage**:
 

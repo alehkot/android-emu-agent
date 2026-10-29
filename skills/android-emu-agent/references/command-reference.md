@@ -506,6 +506,11 @@ Snapshot names accept 1-128 letters, digits, dots, underscores, or hyphens. Spac
 are rejected before the emulator console is contacted. When the console requests authentication,
 snapshot commands use the token from `~/.emulator_console_auth_token` automatically.
 
+Snapshot save and restore with `--no-restart` allow 60 seconds for the daemon's HTTP response;
+restart-backed restore allows 180 seconds. This avoids the ordinary 10-second client limit cutting
+off a slower snapshot operation. The emulator console's own deadlines remain unchanged. An HTTP
+timeout does not prove the snapshot was cancelled; do not automatically replay a save or restore.
+
 ### Reliability
 
 - `reliability profile <package> --device <serial>` Bounded process, memory, rendering, background,
