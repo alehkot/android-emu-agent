@@ -801,6 +801,8 @@ async def set_doze(req: DozeRequest) -> EndpointResponse:
     core: DaemonCore = app.state.core
     try:
         await core.device_manager.set_doze(req.serial, req.enabled)
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
     except Exception:
         return _error_response(device_offline_error(req.serial), status_code=404)
     return {"status": "done", "serial": req.serial, "doze": "on" if req.enabled else "off"}

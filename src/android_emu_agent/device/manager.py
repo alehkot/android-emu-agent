@@ -439,10 +439,20 @@ class DeviceManager:
             raise RuntimeError(f"Device not found: {serial}")
 
         def _apply() -> None:
-            if enabled:
-                device.shell("dumpsys deviceidle force-idle")
-            else:
-                device.shell("dumpsys deviceidle unforce")
+            command = "dumpsys deviceidle force-idle" if enabled else "dumpsys deviceidle unforce"
+            output = str(device.shell(command)).strip()
+            # dumpsys discards the service's shell-command result code. Inspect its
+            # rejection diagnostic rather than reporting a failed idle precondition as done.
+            if re.search(r"^Unable to go (?:deep |light )?idle;", output, re.MULTILINE):
+                raise AgentError(
+                    code="ERR_DOZE_CHANGE_FAILED",
+                    message=f"Device rejected doze change: {output}",
+                    context={"serial": serial, "command": command, "output": output},
+                    remediation=(
+                        "Check whether this device supports and enables the requested idle mode; "
+                        "do not treat this run as a successful doze test."
+                    ),
+                )
 
         await run_device_io(device, _apply)
 

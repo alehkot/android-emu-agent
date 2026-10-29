@@ -91,7 +91,11 @@ terminate the process; inspect `daemon status` and `~/.android-emu-agent/daemon.
   `reverse-portrait`, `reverse-landscape`, `auto`).
 - `device set wifi <on_or_off> -d <device_serial>` Toggle WiFi.
 - `device set mobile <on_or_off> -d <device_serial>` Toggle mobile data.
-- `device set doze <on_or_off> -d <device_serial>` Toggle doze mode.
+- `device set doze <on_or_off> -d <device_serial>` Toggle doze mode. Disabled or stalled
+  force-idle rejections reported by Android return `ERR_DOZE_CHANGE_FAILED` and exit 1
+  (including `--json`), preserving the device diagnostic. The command does not enable a disabled
+  idle mode or retry the change;
+  a rejected request is not evidence that the app was tested in doze.
 
 ### System
 
