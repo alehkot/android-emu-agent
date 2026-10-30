@@ -487,6 +487,11 @@ Use `--since` to limit logcat by line count, native logcat timestamp, ISO 8601, 
 - `artifact logs <session_id> --since "10m ago"` Relative timestamp.
 - `artifact logs <session_id> --since 100` Show last 100 lines.
 
+ISO 8601 and relative lower bounds are sent as fractional epoch seconds, independent of host and
+device timezones. A T-separated ISO value without an offset means UTC. Native space-separated
+logcat timestamp strings (including the optional year) remain device-local; integers remain line
+counts. These are buffered captures, not live streams.
+
 Artifact log capture is bounded and does not stream. Use `adb -s <emulator-serial> logcat` for a
 live stream; the retained `--follow` compatibility flag returns `ERR_LOG_FOLLOW_UNSUPPORTED`.
 

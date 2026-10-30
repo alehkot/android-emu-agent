@@ -125,7 +125,9 @@ def test_resolve_logcat_since_supports_short_relative_form() -> None:
 
     resolved, is_datetime = resolve_logcat_since("10m")
     assert isinstance(resolved, str)
-    assert len(resolved) >= 19
+    seconds, milliseconds = resolved.split(".")
+    assert seconds.isdigit()
+    assert len(milliseconds) == 3
     assert is_datetime is True
 
 

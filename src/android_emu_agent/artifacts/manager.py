@@ -98,8 +98,10 @@ def resolve_logcat_since(since: str | int | None) -> tuple[str | None, bool]:
     if since_ms is None:  # Defensive; parse_datetime currently returns int for non-empty values.
         return None, False
 
-    resolved_time = datetime.fromtimestamp(since_ms / 1000).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    return resolved_time, True
+    # Logcat accepts fractional epoch seconds. A host-local wall time would be
+    # interpreted in the device timezone, shifting this absolute lower bound.
+    seconds, milliseconds = divmod(since_ms, 1000)
+    return f"{seconds}.{milliseconds:03d}", True
 
 
 class ArtifactManager:

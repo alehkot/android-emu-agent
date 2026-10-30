@@ -79,7 +79,12 @@ def artifact_logs(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Pull logcat logs."""
+    """Pull logcat logs.
+
+    ISO 8601 and relative since filters preserve their absolute instant across host
+    and device timezones. T-separated ISO values without an offset mean UTC. Native
+    space-separated logcat timestamps remain device-local; integers remain line counts.
+    """
     try:
         resolved_session = resolve_session_id(session_id, session)
         if not resolved_session:
