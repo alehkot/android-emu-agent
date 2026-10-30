@@ -2497,7 +2497,8 @@ android-emu-agent emulator list-avds [OPTIONS]
 Start an AVD using the Android emulator CLI.
 
 Waits for boot by default, so the command returns only once Android is ready for a session. Get AVD
-names from 'emulator list-avds'.
+names from 'emulator list-avds'. A fixed --port already listed by ADB is rejected before launch,
+including with --no-wait-boot; the existing emulator is left untouched.
 
 Examples:
 

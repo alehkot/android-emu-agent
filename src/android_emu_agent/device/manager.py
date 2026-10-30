@@ -1003,6 +1003,12 @@ class DeviceManager:
 
         emulator_path = self._resolve_sdk_tool("emulator")
         existing_serials = await self._list_running_emulator_serials()
+        if port is not None and f"emulator-{port}" in existing_serials:
+            raise emulator_launch_failed_error(
+                avd_name,
+                f"console port {port} is already used by emulator-{port}; choose a free port "
+                "or omit --port for automatic selection",
+            )
 
         args = [str(emulator_path), "-avd", avd_name]
         if port is not None:
