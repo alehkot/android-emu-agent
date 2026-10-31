@@ -1490,8 +1490,9 @@ android-emu-agent trace status [OPTIONS]
 
 Return a dry-run replay plan from a trace archive.
 
-Archive paths expand ~ and are relative to your current directory, even if the daemon started
-elsewhere.
+With --until-failure, include exchanges through the first HTTP error, daemon error, or failed task
+result (including HTTP 200). No requests are executed. Archive paths expand ~ and are relative to
+your current directory, even if the daemon started elsewhere.
 
 **Usage**:
 

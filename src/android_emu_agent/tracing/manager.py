@@ -224,18 +224,23 @@ class TraceManager:
     ) -> dict[str, Any]:
         """Return a dry replay plan from a trace archive."""
         events = self.load_events(archive_path)
-        replayable = [
-            self._replay_step(event) for event in events if event.get("kind") == "daemon_exchange"
-        ]
+        replayable: list[dict[str, Any]] = []
         stopped_at_failure = False
-        if until_failure:
-            trimmed: list[dict[str, Any]] = []
-            for step in replayable:
-                trimmed.append(step)
-                if step["status_code"] >= 400 or step.get("error"):
-                    stopped_at_failure = True
-                    break
-            replayable = trimmed
+        for event in events:
+            if event.get("kind") != "daemon_exchange":
+                continue
+            step = self._replay_step(event)
+            replayable.append(step)
+            # Failed tasks use HTTP 200 without a top-level error. Inspect the
+            # archived response before projecting away fields from the replay plan.
+            response = event.get("response")
+            if until_failure and (
+                step["status_code"] >= 400
+                or step.get("error")
+                or (isinstance(response, dict) and response.get("status") == "failed")
+            ):
+                stopped_at_failure = True
+                break
 
         return {
             "status": "done",

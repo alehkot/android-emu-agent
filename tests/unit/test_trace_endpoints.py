@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from android_emu_agent.daemon.diagnostics import RequestDiagnostics
@@ -144,3 +145,72 @@ def test_trace_stop_rejects_source_output_and_can_retry(tmp_path: Path) -> None:
         assert stopped.status_code == 200
         events = trace_manager.load_events(stopped.json()["path"])
         assert [event["kind"] for event in events] == ["trace_started", "trace_stopped"]
+
+
+@pytest.mark.parametrize("script", [False, True], ids=["json-task", "aea-script"])
+@pytest.mark.parametrize("failure_scope", ["action", "step-verifier", "final-verifier"])
+@pytest.mark.parametrize("stop_on_failure", [False, True], ids=["continue", "stop"])
+def test_trace_replay_stops_at_failed_task_response(
+    tmp_path: Path, script: bool, failure_scope: str, stop_on_failure: bool
+) -> None:
+    """Actual task results and middleware archives must retain the failure boundary."""
+    from android_emu_agent.daemon import server
+    from android_emu_agent.tasks.manager import TaskManager
+
+    manager = TaskManager()
+    lines = ["home"]
+    if failure_scope == "step-verifier":
+        lines.append('verify text "Ready"')
+    lines.append("back")
+    if failure_scope == "final-verifier":
+        lines.append('expect text "Ready"')
+    source = "\n".join(lines)
+    dispatched = []
+
+    async def dispatch(call):
+        dispatched.append(call.operation)
+        fail_operation = "home" if failure_scope == "action" else "text"
+        if call.operation == fail_operation:
+            return {"error": {"code": "ERR_TIMEOUT", "message": "condition not reached"}}
+        return {"status": "done"}
+
+    with _client_with_core(tmp_path) as (client, trace_manager):
+        server.app.state.core.task_manager = manager
+        started = client.post("/trace/start", json={"session_id": "s-abc123"}).json()
+        assert client.get("/sessions/s-abc123").status_code == 200
+        task_path = "/tasks/script/run" if script else "/tasks/run"
+        payload = {"session_id": "s-abc123", "stop_on_failure": stop_on_failure}
+        if script:
+            payload["script"] = source
+        else:
+            payload["task"] = manager.parse_script(source)
+        with patch.object(server, "_dispatch_task_call", dispatch):
+            task_response = client.post(task_path, json=payload)
+        assert task_response.status_code == 200
+        assert task_response.json()["status"] == "failed"
+        assert task_response.json()["passed"] is False
+        assert not task_response.json().get("error")
+        assert client.get("/sessions/s-abc123").status_code == 200
+        stopped = client.post("/trace/stop", json={"session_id": "s-abc123"}).json()
+        calls_before_replay = list(dispatched)
+        for archive_path in (stopped["path"], started["directory"]):
+            full = client.post("/trace/replay", json={"path": archive_path}).json()
+            limited = client.post(
+                "/trace/replay", json={"path": archive_path, "until_failure": True}
+            ).json()
+            assert full["step_count"] == 3
+            assert full["stopped_at_failure"] is False
+            assert limited["stopped_at_failure"] is True
+            assert limited["step_count"] == 2
+            assert limited["steps"] == full["steps"][:2]
+            assert limited["steps"][-1]["path"] == task_path
+            assert limited["steps"][-1]["status_code"] == 200
+            assert limited["steps"][-1]["error"] is None
+            assert "response" not in limited["steps"][-1], "keep the replay step schema"
+        assert dispatched == calls_before_replay, "replay remains a dry-run"
+        exchanges = [
+            event
+            for event in trace_manager.load_events(stopped["path"])
+            if event["kind"] == "daemon_exchange"
+        ]
+        assert exchanges[1]["response"] == task_response.json()

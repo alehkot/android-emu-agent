@@ -297,3 +297,63 @@ async def test_trace_stop_rejects_source_symlink_pointing_outside(tmp_path: Path
         "manifest.json",
         "link.zip",
     }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure_index", [0, 1, 2])
+async def test_trace_replay_includes_failed_task_at_any_position(
+    tmp_path: Path, failure_index: int
+) -> None:
+    manager = TraceManager(tmp_path / "traces")
+    await manager.start("s-abc123")
+    for index in range(3):
+        await manager.record_daemon_exchange(
+            session_id="s-abc123",
+            diagnostic_id=f"diag-{index}",
+            method="POST",
+            path="/tasks/run",
+            status_code=200,
+            elapsed_ms=1.0,
+            request_payload={"session_id": "s-abc123"},
+            response_payload={"status": "failed" if index == failure_index else "done"},
+        )
+    stopped = await manager.stop("s-abc123")
+    full = manager.replay_archive(stopped["path"])
+    limited = manager.replay_archive(stopped["path"], until_failure=True)
+    assert full["step_count"] == 3
+    assert full["stopped_at_failure"] is False
+    assert limited["stopped_at_failure"] is True
+    assert limited["steps"] == full["steps"][: failure_index + 1]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "response",
+    [
+        None,
+        {},
+        {"status": None},
+        {"status": "done"},
+        {"passed": False},
+        {"status": "done", "steps": [{"status": "failed"}]},
+    ],
+)
+async def test_trace_replay_does_not_infer_failure_from_unrelated_response_fields(
+    tmp_path: Path, response
+) -> None:
+    manager = TraceManager(tmp_path / "traces")
+    await manager.start("s-abc123")
+    await manager.record_daemon_exchange(
+        session_id="s-abc123",
+        diagnostic_id="diag-1",
+        method="GET",
+        path="/sessions/s-abc123",
+        status_code=200,
+        elapsed_ms=1.0,
+        request_payload=None,
+        response_payload=response,
+    )
+    stopped = await manager.stop("s-abc123")
+    limited = manager.replay_archive(stopped["path"], until_failure=True)
+    assert limited["step_count"] == 1
+    assert limited["stopped_at_failure"] is False

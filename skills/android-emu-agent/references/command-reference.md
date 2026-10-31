@@ -137,6 +137,8 @@ payload is preserved; successful human output remains the session ID.
   after the new ZIP is complete.
 - `trace status [--session <session_id>]` List active traces.
 - `trace replay <path> [--until-failure]` Return a dry-run replay plan from an archive.
+  With `--until-failure`, include the first HTTP/daemon error or failed task result, even when
+  the task response is HTTP 200, and omit later exchanges. This does not execute requests.
 - `trace export <path> [--output <path>]` Export a trace archive to Markdown.
 
 Trace archive inputs and explicit output paths expand `~` and are relative to the CLI's current
