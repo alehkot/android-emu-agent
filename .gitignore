@@ -84,4 +84,3 @@ site/
 
 # Woodpecker build logs and test artifacts
 /.ci-output/
-/.ci/__pycache__/

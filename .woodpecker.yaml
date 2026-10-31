@@ -11,7 +11,9 @@ steps:
     image: bash
     commands:
       - mkdir -p .ci-output
-      - bash -o pipefail -c 'bash .ci/check.sh 2>&1 | tee .ci-output/build.log'
+      - git -c core.sshCommand='ssh -o BatchMode=yes' clone --quiet --no-checkout git@github.com:alehkot/build-scripts.git .ci-output/build-scripts
+      - git -C .ci-output/build-scripts checkout --quiet --detach f0bf333270639b4e26f8d6442d083dde0e2ca008
+      - bash .ci-output/build-scripts/run.sh bash .ci/check.sh
 
   - name: commit-comment
     image: bash
@@ -19,6 +21,6 @@ steps:
       GH_TOKEN:
         from_secret: github_comment_token
     commands:
-      - python3 -B .ci/report.py
+      - python3 -B .ci-output/build-scripts/report.py
     when:
       - status: [success, failure]
