@@ -1,0 +1,24 @@
+when:
+  - event: push
+    branch: [main, development]
+  - event: manual
+
+labels:
+  backend: local
+
+steps:
+  - name: build-and-test
+    image: bash
+    commands:
+      - mkdir -p .ci-output
+      - bash -o pipefail -c 'bash .ci/check.sh 2>&1 | tee .ci-output/build.log'
+
+  - name: commit-comment
+    image: bash
+    environment:
+      GH_TOKEN:
+        from_secret: github_comment_token
+    commands:
+      - python3 -B .ci/report.py
+    when:
+      - status: [success, failure]
