@@ -642,7 +642,7 @@ android-emu-agent debug mapping load [OPTIONS] PATH
 
 **Arguments**:
 
-- `PATH`: Path to ProGuard/R8 mapping.txt [required]
+- `PATH`: Path to ProGuard/R8 mapping.txt (relative to the invoking CLI directory) [required]
 
 **Options**:
 
@@ -1276,8 +1276,8 @@ android-emu-agent system permissions [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 - `list`: List requested and granted package...
-- `grant`: Grant a runtime permission.
-- `revoke`: Revoke a runtime permission.
+- `grant`: Grant a runtime permission; Android...
+- `revoke`: Revoke a runtime permission; Android...
 
 #### `android-emu-agent system permissions list`
 
@@ -1302,7 +1302,7 @@ android-emu-agent system permissions list [OPTIONS] PACKAGE
 
 #### `android-emu-agent system permissions grant`
 
-Grant a runtime permission.
+Grant a runtime permission; Android rejections exit 1, including with --json.
 
 **Usage**:
 
@@ -1324,7 +1324,7 @@ android-emu-agent system permissions grant [OPTIONS] PACKAGE PERMISSION
 
 #### `android-emu-agent system permissions revoke`
 
-Revoke a runtime permission.
+Revoke a runtime permission; Android rejections exit 1, including with --json.
 
 **Usage**:
 
@@ -1451,6 +1451,9 @@ android-emu-agent trace start [OPTIONS] SESSION_ID
 
 Stop recording and write a trace archive.
 
+Explicit output paths expand ~ and are relative to your current directory. Omit --output to use the
+daemon's default archive directory.
+
 **Usage**:
 
 ```console
@@ -1487,6 +1490,9 @@ android-emu-agent trace status [OPTIONS]
 
 Return a dry-run replay plan from a trace archive.
 
+Archive paths expand ~ and are relative to your current directory, even if the daemon started
+elsewhere.
+
 **Usage**:
 
 ```console
@@ -1506,6 +1512,9 @@ android-emu-agent trace replay [OPTIONS] PATH
 ### `android-emu-agent trace export`
 
 Export a trace archive to Markdown.
+
+Archive and explicit output paths expand ~ and are relative to your current directory. Omit --output
+and use --json to read the Markdown response without writing a report file.
 
 **Usage**:
 
@@ -2063,11 +2072,11 @@ android-emu-agent app [OPTIONS] COMMAND [ARGS]...
 
 - `install`: Install an APK on the target device.
 - `uninstall`: Uninstall a package from the target device.
-- `reset`: Clear app data for a package.
-- `launch`: Launch an app.
+- `reset`: Clear app data for a package; fail if...
+- `launch`: Launch an app; fail if Android rejects the...
 - `force-stop`: Force stop an app.
-- `deeplink`: Open a deeplink URI.
-- `intent`: Launch an explicit or implicit intent.
+- `deeplink`: Open a deeplink URI; fail if Android...
+- `intent`: Launch an explicit or implicit intent;...
 - `list`: List installed packages.
 - `current`: Show current foreground app/activity.
 - `task-stack`: Show current task stack.
@@ -2134,7 +2143,7 @@ android-emu-agent app uninstall [OPTIONS] PACKAGE
 
 ### `android-emu-agent app reset`
 
-Clear app data for a package.
+Clear app data for a package; fail if Android rejects the reset.
 
 **Usage**:
 
@@ -2154,7 +2163,7 @@ android-emu-agent app reset [OPTIONS] SESSION_ID PACKAGE
 
 ### `android-emu-agent app launch`
 
-Launch an app.
+Launch an app; fail if Android rejects the activity start.
 
 Follow this with a wait so the app is ready before the first snapshot. Activity names may be bare
 (MainActivity), package-relative (.ui.MainActivity), or fully qualified
@@ -2215,7 +2224,7 @@ android-emu-agent app force-stop [OPTIONS] SESSION_ID PACKAGE
 
 ### `android-emu-agent app deeplink`
 
-Open a deeplink URI.
+Open a deeplink URI; fail if Android cannot start a matching activity.
 
 **Usage**:
 
@@ -2236,7 +2245,7 @@ android-emu-agent app deeplink [OPTIONS] SESSION_ID URI
 
 ### `android-emu-agent app intent`
 
-Launch an explicit or implicit intent.
+Launch an explicit or implicit intent; fail if Android rejects the start.
 
 **Usage**:
 
@@ -2407,6 +2416,10 @@ android-emu-agent artifact screenshot [OPTIONS] [SESSION_ID]
 
 Pull logcat logs.
 
+ISO 8601 and relative since filters preserve their absolute instant across host and device
+timezones. T-separated ISO values without an offset mean UTC. Native space-separated logcat
+timestamps remain device-local; integers remain line counts.
+
 **Usage**:
 
 ```console
@@ -2488,7 +2501,8 @@ android-emu-agent emulator list-avds [OPTIONS]
 Start an AVD using the Android emulator CLI.
 
 Waits for boot by default, so the command returns only once Android is ready for a session. Get AVD
-names from 'emulator list-avds'.
+names from 'emulator list-avds'. A fixed --port already listed by ADB is rejected before launch,
+including with --no-wait-boot; the existing emulator is left untouched.
 
 Examples:
 
@@ -2561,12 +2575,12 @@ android-emu-agent emulator snapshot [OPTIONS] COMMAND [ARGS]...
 
 **Commands**:
 
-- `save`: Save emulator snapshot.
+- `save`: Save emulator snapshot, allowing up to 60...
 - `restore`: Restore emulator snapshot and restart by...
 
 #### `android-emu-agent emulator snapshot save`
 
-Save emulator snapshot.
+Save emulator snapshot, allowing up to 60 seconds for the daemon response.
 
 **Usage**:
 
@@ -2587,6 +2601,9 @@ android-emu-agent emulator snapshot save [OPTIONS] SERIAL NAME
 #### `android-emu-agent emulator snapshot restore`
 
 Restore emulator snapshot and restart by default.
+
+Allow up to 180 seconds for the daemon response, or 60 seconds with --no-restart. These HTTP limits
+do not change the emulator console deadlines.
 
 **Usage**:
 

@@ -15,6 +15,7 @@ from android_emu_agent.system import SystemManager
 @dataclass
 class ShellResult:
     output: str = ""
+    returncode: int = 0
 
 
 class FakeDevice:
@@ -24,6 +25,9 @@ class FakeDevice:
     def shell(self, command: str) -> ShellResult:
         self.commands.append(command)
         return ShellResult("ok")
+
+    def shell2(self, command: str) -> ShellResult:
+        return self.shell(command)
 
 
 @dataclass

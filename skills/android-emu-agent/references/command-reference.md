@@ -15,6 +15,14 @@ need to parse structured results programmatically).
 JSON responses also include `diagnostic_id`, and the same value is returned in the `x-diagnostic-id`
 header for request-level tracing.
 
+Commands using the standard response handlers exit `1` on HTTP client/server errors, including
+FastAPI request-validation failures that contain `detail` rather than an `error` object. For
+example, `reliability compile com.example --device emulator-5554 --mode speeed` is rejected, not a
+successful compile. With `--json`, the original response (including validation details and
+`diagnostic_id`) is preserved. Fix the rejected arguments before retrying. Failed HTTP responses do
+not trigger artifact copies with `--pull`; successful output and structured daemon-error handling
+are unchanged.
+
 Emulator lifecycle commands expect `adb` and `emulator` to be available via `PATH` or discoverable
 through `ANDROID_SDK_ROOT` / `ANDROID_HOME`. `avdmanager` is recommended when you need to create or
 inspect AVD definitions outside `android-emu-agent`.
@@ -83,7 +91,11 @@ terminate the process; inspect `daemon status` and `~/.android-emu-agent/daemon.
   `reverse-portrait`, `reverse-landscape`, `auto`).
 - `device set wifi <on_or_off> -d <device_serial>` Toggle WiFi.
 - `device set mobile <on_or_off> -d <device_serial>` Toggle mobile data.
-- `device set doze <on_or_off> -d <device_serial>` Toggle doze mode.
+- `device set doze <on_or_off> -d <device_serial>` Toggle doze mode. Disabled or stalled
+  force-idle rejections reported by Android return `ERR_DOZE_CHANGE_FAILED` and exit 1
+  (including `--json`), preserving the device diagnostic. The command does not enable a disabled
+  idle mode or retry the change;
+  a rejected request is not evidence that the app was tested in doze.
 
 ### System
 
@@ -101,7 +113,10 @@ terminate the process; inspect `daemon status` and `~/.android-emu-agent/daemon.
 
 System commands use validated package and permission names before invoking shell-backed Android
 services. Permission changes are useful for deterministic setup but still depend on Android's
-runtime permission rules for the target app and device.
+runtime permission rules for the target app and device. If Android rejects `pm grant` or
+`pm revoke`, the command reports `ERR_PERMISSION_CHANGE_FAILED` and exits `1`, including with
+`--json`; it does not claim that the permission was changed. Check the error output, the app's
+declared runtime permissions, and applicable user/device policy before retrying.
 
 ### Session
 
@@ -123,6 +138,11 @@ payload is preserved; successful human output remains the session ID.
 - `trace status [--session <session_id>]` List active traces.
 - `trace replay <path> [--until-failure]` Return a dry-run replay plan from an archive.
 - `trace export <path> [--output <path>]` Export a trace archive to Markdown.
+
+Trace archive inputs and explicit output paths expand `~` and are relative to the CLI's current
+directory, even if the daemon started elsewhere. Omitting `trace stop --output` preserves the
+daemon's default archive directory. For `trace export`, omit `--output` and use `--json` to read
+the Markdown response without writing a report file.
 
 Trace archives record daemon request/response exchanges for the active session, including
 `diagnostic_id`, request payloads with sensitive fields redacted, response payloads, status codes,
@@ -306,9 +326,16 @@ return `ERR_EXPECTATION_FAILED`; `current-app` without an expected package or ac
 - `app resolve-intent --session <session_id> [--action <action>] [--data <uri>]` Resolve an intent
   without launching it.
 - `app force-stop <session_id> <package>` Force stop app.
-- `app reset <session_id> <package>` Clear app data.
+- `app reset <session_id> <package>` Clear app data. A rejected Android `pm clear` returns
+  `ERR_ADB_COMMAND` and a nonzero CLI exit status; do not assume the app data was cleared.
 - `app deeplink <session_id> <uri>` Open a deep link, including opaque Android URIs such as
   `mailto:`, `tel:`, `content:`, and `market:`.
+
+Rejected `app launch`, `app intent`, and `app deeplink` starts return `ERR_LAUNCH_FAILED` and a
+nonzero CLI exit status, including on Android versions that print an error with a zero shell status.
+Check the installed activity, intent handler, and export/permission requirements before retrying. A
+normal already-running/task-to-front warning is not a launch failure. A successful start still needs
+an appropriate wait before interacting with the app.
 
 Use `--activity` to launch a specific screen directly. Use `--wait-debugger` when attaching a
 debugger to the app at startup:
@@ -355,7 +382,8 @@ debugger to the app at startup:
 - `debug eval <expression> --session <session_id> [--thread <name>] [--frame <idx>]` Evaluate a
   constrained expression (field access or `toString()`).
 - `debug mapping load <path> --session <session_id>` Load ProGuard/R8 mapping for deobfuscated
-  class/method/field names.
+  class/method/field names. Relative paths use the invoking CLI directory; `~` expands to the
+  caller's home before the path reaches the daemon/JVM.
 - `debug mapping clear --session <session_id>` Clear loaded mapping from the active debug bridge.
 - `debug step-over --session <session_id> [--thread <name>] [--timeout-seconds <sec>]` Step to the
   next line and return stopped location + locals.
@@ -459,6 +487,11 @@ Use `--since` to limit logcat by line count, native logcat timestamp, ISO 8601, 
 - `artifact logs <session_id> --since "10m ago"` Relative timestamp.
 - `artifact logs <session_id> --since 100` Show last 100 lines.
 
+ISO 8601 and relative lower bounds are sent as fractional epoch seconds, independent of host and
+device timezones. A T-separated ISO value without an offset means UTC. Native space-separated
+logcat timestamp strings (including the optional year) remain device-local; integers remain line
+counts. These are buffered captures, not live streams.
+
 Artifact log capture is bounded and does not stream. Use `adb -s <emulator-serial> logcat` for a
 live stream; the retained `--follow` compatibility flag returns `ERR_LOG_FOLLOW_UNSUPPORTED`.
 
@@ -470,6 +503,8 @@ compatible alias.
 - `emulator list-avds` List AVDs known to the Android emulator CLI.
 - `emulator start <avd_name>` Start an AVD and wait for boot by default.
 - `emulator start <avd_name> --port <port>` Use an even fixed console port from 5554 through 5584.
+  A port already listed by ADB is rejected before launch, including with `--no-wait-boot`;
+  choose a free port or omit `--port` for automatic selection. Existing emulators are untouched.
 - `emulator start <avd_name> --snapshot <name> --no-snapshot-save` Start from a named snapshot
   without saving Quick Boot state on exit.
 - `emulator start <avd_name> --cold-boot` Start without loading Quick Boot or snapshot state.
@@ -481,6 +516,11 @@ compatible alias.
 Snapshot names accept 1-128 letters, digits, dots, underscores, or hyphens. Spaces and line breaks
 are rejected before the emulator console is contacted. When the console requests authentication,
 snapshot commands use the token from `~/.emulator_console_auth_token` automatically.
+
+Snapshot save and restore with `--no-restart` allow 60 seconds for the daemon's HTTP response;
+restart-backed restore allows 180 seconds. This avoids the ordinary 10-second client limit cutting
+off a slower snapshot operation. The emulator console's own deadlines remain unchanged. An HTTP
+timeout does not prove the snapshot was cancelled; do not automatically replay a save or restore.
 
 ### Reliability
 

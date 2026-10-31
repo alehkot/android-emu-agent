@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from urllib.parse import urlencode
 
 import typer
@@ -447,18 +448,22 @@ def debug_eval(
 
 @mapping_app.command("load")
 def debug_mapping_load(
-    path: str = typer.Argument(..., help="Path to ProGuard/R8 mapping.txt"),
+    path: str = typer.Argument(
+        ..., help="Path to ProGuard/R8 mapping.txt (relative to the invoking CLI directory)"
+    ),
     session_id: str = typer.Option(..., "--session", help="Session ID"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Load a ProGuard/R8 mapping file for deobfuscation."""
+    # Preserve blank-path validation in the daemon; bind nonblank host paths to this caller.
+    mapping_path = str(Path(path).expanduser().absolute()) if path.strip() else path
     client = DaemonClient(timeout=30.0)
     resp = client.request(
         "POST",
         "/debug/mapping/load",
         json_body={
             "session_id": session_id,
-            "path": path,
+            "path": mapping_path,
         },
     )
     client.close()

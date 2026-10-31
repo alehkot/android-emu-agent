@@ -34,12 +34,8 @@ async def test_launch_preserves_activity_class(
     manager = DeviceManager()
     device = MagicMock()
     if resolved:
-        device.shell.side_effect = [
-            f"priority=0 preferredOrder=0\ncom.example.app/{activity}",
-            "Starting: Intent { ... }",
-        ]
-    else:
-        device.shell.return_value = "Starting: Intent { ... }"
+        device.shell.return_value = f"priority=0 preferredOrder=0\ncom.example.app/{activity}"
+    device.shell2.return_value = SimpleNamespace(returncode=0, output="Starting: Intent { ... }")
 
     with patch.object(manager, "get_adb_device", new=AsyncMock(return_value=device)):
         result = await manager.app_launch(
@@ -52,8 +48,9 @@ async def test_launch_preserves_activity_class(
     assert result == expected
     expected_args = ["am", "start", *(["-D"] if wait_debugger else [])]
     expected_args.extend(["-n", f"com.example.app/{expected}"])
-    assert shlex.split(device.shell.call_args.args[0]) == expected_args
-    assert device.shell.call_count == (2 if resolved else 1)
+    assert shlex.split(device.shell2.call_args.args[0]) == expected_args
+    assert device.shell2.call_count == 1
+    assert device.shell.call_count == (1 if resolved else 0)
     if resolved:
         assert shlex.split(device.shell.call_args_list[0].args[0]) == [
             "cmd",
@@ -75,7 +72,7 @@ async def test_launch_endpoint_and_task_preserve_activity_class(
     """Real request normalization and endpoint dispatch reach the real manager."""
     manager = DeviceManager()
     device = MagicMock()
-    device.shell.return_value = "Starting: Intent { ... }"
+    device.shell2.return_value = SimpleNamespace(returncode=0, output="Starting: Intent { ... }")
     core = SimpleNamespace(
         device_manager=manager,
         session_manager=SimpleNamespace(
@@ -118,7 +115,7 @@ async def test_launch_endpoint_and_task_preserve_activity_class(
             assert isinstance(result, dict)
             assert result["activity"] == expected
         assert result["status"] == "done"
-    assert shlex.split(device.shell.call_args.args[0]) == [
+    assert shlex.split(device.shell2.call_args.args[0]) == [
         "am",
         "start",
         "-D",

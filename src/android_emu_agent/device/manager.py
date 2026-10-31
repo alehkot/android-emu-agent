@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -307,7 +308,11 @@ class DeviceManager:
             raise RuntimeError(f"Device not found: {serial}")
 
         def _apply() -> None:
-            device.shell(f"pm clear {shlex.quote(package)}")
+            command = f"pm clear {shlex.quote(package)}"
+            result = device.shell2(command)
+            if result.returncode != 0:
+                reason = result.output.strip() or f"Exit status {result.returncode}"
+                raise adb_command_error(command, reason)
 
         await run_device_io(device, _apply)
 
@@ -434,10 +439,20 @@ class DeviceManager:
             raise RuntimeError(f"Device not found: {serial}")
 
         def _apply() -> None:
-            if enabled:
-                device.shell("dumpsys deviceidle force-idle")
-            else:
-                device.shell("dumpsys deviceidle unforce")
+            command = "dumpsys deviceidle force-idle" if enabled else "dumpsys deviceidle unforce"
+            output = str(device.shell(command)).strip()
+            # dumpsys discards the service's shell-command result code. Inspect its
+            # rejection diagnostic rather than reporting a failed idle precondition as done.
+            if re.search(r"^Unable to go (?:deep |light )?idle;", output, re.MULTILINE):
+                raise AgentError(
+                    code="ERR_DOZE_CHANGE_FAILED",
+                    message=f"Device rejected doze change: {output}",
+                    context={"serial": serial, "command": command, "output": output},
+                    remediation=(
+                        "Check whether this device supports and enables the requested idle mode; "
+                        "do not treat this run as a successful doze test."
+                    ),
+                )
 
         await run_device_io(device, _apply)
 
@@ -497,7 +512,7 @@ class DeviceManager:
             if wait_for_debugger:
                 command_parts.append("-D")
             command_parts.extend(["-n", component])
-            device.shell(" ".join(shlex.quote(part) for part in command_parts))
+            self._start_activity(device, command_parts)
             return target_activity
 
         return await run_device_io(device, _launch)
@@ -560,10 +575,32 @@ class DeviceManager:
             if package:
                 command_parts.append(package)
 
-            command = " ".join(shlex.quote(part) for part in command_parts)
-            device.shell(command)
+            self._start_activity(device, command_parts)
 
         await run_device_io(device, _start)
+
+    @staticmethod
+    def _start_activity(device: AdbDevice, command_parts: list[str]) -> None:
+        """Check both shell status and older Android's zero-status launch errors."""
+        command = " ".join(shlex.quote(part) for part in command_parts)
+        result = device.shell2(command)
+        output = result.output.strip()
+        # Older ActivityManager implementations print rejection diagnostics but
+        # return zero. Match diagnostic lines, not words in an echoed URI/intent.
+        rejected = any(
+            re.match(r"^(?:Error:|Error type \d+\b)", line.strip()) for line in output.splitlines()
+        )
+        if result.returncode != 0 or rejected:
+            reason = output or f"Exit status {result.returncode}"
+            raise AgentError(
+                code="ERR_LAUNCH_FAILED",
+                message=f"Android rejected the activity start: {reason}",
+                context={"command": command, "exit_code": result.returncode, "output": output},
+                remediation=(
+                    "Verify the activity or intent handler is installed, enabled, and accessible "
+                    "with the required permissions"
+                ),
+            )
 
     async def app_current(self, serial: str) -> dict[str, str | None]:
         """Get the current foreground app/activity."""
@@ -966,6 +1003,12 @@ class DeviceManager:
 
         emulator_path = self._resolve_sdk_tool("emulator")
         existing_serials = await self._list_running_emulator_serials()
+        if port is not None and f"emulator-{port}" in existing_serials:
+            raise emulator_launch_failed_error(
+                avd_name,
+                f"console port {port} is already used by emulator-{port}; choose a free port "
+                "or omit --port for automatic selection",
+            )
 
         args = [str(emulator_path), "-avd", avd_name]
         if port is not None:

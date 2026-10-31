@@ -63,6 +63,10 @@ Optional: clear app data:
 android-emu-agent app reset <session-id> com.example.app
 ```
 
+Check the exit status before continuing: if Android rejects `pm clear` (for example, for a missing
+package or a user restriction), reset returns `ERR_ADB_COMMAND` rather than reporting success. The
+original app data may still be present.
+
 Launch the app:
 
 ```bash
@@ -309,6 +313,11 @@ android-emu-agent trace stop <session-id> --output ./artifacts/checkout-flake.ae
 android-emu-agent trace replay ./artifacts/checkout-flake.aea-trace.zip --until-failure
 android-emu-agent trace export ./artifacts/checkout-flake.aea-trace.zip --output ./artifacts/checkout-flake.md
 ```
+
+Trace input paths and explicit output paths expand `~` and are relative to the directory where you
+run the CLI, not the daemon's working directory. With no `--output`, `trace stop` uses the daemon's
+default archive directory. For `trace export`, omit `--output` and use `--json` to read the
+Markdown response without writing a report file.
 
 Diagnostics and traces redact `set_text` input in JSON tasks using `action`, `kind` plus
 `operation`, or `kind` plus `op`. This applies to newly recorded data; existing diagnostics and

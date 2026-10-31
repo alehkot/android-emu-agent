@@ -7,6 +7,7 @@ import typer
 from android_emu_agent.cli.daemon_client import DaemonClient
 from android_emu_agent.cli.utils import (
     EMULATOR_RESTORE_TIMEOUT,
+    EMULATOR_SNAPSHOT_TIMEOUT,
     EMULATOR_START_TIMEOUT,
     EMULATOR_STOP_TIMEOUT,
     handle_output_response,
@@ -65,7 +66,8 @@ def emulator_start(
     """Start an AVD using the Android emulator CLI.
 
     Waits for boot by default, so the command returns only once Android is ready for a session.
-    Get AVD names from 'emulator list-avds'.
+    Get AVD names from 'emulator list-avds'. A fixed --port already listed by ADB is rejected
+    before launch, including with --no-wait-boot; the existing emulator is left untouched.
 
     Examples:
 
@@ -125,8 +127,8 @@ def emulator_snapshot_save(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Save emulator snapshot."""
-    client = DaemonClient()
+    """Save emulator snapshot, allowing up to 60 seconds for the daemon response."""
+    client = DaemonClient(timeout=EMULATOR_SNAPSHOT_TIMEOUT)
     resp = client.request(
         "POST",
         "/emulator/snapshot_save",
@@ -150,8 +152,14 @@ def emulator_snapshot_restore(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Restore emulator snapshot and restart by default."""
-    client = DaemonClient(timeout=EMULATOR_RESTORE_TIMEOUT if restart else 10.0)
+    """Restore emulator snapshot and restart by default.
+
+    Allow up to 180 seconds for the daemon response, or 60 seconds with --no-restart.
+    These HTTP limits do not change the emulator console deadlines.
+    """
+    client = DaemonClient(
+        timeout=EMULATOR_RESTORE_TIMEOUT if restart else EMULATOR_SNAPSHOT_TIMEOUT
+    )
     resp = client.request(
         "POST",
         "/emulator/snapshot_restore",

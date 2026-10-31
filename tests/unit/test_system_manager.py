@@ -13,6 +13,7 @@ from android_emu_agent.system.manager import SystemManager
 @dataclass
 class ShellResult:
     output: str
+    returncode: int = 0
 
 
 class FakeDevice:
@@ -23,6 +24,9 @@ class FakeDevice:
     def shell(self, command: str) -> ShellResult:
         self.commands.append(command)
         return ShellResult(self.outputs.get(command, "ok"))
+
+    def shell2(self, command: str) -> ShellResult:
+        return self.shell(command)
 
 
 def test_parse_permissions_combines_requested_and_runtime_state() -> None:

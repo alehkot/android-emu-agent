@@ -39,10 +39,7 @@ class SystemManager:
     ) -> dict[str, Any]:
         """Grant a runtime permission."""
         self._validate_permission(permission)
-        output = await self._shell(
-            device,
-            f"pm grant {shlex.quote(package)} {shlex.quote(permission)}",
-        )
+        output = await self._permission_shell(device, package, permission, "grant")
         return {
             "status": "done",
             "package": package,
@@ -59,10 +56,7 @@ class SystemManager:
     ) -> dict[str, Any]:
         """Revoke a runtime permission."""
         self._validate_permission(permission)
-        output = await self._shell(
-            device,
-            f"pm revoke {shlex.quote(package)} {shlex.quote(permission)}",
-        )
+        output = await self._permission_shell(device, package, permission, "revoke")
         return {
             "status": "done",
             "package": package,
@@ -119,6 +113,36 @@ class SystemManager:
                 )
 
         return sorted(requested.values(), key=lambda item: item["permission"])
+
+    async def _permission_shell(
+        self, device: Any, package: str, permission: str, operation: str
+    ) -> str:
+        """Preserve Android's exit status instead of treating rejection text as success."""
+        command = f"pm {operation} {shlex.quote(package)} {shlex.quote(permission)}"
+
+        def _run() -> str:
+            result = device.shell2(command)
+            output = result.output.strip()
+            if result.returncode != 0:
+                reason = output or f"Exit status {result.returncode}"
+                raise AgentError(
+                    code="ERR_PERMISSION_CHANGE_FAILED",
+                    message=f"Permission {operation} failed: {reason}",
+                    context={
+                        "package": package,
+                        "permission": permission,
+                        "operation": operation,
+                        "exit_code": result.returncode,
+                        "output": output,
+                    },
+                    remediation=(
+                        "Check that the installed app declares this runtime permission and that "
+                        "Android user or device policy permits the change."
+                    ),
+                )
+            return str(output)
+
+        return await asyncio.to_thread(_run)
 
     async def _shell(self, device: Any, command: str) -> str:
         def _run() -> str:

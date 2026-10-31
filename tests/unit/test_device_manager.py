@@ -289,14 +289,15 @@ class TestAppLaunch:
 
         manager = DeviceManager()
         mock_device = MagicMock()
-        mock_device.shell.return_value = "Starting: Intent { ... }"
+        mock_device.shell2.return_value.returncode = 0
+        mock_device.shell2.return_value.output = "Starting: Intent { ... }"
 
         with patch.object(manager, "get_adb_device", return_value=mock_device):
             result = await manager.app_launch(
                 "emulator-5554", "com.example.app", activity=".MainActivity"
             )
 
-        call_arg = mock_device.shell.call_args[0][0]
+        call_arg = mock_device.shell2.call_args[0][0]
         assert "am start" in call_arg
         assert "com.example.app/.MainActivity" in call_arg
         assert result == ".MainActivity"
@@ -308,12 +309,13 @@ class TestAppLaunch:
 
         manager = DeviceManager()
         mock_device = MagicMock()
-        mock_device.shell.return_value = "Starting: Intent { ... }"
+        mock_device.shell2.return_value.returncode = 0
+        mock_device.shell2.return_value.output = "Starting: Intent { ... }"
 
         with patch.object(manager, "get_adb_device", return_value=mock_device):
             await manager.app_launch("emulator-5554", "com.example.app", activity="MainActivity;id")
 
-        call_arg = mock_device.shell.call_args[0][0]
+        call_arg = mock_device.shell2.call_args[0][0]
         assert "'com.example.app/.MainActivity;id'" in call_arg
 
     @pytest.mark.asyncio
@@ -323,7 +325,8 @@ class TestAppLaunch:
 
         manager = DeviceManager()
         mock_device = MagicMock()
-        mock_device.shell.return_value = "Starting: Intent { ... }"
+        mock_device.shell2.return_value.returncode = 0
+        mock_device.shell2.return_value.output = "Starting: Intent { ... }"
 
         with patch.object(manager, "get_adb_device", return_value=mock_device):
             await manager.app_launch(
@@ -333,7 +336,7 @@ class TestAppLaunch:
                 wait_for_debugger=True,
             )
 
-        call_arg = mock_device.shell.call_args[0][0]
+        call_arg = mock_device.shell2.call_args[0][0]
         assert "am start -D -n" in call_arg
 
     @pytest.mark.asyncio
@@ -343,11 +346,11 @@ class TestAppLaunch:
 
         manager = DeviceManager()
         mock_device = MagicMock()
-        # First call: resolve activity, second call: launch
-        mock_device.shell.side_effect = [
-            "priority=0 preferredOrder=0\ncom.example.app/.LauncherActivity",
-            "Starting: Intent { ... }",
-        ]
+        mock_device.shell.return_value = (
+            "priority=0 preferredOrder=0\ncom.example.app/.LauncherActivity"
+        )
+        mock_device.shell2.return_value.returncode = 0
+        mock_device.shell2.return_value.output = "Starting: Intent { ... }"
 
         with patch.object(manager, "get_adb_device", return_value=mock_device):
             result = await manager.app_launch("emulator-5554", "com.example.app")
@@ -384,11 +387,12 @@ class TestAppReset:
 
         manager = DeviceManager()
         mock_device = MagicMock()
+        mock_device.shell2.return_value.returncode = 0
 
         with patch.object(manager, "get_adb_device", return_value=mock_device):
             await manager.app_reset("emulator-5554", "com.example.app;id")
 
-        call_arg = mock_device.shell.call_args[0][0]
+        call_arg = mock_device.shell2.call_args[0][0]
         assert call_arg == "pm clear 'com.example.app;id'"
 
 
@@ -402,12 +406,15 @@ class TestAppDeeplink:
 
         manager = DeviceManager()
         mock_device = MagicMock()
-        mock_device.shell.return_value = "Starting: Intent { act=android.intent.action.VIEW ... }"
+        mock_device.shell2.return_value.returncode = 0
+        mock_device.shell2.return_value.output = (
+            "Starting: Intent { act=android.intent.action.VIEW ... }"
+        )
 
         with patch.object(manager, "get_adb_device", return_value=mock_device):
             await manager.app_deeplink("emulator-5554", "myapp://deep/link")
 
-        call_arg = mock_device.shell.call_args[0][0]
+        call_arg = mock_device.shell2.call_args[0][0]
         assert "am start" in call_arg
         assert "android.intent.action.VIEW" in call_arg
         assert "myapp://deep/link" in call_arg
@@ -419,12 +426,13 @@ class TestAppDeeplink:
 
         manager = DeviceManager()
         mock_device = MagicMock()
-        mock_device.shell.return_value = "Starting: Intent { ... }"
+        mock_device.shell2.return_value.returncode = 0
+        mock_device.shell2.return_value.output = "Starting: Intent { ... }"
 
         with patch.object(manager, "get_adb_device", return_value=mock_device):
             await manager.app_deeplink("emulator-5554", "https://example.com/path")
 
-        call_arg = mock_device.shell.call_args[0][0]
+        call_arg = mock_device.shell2.call_args[0][0]
         assert "https://example.com/path" in call_arg
 
     @pytest.mark.asyncio
@@ -434,7 +442,8 @@ class TestAppDeeplink:
 
         manager = DeviceManager()
         mock_device = MagicMock()
-        mock_device.shell.return_value = "Starting: Intent { ... }"
+        mock_device.shell2.return_value.returncode = 0
+        mock_device.shell2.return_value.output = "Starting: Intent { ... }"
 
         with patch.object(manager, "get_adb_device", return_value=mock_device):
             await manager.app_deeplink(
@@ -443,7 +452,7 @@ class TestAppDeeplink:
                 wait_for_debugger=True,
             )
 
-        call_arg = mock_device.shell.call_args[0][0]
+        call_arg = mock_device.shell2.call_args[0][0]
         assert "am start -D" in call_arg
 
 
@@ -457,7 +466,8 @@ class TestAppIntent:
 
         manager = DeviceManager()
         mock_device = MagicMock()
-        mock_device.shell.return_value = "Starting: Intent { ... }"
+        mock_device.shell2.return_value.returncode = 0
+        mock_device.shell2.return_value.output = "Starting: Intent { ... }"
 
         with patch.object(manager, "get_adb_device", return_value=mock_device):
             await manager.app_start_intent(
@@ -467,7 +477,7 @@ class TestAppIntent:
                 package="com.example.app",
             )
 
-        call_arg = mock_device.shell.call_args[0][0]
+        call_arg = mock_device.shell2.call_args[0][0]
         assert "android.intent.action.MAIN" in call_arg
         assert "com.example.app/.MainActivity" in call_arg
         assert call_arg.endswith("com.example.app")

@@ -83,7 +83,7 @@ def system_permissions_grant(
     session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Grant a runtime permission."""
+    """Grant a runtime permission; Android rejections exit 1, including with --json."""
     payload = require_target(device, session_id)
     payload.update({"package": package, "permission": permission})
     client = DaemonClient()
@@ -100,7 +100,7 @@ def system_permissions_revoke(
     session_id: str | None = typer.Option(None, "--session", "-s", help="Session ID"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Revoke a runtime permission."""
+    """Revoke a runtime permission; Android rejections exit 1, including with --json."""
     payload = require_target(device, session_id)
     payload.update({"package": package, "permission": permission})
     client = DaemonClient()
