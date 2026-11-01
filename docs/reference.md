@@ -2417,6 +2417,8 @@ android-emu-agent artifact screenshot [OPTIONS] [SESSION_ID]
 
 Pull logcat logs.
 
+Failed logcat captures report an error, not a successful artifact path.
+
 ISO 8601 and relative since filters preserve their absolute instant across host and device
 timezones. T-separated ISO values without an offset mean UTC. Native space-separated logcat
 timestamps remain device-local; integers remain line counts.

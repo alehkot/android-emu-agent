@@ -191,15 +191,31 @@ class ArtifactManager:
             raw_output = output if isinstance(output, str) else str(result)
 
             # Some devices don't support --pid; retry without it.
-            if package_pid and "unknown option --pid" in raw_output.lower():
+            initial_exit_code = getattr(result, "exit_code", None)
+            if (
+                package_pid
+                and initial_exit_code != 0
+                and "unknown option --pid" in raw_output.lower()
+            ):
                 fallback_parts = [part for part in cmd_parts if not part.startswith("--pid=")]
                 fallback_cmd = " ".join(shlex.quote(part) for part in fallback_parts)
-                fallback_result = device.shell(fallback_cmd)
-                fallback_output = getattr(fallback_result, "output", None)
-                raw_output = (
-                    fallback_output if isinstance(fallback_output, str) else str(fallback_result)
-                )
+                result = device.shell(fallback_cmd)
+                cmd = fallback_cmd
+                fallback_output = getattr(result, "output", None)
+                raw_output = fallback_output if isinstance(fallback_output, str) else str(result)
                 pid_filter_used = False
+
+            # uiautomator2 returns diagnostics as output even when logcat fails.
+            # Validate the final capture (including a --pid retry) before package
+            # filtering can hide its error or an existing artifact is overwritten.
+            exit_code = getattr(result, "exit_code", None)
+            if isinstance(exit_code, int) and exit_code != 0:
+                raise AgentError(
+                    code="ERR_LOGCAT_FAILED",
+                    message=f"Logcat capture failed (exit status {exit_code})",
+                    context={"command": cmd, "exit_code": exit_code, "output": raw_output},
+                    remediation="Check the device logcat diagnostic and capture options, then retry.",
+                )
 
             if package and not pid_filter_used:
                 filtered = [line for line in raw_output.splitlines() if package in line]

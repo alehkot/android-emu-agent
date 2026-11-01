@@ -494,6 +494,12 @@ device timezones. A T-separated ISO value without an offset means UTC. Native sp
 logcat timestamp strings (including the optional year) remain device-local; integers remain line
 counts. These are buffered captures, not live streams.
 
+A nonzero logcat exit status returns `ERR_LOGCAT_FAILED` rather than a successful path, even if the
+diagnostic is empty or package filtering would hide it. Failed captures do not replace an existing
+explicit log filename. An unsupported `--pid` may still retry without that option; the retry must
+succeed. Debug bundles also report logcat failure instead of publishing a bundle; a screenshot
+already captured before the failure may remain.
+
 Artifact log capture is bounded and does not stream. Use `adb -s <emulator-serial> logcat` for a
 live stream; the retained `--follow` compatibility flag returns `ERR_LOG_FOLLOW_UNSUPPORTED`.
 

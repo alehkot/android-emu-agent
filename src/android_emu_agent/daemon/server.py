@@ -2058,7 +2058,12 @@ async def debug_bundle(req: SessionRequest) -> EndpointResponse:
         return _error_response(device_offline_error(session.device_serial), status_code=404)
 
     snapshot_json = await core.session_manager.get_last_snapshot_json(req.session_id)
-    path = await core.artifact_manager.create_debug_bundle(device, req.session_id, snapshot_json)
+    try:
+        path = await core.artifact_manager.create_debug_bundle(
+            device, req.session_id, snapshot_json
+        )
+    except AgentError as exc:
+        return _error_response(exc, status_code=400)
     return {"status": "done", "path": str(path)}
 
 

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from android_emu_agent.errors import AgentError
@@ -191,3 +192,48 @@ def test_artifact_logs_rejects_non_streaming_follow_mode() -> None:
     data = resp.json()
     assert data["error"]["code"] == "ERR_LOG_FOLLOW_UNSUPPORTED"
     assert artifact_manager.calls == []
+
+
+@pytest.mark.parametrize("endpoint", ["logs", "debug_bundle"])
+def test_logcat_exit_failure_reaches_api_and_cli(tmp_path, endpoint):
+    """Exercise real manager errors through the API and both CLI output modes."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from typer.testing import CliRunner
+    from uiautomator2.abstract import ShellResponse
+
+    from android_emu_agent.artifacts.manager import ArtifactManager
+    from android_emu_agent.cli.commands import artifact
+    from android_emu_agent.cli.main import app
+    from android_emu_agent.daemon import server
+
+    manager = ArtifactManager(tmp_path)
+    device = MagicMock()
+    device.shell.return_value = ShellResponse("logcat: read failure", 1)
+    with _client_with_core() as (client, _):
+        server.app.state.core.artifact_manager = manager
+        with (
+            patch.object(DummyDeviceManager, "get_u2_device", AsyncMock(return_value=device)),
+            patch.object(
+                DummySessionManager,
+                "get_last_snapshot_json",
+                AsyncMock(return_value=None),
+                create=True,
+            ),
+            patch.object(manager, "screenshot", AsyncMock(return_value=tmp_path / "shot.png")),
+        ):
+            response = client.post(f"/artifacts/{endpoint}", json={"session_id": "s-abc123"})
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["error"]["code"] == "ERR_LOGCAT_FAILED"
+    assert payload["error"]["context"]["exit_code"] == 1
+    assert "path" not in payload
+    assert not list(tmp_path.iterdir())
+    command = "logs" if endpoint == "logs" else "bundle"
+    for flags in ([], ["--json"]):
+        with patch.object(artifact, "DaemonClient") as client_class:
+            client_class.return_value.request.return_value = response
+            result = CliRunner().invoke(app, ["artifact", command, "s-abc123", *flags])
+        assert result.exit_code == 1
+        assert "ERR_LOGCAT_FAILED" in result.output
