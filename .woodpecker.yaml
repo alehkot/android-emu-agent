@@ -5,6 +5,8 @@ when:
 
 labels:
   backend: local
+  pool: pi5
+  platform: linux/arm64
 
 steps:
   - name: build-and-test
