@@ -5,17 +5,19 @@ when:
 
 labels:
   backend: local
-  pool: pi5
-  platform: linux/arm64
+  platform: darwin/arm64
 
 steps:
   - name: build-and-test
     image: bash
+    environment:
+      JAVA_HOME: /opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
+      UV_PYTHON: "3.12"
     commands:
       - mkdir -p .ci-output
-      - git -c core.sshCommand='ssh -i /var/lib/woodpecker-worker/.ssh/build-scripts -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/var/lib/woodpecker-worker/.ssh/known_hosts' clone --quiet --no-checkout git@github.com:alehkot/build-scripts.git .ci-output/build-scripts
+      - git clone --quiet --no-checkout git@github.com:alehkot/build-scripts.git .ci-output/build-scripts
       - git -C .ci-output/build-scripts checkout --quiet --detach f0bf333270639b4e26f8d6442d083dde0e2ca008
-      - bash .ci-output/build-scripts/run.sh bash .ci/check.sh
+      - bash .ci-output/build-scripts/run.sh caffeinate -i bash .ci/check.sh
 
   - name: commit-comment
     image: bash
