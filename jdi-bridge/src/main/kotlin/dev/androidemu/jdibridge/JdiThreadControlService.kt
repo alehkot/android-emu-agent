@@ -172,7 +172,6 @@ internal class JdiThreadControlService(
                 if (current == null || current.request != stepRequest) {
                     null
                 } else {
-                    state.activeStep = null
                     current
                 }
             }
@@ -183,12 +182,24 @@ internal class JdiThreadControlService(
         }
 
         clearStepRequest(machine, stepRequest)
-        val payload = frameValueService.buildStoppedPayload(event.thread(), event.location())
-        markThreadSuspended(event.thread())
-        pending.completion.complete(payload)
-
-        // Keep thread suspended on the new line for follow-up step/inspect commands.
-        return false
+        // Keep the pending step reachable until every JDI read has succeeded. A
+        // disconnect while constructing the payload must still complete its waiter.
+        val thread = event.thread()
+        val payload = frameValueService.buildStoppedPayload(thread, event.location())
+        val threadId = thread.uniqueID()
+        return synchronized(state.lock) {
+            if (state.activeStep !== pending) {
+                // A timeout/disconnect already retired this event. Do not mutate a
+                // newer step or leave its thread suspended on a stale event.
+                true
+            } else {
+                state.suspendedAtMs.getOrPut(threadId) { System.currentTimeMillis() }
+                state.activeStep = null
+                pending.completion.complete(payload)
+                // Keep the thread suspended for follow-up step/inspect commands.
+                false
+            }
+        }
     }
 
     fun markThreadSuspended(thread: ThreadReference) {
