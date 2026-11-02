@@ -108,7 +108,10 @@ A successful run returns `status: done` and `passed: true` in JSON output. A fai
 `status: failed` with the failing step, verifier, operation, and response payload. `task run` exits
 with code `0` on success and `1` when a step or verifier fails, in both human and `--json` output
 modes. The complete failure report is printed before exiting. `--continue-on-failure` continues
-collecting results; it does not turn a failed run into a successful exit.
+collecting results, including the remaining attached verifiers after a verifier fails. The first
+failure remains the report's primary failure even if later checks pass or also fail. Attached
+verifiers are still skipped when their step's own operation fails; later steps and final verifiers continue.
+The flag does not turn a failed run into a successful exit.
 
 After a failed run, capture evidence before changing the screen:
 

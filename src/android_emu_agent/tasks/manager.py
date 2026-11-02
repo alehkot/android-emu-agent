@@ -127,7 +127,12 @@ class TaskManager:
         failure: dict[str, Any] | None = None
 
         for step in normalized["steps"]:
-            result = await self._run_step(step, session_id=session_id, dispatcher=dispatcher)
+            result = await self._run_step(
+                step,
+                session_id=session_id,
+                dispatcher=dispatcher,
+                stop_on_failure=stop_on_failure,
+            )
             step_results.append(result)
             if not result["passed"] and failure is None:
                 failure = self._failure_payload("step", result)
@@ -169,6 +174,7 @@ class TaskManager:
         *,
         session_id: str,
         dispatcher: TaskDispatcher,
+        stop_on_failure: bool,
     ) -> dict[str, Any]:
         call = self._call_for_step(step, session_id=session_id)
         started = time.perf_counter()
@@ -188,8 +194,10 @@ class TaskManager:
                 verifier_results.append(verifier_result)
                 if not verifier_result["passed"]:
                     passed = False
-                    failed_verifier = verifier_result
-                    break
+                    if failed_verifier is None:
+                        failed_verifier = verifier_result
+                    if stop_on_failure:
+                        break
 
         elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
         return {

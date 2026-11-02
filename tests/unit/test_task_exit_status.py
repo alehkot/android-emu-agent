@@ -21,7 +21,7 @@ def _task_file(tmp_path: Path, script: bool, failure_scope: str) -> Path:
     if script:
         lines = ["session s-1", "home"]
         if failure_scope == "step-verifier":
-            lines.append('verify text "Ready"')
+            lines.extend(['verify text "Ready"', "verify idle"])
         lines.append("back")
         if failure_scope == "final-verifier":
             lines.append('expect text "Ready"')
@@ -29,7 +29,10 @@ def _task_file(tmp_path: Path, script: bool, failure_scope: str) -> Path:
     else:
         spec = {"session_id": "s-1", "steps": [{"action": "home"}, {"action": "back"}]}
         if failure_scope == "step-verifier":
-            spec["steps"][0]["verify"] = [{"type": "text", "text": "Ready"}]
+            spec["steps"][0]["verify"] = [
+                {"type": "text", "text": "Ready"},
+                {"type": "idle"},
+            ]
         if failure_scope == "final-verifier":
             spec["verifiers"] = [{"type": "text", "text": "Ready"}]
         path.write_text(json.dumps(spec), encoding="utf-8")
@@ -98,6 +101,13 @@ def test_failed_execution_returns_nonzero_with_complete_result(
     assert responses[0]["passed"] is False
     assert responses[0]["failure"] is not None
     assert ("back" in dispatched) is (continue_on_failure or failure_scope == "final-verifier")
+    if failure_scope == "step-verifier":
+        assert ("idle" in dispatched) is continue_on_failure
+        attached = responses[0]["steps"][0]["verifiers"]
+        assert [item["passed"] for item in attached] == (
+            [False, True] if continue_on_failure else [False]
+        )
+        assert responses[0]["failure"]["verifier"] == attached[0]
 
 
 @pytest.mark.parametrize("script", [False, True], ids=["json-task", "aea-script"])

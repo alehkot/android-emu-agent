@@ -231,3 +231,88 @@ async def test_task_condition_selector_payloads(
     result = await TaskManager().run(spec, session_id="s-test", dispatcher=dispatcher)
     assert result["passed"] is True
     assert calls[0].payload == {"session_id": "s-test", **expected}
+
+
+@pytest.mark.parametrize("stop_on_failure", [True, False])
+async def test_attached_verifiers_honor_stop_on_failure(stop_on_failure: bool) -> None:
+    """Continue mode collects sibling verifiers but retains the first failure."""
+    calls: list[str] = []
+
+    async def dispatcher(call: TaskCall) -> dict[str, Any]:
+        calls.append(call.label)
+        if call.label in {"first failure", "second failure"}:
+            return {"status": "error", "error": {"code": "ERR_TIMEOUT", "message": call.label}}
+        return {"status": "done"}
+
+    result = await TaskManager().run(
+        {
+            "steps": [
+                {
+                    "action": "home",
+                    "name": "first step",
+                    "verify": [
+                        {"type": "text", "text": "Ready", "name": "first failure"},
+                        {"type": "text", "text": "Loaded", "name": "second failure"},
+                        {"type": "idle", "name": "passing verifier"},
+                    ],
+                },
+                {"action": "back", "name": "next step"},
+            ],
+            "verifiers": [{"type": "idle", "name": "final verifier"}],
+        },
+        session_id="s-test",
+        dispatcher=dispatcher,
+        stop_on_failure=stop_on_failure,
+    )
+
+    expected_calls = ["first step", "first failure"]
+    if not stop_on_failure:
+        expected_calls += ["second failure", "passing verifier", "next step", "final verifier"]
+    assert calls == expected_calls
+    assert result["status"] == "failed"
+    assert result["passed"] is False
+    assert result["steps"][0]["passed"] is False
+    assert result["steps"][0]["failed_verifier"]["name"] == "first failure"
+    assert result["failure"]["verifier"]["name"] == "first failure"
+    assert [item["passed"] for item in result["steps"][0]["verifiers"]] == (
+        [False] if stop_on_failure else [False, False, True]
+    )
+    assert len(result["steps"]) == (1 if stop_on_failure else 2)
+    assert len(result["verifiers"]) == (0 if stop_on_failure else 1)
+
+
+@pytest.mark.parametrize("stop_on_failure", [True, False])
+async def test_failed_action_still_skips_attached_verifiers(stop_on_failure: bool) -> None:
+    """Continuing does not verify a step whose action did not succeed."""
+    calls: list[str] = []
+
+    async def dispatcher(call: TaskCall) -> dict[str, Any]:
+        calls.append(call.label)
+        if call.label == "failed action":
+            return {"status": "error", "error": {"code": "ERR_DEVICE_OFFLINE"}}
+        return {"status": "done"}
+
+    result = await TaskManager().run(
+        {
+            "steps": [
+                {
+                    "action": "home",
+                    "name": "failed action",
+                    "verify": [{"type": "idle", "name": "skipped verifier"}],
+                },
+                {"action": "back", "name": "next step"},
+            ],
+            "verifiers": [{"type": "idle", "name": "final verifier"}],
+        },
+        session_id="s-test",
+        dispatcher=dispatcher,
+        stop_on_failure=stop_on_failure,
+    )
+
+    assert calls == (
+        ["failed action"] if stop_on_failure else ["failed action", "next step", "final verifier"]
+    )
+    assert result["status"] == "failed"
+    assert result["steps"][0]["verifiers"] == []
+    assert result["steps"][0]["failed_verifier"] is None
+    assert "verifier" not in result["failure"]

@@ -166,7 +166,9 @@ Task specs support action steps (`tap`, `long_tap`, `set_text`, `clear`, `back`,
 post-step checks and top-level `verifiers` for final checks. A failed verifier returns
 `status=failed` with the failing step or verifier payload. `task run` exits `1` after printing the
 complete report if any step or verifier fails, including with `--json` or `--continue-on-failure`;
-successful runs exit `0`.
+successful runs exit `0`. With `--continue-on-failure`, remaining attached verifiers, later steps,
+and final verifiers still run after a verifier failure, while the first failure remains primary.
+Attached verifiers are skipped if their step's own operation fails.
 
 For long task sequences, set `--http-timeout-seconds 120` (or another finite positive budget
 covering all steps and verifiers). The default remains `10` seconds. This overrides only the run
