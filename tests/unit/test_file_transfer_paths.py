@@ -371,3 +371,46 @@ def test_run_as_directory_pull_extracts_into_callers_directory(
     assert result.exit_code == 0, result.output
     assert (caller / "pulled directory/nested/config.json").read_bytes() == b"device directory data"
     assert not (daemon / "pulled directory").exists()
+
+
+@pytest.mark.parametrize("variant", ["app-run-as", "app-root"])
+@pytest.mark.parametrize("source_kind", ["parent", "symlink-parent"])
+def test_app_push_parent_path_has_safe_stage_and_destination_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, variant: str, source_kind: str
+) -> None:
+    """CLI keeps parent traversal meaning without using '..' as a remote basename."""
+    source = tmp_path / "intended-source"
+    source.mkdir()
+    (source / "config.json").write_bytes(b"intended payload")
+    child = source / "child"
+    child.mkdir()
+    daemon = tmp_path / "daemon"
+    daemon.mkdir()
+    if source_kind == "parent":
+        caller = child
+        argument = ".."
+    else:
+        caller = tmp_path / "caller"
+        caller.mkdir()
+        (caller / "alias").symlink_to(child, target_is_directory=True)
+        argument = "alias/.."
+    manager = FileManager(output_dir=tmp_path / "artifacts")
+    requests = _wire_daemon(monkeypatch, manager, daemon, variant, "push")
+    stages: list[Path] = []
+
+    async def run_adb(_serial: str, args: list[str]) -> None:
+        assert (Path(args[1]) / "config.json").read_bytes() == b"intended payload"
+        stages.append(Path(args[2]))
+
+    monkeypatch.setattr(manager, "_run_adb", run_adb)
+    monkeypatch.chdir(caller)
+    result = CliRunner().invoke(
+        file_commands.app,
+        ["app", "push", "com.example.app", argument, "--device", "emulator-5554", "--json"],
+    )
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["path"] == f"/data/data/com.example.app/files/{source.name}"
+    assert requests[0]["local_path"] == str(caller / argument)
+    assert len(stages) == 1
+    assert stages[0].name == source.name
+    assert ".." not in stages[0].parts

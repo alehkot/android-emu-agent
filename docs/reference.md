@@ -3356,6 +3356,9 @@ Push into app-private storage via root or run-as.
 Local paths expand ~ and are relative to your current directory, even if the daemon started
 elsewhere.
 
+When the resolved destination is an existing directory, copy inside it using the original source
+name, not a temporary staging name.
+
 **Usage**:
 
 ```console

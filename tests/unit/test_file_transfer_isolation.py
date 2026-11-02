@@ -184,7 +184,12 @@ async def test_overlapping_app_pushes_preserve_same_basename_payloads(
 
     async def cleanup(_device: MagicMock, command: str) -> str:
         nonlocal cleanup_count
-        stage_files.pop(shlex.split(command)[2], None)
+        if not command.startswith("rm -rf "):
+            return ""
+        cleanup_path = shlex.split(command)[2]
+        for stage in list(stage_files):
+            if stage == cleanup_path or stage.startswith(f"{cleanup_path}/"):
+                del stage_files[stage]
         cleanup_count += 1
         if cleanup_count == 1:
             first_cleaned.set()
@@ -311,7 +316,9 @@ async def test_app_push_stage_names_fit_filesystem_limit(
     staged_paths: list[Path] = []
 
     async def adb(_serial: str, args: list[str]) -> None:
-        local_stage = stages / Path(args[2]).name
+        remote_stage = Path(args[2])
+        local_stage = stages / remote_stage.parent.name / remote_stage.name
+        local_stage.parent.mkdir(parents=True, exist_ok=True)
         local_stage.write_bytes(Path(args[1]).read_bytes())
         staged_paths.append(local_stage)
 
@@ -329,7 +336,9 @@ async def test_app_push_stage_names_fit_filesystem_limit(
 
     assert staged_paths[0] != staged_paths[1]
     assert all(path.read_text(encoding="utf-8") == "source" for path in staged_paths)
+    assert all(path.name == basename for path in staged_paths)
     assert all(len(path.name.encode("utf-8")) <= 255 for path in staged_paths)
+    assert all(len(path.parent.name.encode("utf-8")) <= 255 for path in staged_paths)
     assert all("\ufffd" not in path.name for path in staged_paths)
 
 

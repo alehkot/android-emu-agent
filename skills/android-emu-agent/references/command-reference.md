@@ -587,7 +587,8 @@ to preserve heap files on-device after pulling:
   shell-readable paths work without root.
 - `file list <path> --device <serial>` List files/folders; shell-readable paths work without root.
 - `file app push <pkg> <local> --device <serial>` Push to app-private storage via root or `run-as`
-  for a debuggable app.
+  for a debuggable app. Existing destination directories retain the original source basename,
+  not a staging name.
 - `file app pull <pkg> <remote> --device <serial>` Pull from app-private storage via root or
   `run-as` for a debuggable app.
 

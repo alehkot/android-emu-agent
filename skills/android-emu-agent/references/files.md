@@ -14,6 +14,13 @@ filesystem meaning; device-side paths are not changed. Pushing `.` uses the curr
 name for the default remote destination. Omitting `--local` keeps the automatic artifact destination
 described below.
 
+## Contents
+
+- [Shared storage](#shared-storage-sdcard)
+- [App-private storage](#app-private-storage)
+- [Find files/folders](#find-filesfolders)
+- [List directory](#list-directory)
+
 ## Shared Storage (sdcard)
 
 ```bash
@@ -50,9 +57,19 @@ android-emu-agent file app push com.example.app ./config.json --device emulator-
 # Push to a specific app-private path
 android-emu-agent file app push com.example.app ./config.json --device emulator-5554 --remote files/config.json
 
+# Push into an existing app-private directory, retaining config.json as the name
+android-emu-agent file app push com.example.app ./config.json --device emulator-5554 --remote files
+
 # Pull app-private file or directory
 android-emu-agent file app pull com.example.app files/ --device emulator-5554
 ```
+
+App-private pushes retain the source file or directory name when copying into an existing
+destination directory; temporary staging names never become destination names. Repeating a push into
+the same container replaces matching files or merges a same-named directory, retaining unrelated
+contents. A destination that does not exist is used as the new path. Existing destination resolution
+is unchanged: the default is `files/<name>`, and a trailing `/` on `--remote` appends `<name>`
+before applying these copy rules. Directory copies are not atomic.
 
 Outputs land in `~/.android-emu-agent/artifacts/files` unless you provide `--local`. Automatically
 generated pull paths include a random UUID, so repeated or concurrent pulls keep separate files or
@@ -62,8 +79,9 @@ within 255 UTF-8 bytes while retaining the full UUID. An explicit `--local` reta
 replacement or directory-merge behavior; choose different destinations to preserve each result.
 
 App-private transfers that require on-device staging use a separate random name for each transfer.
-Cleanup removes only that transfer's staging path. This does not serialize transfers to an
-explicitly shared destination or make a directory copy atomic.
+Pushes place the original source name inside an isolated staging directory. Cleanup removes only
+that transfer's staging path. This does not serialize transfers to an explicitly shared destination
+or make a directory copy atomic.
 
 ## Find Files/Folders
 

@@ -218,9 +218,22 @@ class FileManager:
         if not local.exists():
             raise file_not_found_error(str(local))
 
-        remote_abs = self._resolve_app_dest(package, remote_path, local.name)
+        basename = local.name
+        if basename in {"", ".", ".."}:
+            basename = local.resolve().name
+        if not basename:
+            raise AgentError(
+                code="ERR_INVALID_PATH",
+                message="Cannot push a filesystem root into app-private storage",
+                context={"path": local_path},
+                remediation="Choose a named file or directory below the filesystem root.",
+            )
+        remote_abs = self._resolve_app_dest(package, remote_path, basename)
         stage_dir = self._stage_dir(package)
-        stage_path = f"{stage_dir}/{self._stage_name(package, local.name)}"
+        # Keep uniqueness in a parent directory, not in the copied basename: cp
+        # uses the basename when remote_abs already names a directory.
+        transfer_dir = f"{stage_dir}/{self._stage_name(package)}"
+        stage_path = f"{transfer_dir}/{basename}"
 
         await self._shell_with_optional_root(
             device,
@@ -233,10 +246,16 @@ class FileManager:
             f"&& cp -r {shlex.quote(stage_path)} {shlex.quote(remote_abs)}"
         )
         try:
+            # The shell must own the transfer directory so cleanup can enumerate it.
+            # Root-owned 0733 directories permit traversal, but not shell listing.
+            await self._shell(
+                device,
+                f"mkdir -p {shlex.quote(transfer_dir)} && chmod 0733 {shlex.quote(transfer_dir)}",
+            )
             await self._run_adb(serial, ["push", str(local), stage_path])
             await self._shell_app(device, package, stage_cmd, use_root=use_root)
         finally:
-            await self._shell(device, f"rm -rf {shlex.quote(stage_path)}")
+            await self._shell(device, f"rm -rf {shlex.quote(transfer_dir)}")
         logger.info("app_file_pushed", serial=serial, local=str(local), remote=remote_abs)
         return remote_abs
 
