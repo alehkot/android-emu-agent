@@ -82,16 +82,17 @@ class WaitEngine:
 
         try:
             wait_fn = getattr(device, "wait_idle", None)
+            last_error: Exception | None = None
             if callable(wait_fn):
                 result = await run_device_io(device, wait_fn, timeout=timeout, io_timeout=timeout)
                 success = result is not False
             else:
-                success = await self._wait_for_stable_hierarchy(device, deadline)
+                success, last_error = await self._wait_for_stable_hierarchy(device, deadline)
 
             elapsed = (time.monotonic() - start) * 1000
             if success:
                 return WaitResult(success=True, elapsed_ms=elapsed)
-            return self._idle_timeout_result(timeout, elapsed)
+            return self._idle_timeout_result(timeout, elapsed, last_error)
         except TimeoutError:
             elapsed = (time.monotonic() - start) * 1000
             return self._idle_timeout_result(timeout, elapsed)
@@ -108,38 +109,64 @@ class WaitEngine:
                 ),
             )
 
-    async def _wait_for_stable_hierarchy(self, device: u2.Device, deadline: float) -> bool:
-        """Wait until two consecutive UI hierarchy dumps match."""
+    async def _wait_for_stable_hierarchy(
+        self, device: u2.Device, deadline: float
+    ) -> tuple[bool, Exception | None]:
+        """Wait until two consecutive UI hierarchy dumps match.
+
+        Returns whether the hierarchy settled and the failure from the latest dump, if any.
+        """
         previous: str | None = None
+        last_error: Exception | None = None
 
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                return False
+                return False, last_error
 
-            hierarchy = await run_device_io(
-                device, device.dump_hierarchy, compressed=True, io_timeout=remaining
-            )
-            if hierarchy == previous:
-                return True
-            previous = hierarchy
+            try:
+                hierarchy = await run_device_io(
+                    device, device.dump_hierarchy, compressed=True, io_timeout=remaining
+                )
+            except FATAL_POLL_ERRORS:
+                raise
+            except Exception as exc:
+                # As in _poll_condition, a dump can fail mid-transition. Keep polling, and
+                # require two matching dumps after the failure before calling the UI idle.
+                # The I/O helper's empty TimeoutError only means the deadline arrived.
+                if str(exc):
+                    last_error = exc
+                previous = None
+                logger.debug("wait_idle_dump_error", error=str(exc))
+            else:
+                if hierarchy == previous:
+                    return True, None
+                previous = hierarchy
+                last_error = None
 
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                return False
+                return False, last_error
             await asyncio.sleep(min(self.poll_interval, remaining))
 
     @staticmethod
-    def _idle_timeout_result(timeout: float, elapsed_ms: float) -> WaitResult:
+    def _idle_timeout_result(
+        timeout: float, elapsed_ms: float, last_error: Exception | None = None
+    ) -> WaitResult:
         """Build the standard timeout result for an idle wait."""
+        context: dict[str, Any] = {"timeout_ms": timeout * 1000}
+        remediation = "UI may still be loading; try again or check for dialogs"
+        if last_error is not None:
+            context["last_error"] = str(last_error)
+            remediation += f". The last hierarchy dump failed with: {last_error}"
         return WaitResult(
             success=False,
             elapsed_ms=elapsed_ms,
             error=AgentError(
                 code="ERR_TIMEOUT",
                 message="UI did not become idle before the timeout",
-                context={"timeout_ms": timeout * 1000},
-                remediation="UI may still be loading; try again or check for dialogs",
+                context=context,
+                remediation=remediation,
             ),
         )
 

@@ -71,6 +71,61 @@ def test_wait_idle_times_out_when_hierarchy_never_stabilizes() -> None:
     assert result.error.context == {"timeout_ms": 10.0}
 
 
+def test_wait_idle_polls_through_a_failed_hierarchy_dump() -> None:
+    """A dump failing mid-transition must not end the wait as an instant timeout."""
+
+    class Device:
+        def __init__(self) -> None:
+            self.dumps: list[str | Exception] = [
+                "<before />",
+                RuntimeError("rpc reset"),
+                "<before />",
+                "<before />",
+            ]
+
+        def dump_hierarchy(self, *, compressed: bool) -> str:
+            assert compressed is True
+            item = self.dumps.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            return item
+
+    device = Device()
+    result = asyncio.run(WaitEngine(poll_interval=0.001).wait_idle(cast(Any, device), timeout=1.0))
+
+    assert result.success is True
+    # The dumps around the failure are not compared with each other.
+    assert device.dumps == []
+
+
+def test_wait_idle_timeout_reports_the_last_dump_failure() -> None:
+    """If dumps keep failing, the timeout should say why instead of hiding the cause."""
+
+    class Device:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def dump_hierarchy(self, *, compressed: bool) -> str:
+            assert compressed is True
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("uiautomator server is not running")
+            # Later stalls end in the I/O helper's empty timeout, which must not
+            # replace the informative failure.
+            raise TimeoutError
+
+    result = asyncio.run(
+        WaitEngine(poll_interval=0.001).wait_idle(cast(Any, Device()), timeout=0.05)
+    )
+
+    assert result.success is False
+    assert result.elapsed_ms >= 50
+    assert result.error is not None
+    assert result.error.code == "ERR_TIMEOUT"
+    assert result.error.context["last_error"] == "uiautomator server is not running"
+    assert result.to_dict()["error"]["last_error"] == "uiautomator server is not running"
+
+
 def test_wait_idle_normalizes_asyncio_deadline_timeout() -> None:
     """The wait_for deadline race should produce the standard timeout payload."""
     engine = WaitEngine()
