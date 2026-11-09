@@ -104,11 +104,16 @@ class FileManager:
             return local
 
         stage_dir = self._stage_dir(package)
-        stage_path = f"{stage_dir}/{self._stage_name(package)}"
+        # ADB uses the remote basename when the local destination already exists.
+        # Keep uniqueness in the parent, not in the user's file/directory name.
+        transfer_dir = f"{stage_dir}/{self._stage_name(package)}"
+        basename = Path(remote_abs).name
+        if basename in {"", ".", ".."}:
+            basename = "artifact"
+        stage_path = f"{transfer_dir}/{basename}"
         prepare_parts = [
-            f"rm -rf {shlex.quote(stage_path)}",
-            f"mkdir -p {shlex.quote(stage_dir)}",
-            f"chmod 0733 {shlex.quote(stage_dir)}",
+            f"mkdir -p {shlex.quote(transfer_dir)}",
+            f"chmod 0733 {shlex.quote(stage_dir)} {shlex.quote(transfer_dir)}",
         ]
         await self._shell_with_optional_root(
             device,
@@ -129,7 +134,7 @@ class FileManager:
             # Root made this copy; a+rX grants no write, so the shell user cannot
             # empty a copied directory.
             await self._shell_with_optional_root(
-                device, f"rm -rf {shlex.quote(stage_path)}", use_root=use_root
+                device, f"rm -rf {shlex.quote(transfer_dir)}", use_root=use_root
             )
         logger.info("app_file_pulled", serial=serial, remote=remote_abs, local=str(local))
         return local

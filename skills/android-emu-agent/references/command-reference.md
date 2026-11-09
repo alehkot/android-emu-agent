@@ -590,7 +590,8 @@ to preserve heap files on-device after pulling:
   for a debuggable app. Existing destination directories retain the original source basename,
   not a staging name.
 - `file app pull <pkg> <remote> --device <serial>` Pull from app-private storage via root or
-  `run-as` for a debuggable app.
+  `run-as` for a debuggable app. Root pulls into an existing local directory preserve the remote
+  basename rather than exposing a generated staging name.
 
 Local push sources and explicit pull `--local` paths use the invoking CLI's current directory, not
 the daemon's startup directory. Home-directory shortcuts are expanded; symlink traversal and

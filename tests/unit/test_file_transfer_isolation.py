@@ -106,7 +106,10 @@ async def test_overlapping_root_app_pulls_do_not_delete_each_others_stage(
         if " && " in command:  # preparing the shared stage directory
             return ""
         # Root made the staged copy, so root removes it.
-        stage_files.pop(shlex.split(command)[2], None)
+        cleanup_path = shlex.split(command)[2]
+        for staged_path in list(stage_files):
+            if staged_path.startswith(f"{cleanup_path}/"):
+                del stage_files[staged_path]
         cleanup_count += 1
         if cleanup_count == 1:
             first_cleaned.set()

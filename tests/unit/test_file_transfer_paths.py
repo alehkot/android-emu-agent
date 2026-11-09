@@ -316,7 +316,7 @@ def test_pull_writes_callers_output(
         assert requests[0]["local_path"] == str(expected)
         assert data["path"] == str(expected)
         if path_kind == "directory":
-            assert destinations[0].parent == expected
+            assert destinations[0] == expected / Path(remote).name
         else:
             assert destinations[0] == expected
             assert expected.read_bytes() == b"device data"
