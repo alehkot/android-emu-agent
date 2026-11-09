@@ -328,3 +328,27 @@ async def test_root_shell_falls_back_to_aosp_su_syntax() -> None:
 
     assert await manager._shell_su(device, "ls /data/data") == "app.db"
     assert device.shell.call_args_list[1].args[0].startswith("su 0 sh -c 'ls /data/data';")
+
+
+@pytest.mark.asyncio
+async def test_root_app_pull_removes_its_stage_as_root(tmp_path: Path) -> None:
+    """Root-staged copies are root-owned, so cleanup must not run as the shell user."""
+    from android_emu_agent.files.manager import FileManager
+
+    manager = FileManager(output_dir=tmp_path)
+    device = MagicMock()
+
+    with (
+        patch.object(manager, "_shell_with_optional_root", new=AsyncMock()) as root_shell,
+        patch.object(manager, "_shell_app", new=AsyncMock(return_value="")),
+        patch.object(manager, "_run_adb", new=AsyncMock()),
+        patch.object(manager, "_shell", new=AsyncMock()) as shell,
+    ):
+        await manager.app_pull(
+            device, "emulator-5554", "com.example.app", "databases", None, use_root=True
+        )
+
+    cleanup = root_shell.await_args_list[-1]
+    assert cleanup.args[1].startswith("rm -rf /data/local/tmp/android-emu-agent/com_example_app/")
+    assert cleanup.kwargs == {"use_root": True}
+    shell.assert_not_awaited()

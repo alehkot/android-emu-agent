@@ -100,8 +100,12 @@ async def test_overlapping_root_app_pulls_do_not_delete_each_others_stage(
             raise RuntimeError("Simulated transfer failure")
         Path(args[2]).write_text(stage_files.get(args[1], "STAGE MISSING"), encoding="utf-8")
 
-    async def cleanup(_device: MagicMock, command: str) -> str:
+    async def root_shell(_device: MagicMock, command: str, *, use_root: bool) -> str:
         nonlocal cleanup_count
+        assert use_root
+        if " && " in command:  # preparing the shared stage directory
+            return ""
+        # Root made the staged copy, so root removes it.
         stage_files.pop(shlex.split(command)[2], None)
         cleanup_count += 1
         if cleanup_count == 1:
@@ -111,10 +115,10 @@ async def test_overlapping_root_app_pulls_do_not_delete_each_others_stage(
     remotes = ["files/first.json", "files/second.json"]
     with (
         patch.object(manager, "_timestamp", return_value="20261016_005400"),
-        patch.object(manager, "_shell_with_optional_root", new=AsyncMock()),
+        patch.object(manager, "_shell_with_optional_root", new=AsyncMock(side_effect=root_shell)),
         patch.object(manager, "_shell_app", new=AsyncMock(side_effect=stage)),
         patch.object(manager, "_run_adb", new=AsyncMock(side_effect=adb)),
-        patch.object(manager, "_shell", new=AsyncMock(side_effect=cleanup)),
+        patch.object(manager, "_shell", new=AsyncMock()) as shell,
     ):
         paths = await asyncio.wait_for(
             asyncio.gather(
@@ -144,6 +148,7 @@ async def test_overlapping_root_app_pulls_do_not_delete_each_others_stage(
     assert paths[1].read_text(encoding="utf-8") == f"/data/data/com.example.app/{remotes[1]}"
     assert not stage_files
     assert cleanup_count == 2
+    shell.assert_not_awaited()
 
 
 @pytest.mark.asyncio

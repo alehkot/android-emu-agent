@@ -126,7 +126,11 @@ class FileManager:
             await self._shell_app(device, package, stage_cmd, use_root=use_root)
             await self._run_adb(serial, ["pull", stage_path, str(local)])
         finally:
-            await self._shell(device, f"rm -rf {shlex.quote(stage_path)}")
+            # Root made this copy; a+rX grants no write, so the shell user cannot
+            # empty a copied directory.
+            await self._shell_with_optional_root(
+                device, f"rm -rf {shlex.quote(stage_path)}", use_root=use_root
+            )
         logger.info("app_file_pulled", serial=serial, remote=remote_abs, local=str(local))
         return local
 
