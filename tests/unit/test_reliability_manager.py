@@ -611,3 +611,24 @@ class TestNativePerformanceArtifacts:
 
         assert exc_info.value.code == "ERR_INVALID_ARTIFACT_NAME"
         pidof.assert_not_awaited()
+
+
+class TestRootShell:
+    """Tests for root command execution."""
+
+    @pytest.mark.asyncio
+    async def test_failed_root_command_is_not_rerun(self, tmp_path: Path) -> None:
+        """Only su's own -c rejection retries; a failed root command must not run twice."""
+        from android_emu_agent.errors import AgentError
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        manager = ReliabilityManager(output_dir=tmp_path)
+        device = MagicMock()
+        device.shell.return_value = (
+            "sh: can't create /proc/1/oom_score_adj: Permission denied\n__AEA_EXIT_CODE__:1"
+        )
+
+        with pytest.raises(AgentError):
+            await manager._shell_su(device, "echo 5 > /proc/1/oom_score_adj")
+
+        device.shell.assert_called_once()

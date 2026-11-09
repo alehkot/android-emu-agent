@@ -24,6 +24,7 @@ from android_emu_agent.device.io import (
     shutdown_all_device_io,
     shutdown_device_io,
 )
+from android_emu_agent.device.su import AOSP_SU_REJECTION, aosp_su_command
 from android_emu_agent.errors import (
     AgentError,
     adb_command_error,
@@ -945,7 +946,12 @@ class DeviceManager:
 
         def _run() -> str:
             try:
-                return str(device.shell("su -c id", timeout=DEVICE_ROOT_CHECK_TIMEOUT_S))
+                output = str(device.shell("su -c id", timeout=DEVICE_ROOT_CHECK_TIMEOUT_S))
+                if AOSP_SU_REJECTION in output:
+                    output = str(
+                        device.shell(aosp_su_command("id"), timeout=DEVICE_ROOT_CHECK_TIMEOUT_S)
+                    )
+                return output
             except Exception:
                 # Devices that prompt for root (or are wedged) hang here without a timeout.
                 return ""

@@ -1421,6 +1421,30 @@ class TestDiscoverDevices:
         assert await manager._check_root(device) is False
 
     @pytest.mark.asyncio
+    async def test_root_check_accepts_aosp_su_syntax(self) -> None:
+        """AOSP su on emulator images rejects -c; detection must retry as su 0."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        device = MagicMock()
+        device.shell.side_effect = ["su: invalid uid/gid '-c'", "uid=0(root) gid=0(root)"]
+
+        assert await manager._check_root(device) is True
+        assert device.shell.call_args.args[0] == "su 0 sh -c id"
+
+    @pytest.mark.asyncio
+    async def test_root_check_does_not_retry_denied_su(self) -> None:
+        """A denied su -c is unrooted; only the AOSP syntax rejection retries."""
+        from android_emu_agent.device.manager import DeviceManager
+
+        manager = DeviceManager()
+        device = MagicMock()
+        device.shell.return_value = "Permission denied"
+
+        assert await manager._check_root(device) is False
+        device.shell.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_props_use_bounded_timeout(self) -> None:
         """Property reads must bound the shell call rather than inherit adbutils' 600s."""
         from android_emu_agent.device.manager import DEVICE_PROP_TIMEOUT_S, DeviceManager

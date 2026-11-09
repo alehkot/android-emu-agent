@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from android_emu_agent.device.su import run_as_root
 from android_emu_agent.errors import (
     AgentError,
     adb_command_error,
@@ -766,7 +767,7 @@ class ReliabilityManager:
         return await asyncio.to_thread(_run)
 
     async def _shell_su(self, device: AdbDevice, command: str) -> str:
-        return await self._shell(device, f"su -c {shlex.quote(command)}")
+        return await run_as_root(lambda root_command: self._shell(device, root_command), command)
 
     async def _pidof(self, device: AdbDevice, package: str) -> int:
         output = await self._shell(device, f"pidof {shlex.quote(package)}")

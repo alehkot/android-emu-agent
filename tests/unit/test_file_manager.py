@@ -312,3 +312,19 @@ async def test_shell_raises_when_device_command_fails() -> None:
 
     assert exc_info.value.code == "ERR_ADB_COMMAND"
     assert exc_info.value.context["reason"] == "run-as: package not debuggable"
+
+
+@pytest.mark.asyncio
+async def test_root_shell_falls_back_to_aosp_su_syntax() -> None:
+    """Emulator su rejects -c before running anything, so root commands retry as su 0."""
+    from android_emu_agent.files.manager import FileManager
+
+    manager = FileManager(output_dir=Path("/tmp"))
+    device = MagicMock()
+    device.shell.side_effect = [
+        "su: invalid uid/gid '-c'\n__AEA_EXIT_CODE__:1",
+        "app.db\n__AEA_EXIT_CODE__:0",
+    ]
+
+    assert await manager._shell_su(device, "ls /data/data") == "app.db"
+    assert device.shell.call_args_list[1].args[0].startswith("su 0 sh -c 'ls /data/data';")
