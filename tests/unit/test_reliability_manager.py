@@ -531,7 +531,7 @@ class TestNativePerformanceArtifacts:
         mock_device = MagicMock()
 
         with (
-            patch.object(manager, "_shell_su", AsyncMock(return_value="")),
+            patch.object(manager, "_shell_su", AsyncMock(return_value="")) as su_mock,
             patch.object(manager, "_shell", AsyncMock(return_value="")) as shell_mock,
             patch.object(manager, "_run_adb", AsyncMock(side_effect=RuntimeError("pull failed"))),
             pytest.raises(RuntimeError, match="pull failed"),
@@ -543,10 +543,17 @@ class TestNativePerformanceArtifacts:
                 "anr",
             )
 
-        shell_mock.assert_awaited_once_with(
+        # The shell user that a non-root adbd pulls as must own the copy, and only
+        # root can remove it from root's staging directory.
+        stage_command = su_mock.await_args_list[0].args[1]
+        assert stage_command.endswith(
+            " && chown -R 2000:2000 /data/local/tmp/android-emu-agent/anr"
+        )
+        assert su_mock.await_args_list[-1].args == (
             mock_device,
             "rm -rf /data/local/tmp/android-emu-agent/anr",
         )
+        shell_mock.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_perfetto_rejects_unbounded_duration(self, tmp_path: Path) -> None:

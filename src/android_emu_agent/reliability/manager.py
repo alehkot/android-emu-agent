@@ -602,15 +602,19 @@ class ReliabilityManager:
     ) -> Path:
         stage_parent = "/data/local/tmp/android-emu-agent"
         stage_dir = f"{stage_parent}/{name}"
+        # Root's copy keeps the source's private modes, so hand it to the shell user
+        # (AID 2000) that a non-root adbd pulls as. Its parent is root's, so only root
+        # can remove it afterwards.
         stage_cmd = (
             f"rm -rf {stage_dir} && mkdir -p {stage_parent} && cp -r {remote_dir} {stage_parent}"
+            f" && chown -R 2000:2000 {stage_dir}"
         )
         local_path = self.output_dir / f"{serial}_{self._timestamp()}_{name}"
         try:
             await self._shell_su(device, stage_cmd)
             await self._run_adb(serial, ["pull", stage_dir, str(local_path)])
         finally:
-            await self._cleanup_remote(device, stage_dir, recursive=True)
+            await self._cleanup_remote(device, stage_dir, recursive=True, as_root=True)
         logger.info("root_dir_pulled", serial=serial, remote=remote_dir, local=str(local_path))
         return local_path
 
@@ -620,11 +624,13 @@ class ReliabilityManager:
         remote_path: str,
         *,
         recursive: bool = False,
+        as_root: bool = False,
     ) -> str | None:
         """Best-effort cleanup that never replaces the capture or pull result."""
         flag = "-rf" if recursive else "-f"
+        shell = self._shell_su if as_root else self._shell
         try:
-            await self._shell(device, f"rm {flag} {shlex.quote(remote_path)}")
+            await shell(device, f"rm {flag} {shlex.quote(remote_path)}")
         except Exception as exc:  # pragma: no cover - exact transport errors vary
             warning = f"Unable to remove remote artifact {remote_path}: {exc}"
             logger.warning(
