@@ -15,6 +15,10 @@ from android_emu_agent.errors import bridge_crashed_error
 logger = structlog.get_logger()
 
 _MAX_BRIDGE_EVENTS = 2000
+# Each JSON-RPC message is one line, and asyncio's default 64 KiB line limit is below
+# what a deep stack trace with a large max_frames produces. A longer line ended the
+# stdout reader, which reported the bridge as crashed and ended the debug session.
+_STREAM_LIMIT_BYTES = 16 * 1024 * 1024
 
 
 class BridgeClient:
@@ -53,6 +57,7 @@ class BridgeClient:
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            limit=_STREAM_LIMIT_BYTES,
         )
         logger.info(
             "bridge_started",

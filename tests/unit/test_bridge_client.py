@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -242,3 +243,32 @@ class TestBridgeClientLifecycle:
 
         assert await client.next_event() == {"sequence": 2}
         assert await client.next_event() == {"sequence": 3}
+
+    @pytest.mark.asyncio
+    async def test_response_longer_than_default_stream_limit(self, tmp_path: Path) -> None:
+        """A deep stack trace exceeds asyncio's 64 KiB line limit and must still arrive."""
+        responder = tmp_path / "bridge.py"
+        responder.write_text(
+            "import json, sys\n"
+            "for line in sys.stdin:\n"
+            "    request = json.loads(line)\n"
+            "    frames = [{'method': 'm' * 100, 'line': i} for i in range(1000)]\n"
+            "    result = {'frames': frames} if request['method'] == 'stack_trace' else {}\n"
+            "    print(json.dumps({'jsonrpc': '2.0', 'id': request['id'], 'result': result}),\n"
+            "          flush=True)\n"
+            "    if request['method'] == 'shutdown':\n"
+            "        break\n"
+        )
+        java = tmp_path / "java"
+        java.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{responder}"\n')
+        java.chmod(0o755)
+        client = BridgeClient(java, tmp_path / "bridge.jar")
+
+        await client.start()
+        try:
+            result = await client.request("stack_trace", timeout_seconds=10)
+            assert len(json.dumps(result)) > 64 * 1024
+            assert len(result["frames"]) == 1000
+            assert await client.request("ping", timeout_seconds=10) == {}
+        finally:
+            await client.stop()
