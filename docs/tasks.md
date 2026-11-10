@@ -52,6 +52,13 @@ types and snapshot modes. For example, a JSON wait with `"timeout_ms": "later"` 
 `ERR_TASK_INVALID` and the field location before any step runs. Existing supported type conversions,
 such as a numeric string timeout, remain accepted.
 
+Action targets and nonempty swipe containers are also checked with the same selector parser used
+at runtime. Malformed expressions, such as `tap coords:bad`, fail preflight with their task field
+location. Coordinate targets remain valid for tap/long-tap/set-text/clear, but cannot identify a
+swipe container, including inside a fallback chain. Snapshot refs are checked only as syntax;
+their existence and freshness are still resolved at execution time. Valid selector fallbacks,
+quoted labels, and full-screen swipes remain supported.
+
 `task run` performs the same whole-task preflight before dispatching its first action, including
 when `--continue-on-failure` is set. Invalid fields in a later step, an attached verifier, or a
 final verifier therefore cannot cause earlier steps to run first. Validation does not contact a

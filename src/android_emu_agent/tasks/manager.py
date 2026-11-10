@@ -325,6 +325,27 @@ class TaskManager:
         if isinstance(request, SwipeRequest) and not math.isfinite(request.distance):
             raise self._invalid(f"{source_label}.distance: Input should be a finite number")
 
+        # Selector syntax is static: reject malformed later targets before earlier
+        # actions run. Do not resolve refs or check whether elements exist here.
+        target: str | None = None
+        field = "ref"
+        if isinstance(request, (ActionRequest, SetTextRequest)):
+            target = request.ref
+        elif isinstance(request, SwipeRequest):
+            target = request.container
+            field = "container"
+        if target:
+            try:
+                selector = parse_selector(target)
+            except AgentError as exc:
+                raise self._invalid(f"{source_label}.{field}: Invalid selector expression") from exc
+            if isinstance(request, SwipeRequest):
+                options = selector.options if isinstance(selector, FallbackSelector) else [selector]
+                if any(isinstance(option, CoordsSelector) for option in options):
+                    raise self._invalid(
+                        f"{source_label}.container: Swipe containers cannot be coordinate selectors"
+                    )
+
     def _step_kind_operation(self, step: Mapping[str, Any]) -> tuple[str, str]:
         explicit_kind = self._optional_string(step, "kind")
         explicit_operation = self._optional_string(step, "operation") or self._optional_string(

@@ -541,3 +541,37 @@ def test_task_tap_selects_quoted_label_instead_of_unquoted_neighbor() -> None:
     device.assert_called_once_with(text="'Accept'", enabled=True)
     quoted.click.assert_called_once_with()
     plain.click.assert_not_called()
+
+
+@pytest.mark.parametrize("script_mode", [False, True])
+@pytest.mark.parametrize("stop_on_failure", [False, True])
+@pytest.mark.parametrize("operation", ["tap", "long_tap", "clear", "set_text", "swipe"])
+def test_invalid_action_selector_prevents_prior_device_mutation(
+    script_mode: bool, stop_on_failure: bool, operation: str
+) -> None:
+    device = MagicMock()
+    if operation == "swipe":
+        step: dict[str, Any] = {"action": "swipe", "direction": "up", "container": "coords:10,20"}
+        line = "swipe up container=coords:10,20"
+        field = "container"
+    else:
+        step = {"action": operation, "ref": "coords:bad"}
+        line = f"{operation.replace('_', '-')} coords:bad"
+        field = "ref"
+        if operation == "set_text":
+            step["text"] = "replacement"
+            line += " replacement"
+    payload: dict[str, Any] = {"session_id": "s-abc123", "stop_on_failure": stop_on_failure}
+    if script_mode:
+        payload["script"] = f"home\n{line}"
+        path = "/tasks/script/run"
+    else:
+        payload["task"] = {"steps": [{"action": "home"}, step]}
+        path = "/tasks/run"
+    with _client_with_core(device) as client:
+        response = client.post(path, json=payload)
+    assert response.status_code == 400
+    error = response.json()["error"]
+    assert error["code"] == "ERR_TASK_INVALID"
+    assert f"steps[2].{field}" in error["message"]
+    assert device.mock_calls == []

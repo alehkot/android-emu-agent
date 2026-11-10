@@ -278,3 +278,98 @@ def test_selector_boolean_support_does_not_coerce_numbers(value: int | float) ->
         TaskManager().validate({"steps": [{"wait": "exists", "selector": {"enabled": value}}]})
     assert caught.value.code == "ERR_TASK_INVALID"
     assert "selector.enabled" in caught.value.message
+
+
+INVALID_ACTION_TARGETS = [
+    "coords:bad",
+    "tex:Save",
+    "text:Save ||",
+    "id:com.example:id/save enabled:maybe",
+]
+
+
+@pytest.mark.parametrize("operation", ["tap", "long_tap", "clear", "set_text"])
+@pytest.mark.parametrize("target", INVALID_ACTION_TARGETS)
+@pytest.mark.parametrize("stop_on_failure", [True, False])
+async def test_invalid_action_target_prevents_all_dispatch(
+    operation: str, target: str, stop_on_failure: bool
+) -> None:
+    step: dict[str, Any] = {"action": operation, "ref": target}
+    if operation == "set_text":
+        step["text"] = "replacement"
+    spec = {"steps": [{"action": "home"}, step]}
+    calls: list[TaskCall] = []
+
+    async def dispatcher(call: TaskCall) -> dict[str, Any]:
+        calls.append(call)
+        return {"status": "done"}
+
+    manager = TaskManager()
+    with pytest.raises(AgentError) as validation_error:
+        manager.validate(spec)
+    with pytest.raises(AgentError) as run_error:
+        await manager.run(
+            spec, session_id="s-test", dispatcher=dispatcher, stop_on_failure=stop_on_failure
+        )
+    for error in (validation_error.value, run_error.value):
+        assert error.code == "ERR_TASK_INVALID"
+        assert "steps[2].ref" in error.message
+        assert target not in error.message
+        assert error.remediation
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "container",
+    ["unknown:List", "coords:bad", "text:List ||", "coords:10,20", "id:list || coords:10,20"],
+)
+async def test_invalid_swipe_container_prevents_all_dispatch(container: str) -> None:
+    spec = {
+        "steps": [
+            {"action": "home"},
+            {"action": "swipe", "direction": "up", "container": container},
+        ]
+    }
+    calls: list[TaskCall] = []
+
+    async def dispatcher(call: TaskCall) -> dict[str, Any]:
+        calls.append(call)
+        return {"status": "done"}
+
+    manager = TaskManager()
+    with pytest.raises(AgentError) as validation_error:
+        manager.validate(spec)
+    with pytest.raises(AgentError) as run_error:
+        await manager.run(spec, session_id="s-test", dispatcher=dispatcher, stop_on_failure=False)
+    for error in (validation_error.value, run_error.value):
+        assert error.code == "ERR_TASK_INVALID"
+        assert "steps[2].container" in error.message
+        assert container not in error.message
+    assert calls == []
+
+
+@pytest.mark.parametrize("operation", ["tap", "long_tap", "clear", "set_text"])
+@pytest.mark.parametrize(
+    "target",
+    [
+        "^g2a1",
+        "^a1",
+        "coords:10,20",
+        "^a1 || text:Save || coords:10,20",
+        'text:"James\'" enabled:true',
+        r"text-matches:^Save.*$",
+    ],
+)
+def test_action_target_preflight_preserves_valid_syntax(operation: str, target: str) -> None:
+    step: dict[str, Any] = {"action": operation, "ref": target}
+    if operation == "set_text":
+        step["text"] = "replacement"
+    assert TaskManager().validate({"steps": [step]})["status"] == "done"
+
+
+@pytest.mark.parametrize(
+    "container", [None, "", "^a1", 'text:"My list" scrollable:true', "^g2a1 || id:list"]
+)
+def test_swipe_container_preflight_preserves_valid_syntax(container: str | None) -> None:
+    step = {"action": "swipe", "direction": "up", "container": container}
+    assert TaskManager().validate({"steps": [step]})["status"] == "done"

@@ -182,6 +182,12 @@ models before any action is dispatched. Invalid request fields return `ERR_TASK_
 task location, even with `--continue-on-failure`. This checks request types and modeled choices, not
 selector existence, installed packages, or all runtime operation constraints.
 
+Task action targets and nonempty swipe containers also receive selector syntax validation before
+any step runs. Invalid expressions return `ERR_TASK_INVALID` with the `ref` or `container` field
+location. Coordinates remain valid action targets, but are rejected in swipe containers (including
+fallbacks). Valid refs, selector fallback chains, quoted labels, and full-screen swipes are preserved;
+ref freshness and element existence remain runtime checks.
+
 Malformed numeric options in `.aea` swipe/wait/verifier lines return `ERR_TASK_SCRIPT_INVALID` with
 the source file, line, and option name. Swipe distance must be finite. Fix the reported line and
 rerun validation; no device actions run for a script rejected during parsing.
