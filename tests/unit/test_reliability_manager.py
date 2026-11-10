@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import shlex
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -546,14 +548,51 @@ class TestNativePerformanceArtifacts:
         # The shell user that a non-root adbd pulls as must own the copy, and only
         # root can remove it from root's staging directory.
         stage_command = su_mock.await_args_list[0].args[1]
-        assert stage_command.endswith(
-            " && chown -R 2000:2000 /data/local/tmp/android-emu-agent/anr"
-        )
-        assert su_mock.await_args_list[-1].args == (
-            mock_device,
-            "rm -rf /data/local/tmp/android-emu-agent/anr",
-        )
+        transfer_dir = shlex.split(stage_command)[2]
+        assert transfer_dir.startswith("/data/local/tmp/android-emu-agent/")
+        assert stage_command.endswith(f" && chown -R 2000:2000 {transfer_dir}/anr")
+        assert su_mock.await_args_list[-1].args == (mock_device, f"rm -rf {transfer_dir}")
         shell_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_overlapping_root_dir_pulls_keep_separate_copies(self, tmp_path: Path) -> None:
+        """Two pulls of one directory must not delete each other's staged copy."""
+        from android_emu_agent.reliability.manager import ReliabilityManager
+
+        manager = ReliabilityManager(output_dir=tmp_path)
+        staged: set[str] = set()
+        both_staged = asyncio.Event()
+        sources: list[str] = []
+
+        async def su(_device: object, command: str) -> str:
+            for step in command.split(" && "):
+                program, *args = shlex.split(step)
+                if program == "mkdir":
+                    staged.add(args[-1])
+                elif program == "rm":
+                    staged.discard(args[-1])
+            if len(staged) == 2:
+                both_staged.set()
+            return ""
+
+        async def pull(_serial: str, args: list[str]) -> None:
+            await asyncio.wait_for(both_staged.wait(), timeout=1)
+            # Each copy must still exist while the other pull is in flight.
+            assert any(args[1].startswith(f"{directory}/") for directory in staged)
+            sources.append(args[1])
+
+        with (
+            patch.object(manager, "_shell_su", AsyncMock(side_effect=su)),
+            patch.object(manager, "_run_adb", AsyncMock(side_effect=pull)),
+        ):
+            first, second = await asyncio.gather(
+                manager.pull_root_dir(MagicMock(), "emulator-5554", "/data/anr", "anr"),
+                manager.pull_root_dir(MagicMock(), "emulator-5554", "/data/anr", "anr"),
+            )
+
+        assert first != second
+        assert len(set(sources)) == 2
+        assert not staged, "each pull removes only its own staging directory"
 
     @pytest.mark.asyncio
     async def test_perfetto_rejects_unbounded_duration(self, tmp_path: Path) -> None:

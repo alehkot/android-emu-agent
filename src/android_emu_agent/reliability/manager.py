@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 import structlog
 
@@ -600,21 +601,24 @@ class ReliabilityManager:
         remote_dir: str,
         name: str,
     ) -> Path:
-        stage_parent = "/data/local/tmp/android-emu-agent"
-        stage_dir = f"{stage_parent}/{name}"
-        # Root's copy keeps the source's private modes, so hand it to the shell user
-        # (AID 2000) that a non-root adbd pulls as. Its parent is root's, so only root
-        # can remove it afterwards.
+        # A per-pull parent keeps overlapping pulls of one directory from deleting each
+        # other's copy, and the same token keeps their local results apart. Root's copy
+        # keeps the source's private modes, so hand it to the shell user (AID 2000) that
+        # a non-root adbd pulls as. Its parent is root's, so only root can remove it.
+        token = uuid4().hex
+        transfer_dir = f"/data/local/tmp/android-emu-agent/{token}"
+        stage_dir = f"{transfer_dir}/{name}"
         stage_cmd = (
-            f"rm -rf {stage_dir} && mkdir -p {stage_parent} && cp -r {remote_dir} {stage_parent}"
-            f" && chown -R 2000:2000 {stage_dir}"
+            f"mkdir -p {shlex.quote(transfer_dir)}"
+            f" && cp -r {shlex.quote(remote_dir)} {shlex.quote(transfer_dir)}"
+            f" && chown -R 2000:2000 {shlex.quote(stage_dir)}"
         )
-        local_path = self.output_dir / f"{serial}_{self._timestamp()}_{name}"
+        local_path = self.output_dir / f"{serial}_{self._timestamp()}_{token}_{name}"
         try:
             await self._shell_su(device, stage_cmd)
             await self._run_adb(serial, ["pull", stage_dir, str(local_path)])
         finally:
-            await self._cleanup_remote(device, stage_dir, recursive=True, as_root=True)
+            await self._cleanup_remote(device, transfer_dir, recursive=True, as_root=True)
         logger.info("root_dir_pulled", serial=serial, remote=remote_dir, local=str(local_path))
         return local_path
 
