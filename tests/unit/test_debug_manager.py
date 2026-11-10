@@ -1321,6 +1321,26 @@ class TestMilestone2DebugMethods:
         ]
         assert len(manager._event_queues["s-test"]) == 3
 
+    @pytest.mark.asyncio
+    async def test_limited_drain_keeps_events_it_did_not_return(self) -> None:
+        manager = DebugManager()
+        self._attach_session(manager)
+        manager._event_queues["s-test"] = [
+            {"type": "breakpoint_resolved", "breakpoint_id": 1},
+            {"type": "breakpoint_hit", "breakpoint_id": 1},
+            {"type": "exception_hit", "breakpoint_id": 2},
+        ]
+
+        result = await manager.peek_events("s-test", drain=True, limit=2)
+
+        assert [event["type"] for event in result["events"]] == [
+            "breakpoint_hit",
+            "exception_hit",
+        ]
+        assert result["buffer_count"] == 1
+        remaining = await manager.drain_events("s-test")
+        assert [event["type"] for event in remaining["events"]] == ["breakpoint_resolved"]
+
     def test_event_queue_keeps_newest_notifications(self) -> None:
         manager = DebugManager()
         with patch("android_emu_agent.debugger.manager._MAX_EVENT_HISTORY", 2):

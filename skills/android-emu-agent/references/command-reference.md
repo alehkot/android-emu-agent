@@ -413,8 +413,10 @@ Use `--keep-suspended` when attaching to an app started with `--wait-debugger` a
 breakpoints before any app code resumes.
 
 Use `debug observe` when an agent needs one bounded planning payload. It is non-destructive by
-default: queued events are peeked, not drained, unless `--drain-events` is set. Use `--no-stack`
-when the target thread is running and a stack snapshot is not expected.
+default: queued events are peeked, not drained, unless `--drain-events` is set. A drain consumes
+only the newest `--event-limit` events it returns; older events stay queued, counted in
+`buffer_count`. Use `--no-stack` when the target thread is running and a stack snapshot is not
+expected.
 
 Step commands return an Observe-Act-Verify payload with `status`, `location`, `method`, `thread`,
 `locals`, `token_usage_estimate`, and `truncated`. If stepping times out, `status=timeout` includes

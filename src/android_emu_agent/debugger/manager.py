@@ -814,7 +814,9 @@ class DebugManager:
         if limit is not None and limit < len(events):
             events = events[-limit:]
         if drain:
-            queue.clear()
+            # Consume only what is returned. Older events beyond the limit stay queued, and
+            # buffer_count reports them, instead of being dropped unseen.
+            del queue[len(queue) - len(events) :]
         return {
             "status": ds.state,
             "session_id": session_id,

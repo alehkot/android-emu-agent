@@ -57,7 +57,9 @@ This allows safe interleaving of UI and debugger operations in one session.
 
 `debug observe --session <id> --json` is the preferred first debugger read for agents. It is
 non-destructive by default because it peeks queued events and buffered logpoint hits without
-draining them; add `--drain-events` only when you intentionally want to consume the queue.
+draining them; add `--drain-events` only when you intentionally want to consume the queue. A drain
+consumes only the events it returns (the newest `--event-limit`); if `buffer_count` is still
+nonzero, older events remain queued.
 
 `debug status` reports `unresponsive` when cached attachment metadata exists but the bridge process
 is missing, stopped, or does not answer its bounded health check. Retry once, then detach and attach
