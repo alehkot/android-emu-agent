@@ -19,8 +19,8 @@ class JdiSessionCharacterizationTest {
 
     companion object {
         private const val EXCEPTION_TARGET_CLASS = "dev.androidemu.jdibridge.TestTargetException"
-        private const val STEP_TARGET_CLASS = "dev.androidemu.jdibridge.TestTargetDebug"
-        private const val STEP_BREAKPOINT_LINE = 30
+        private const val STEP_TARGET_CLASS = "dev.androidemu.jdibridge.TestTargetSlowStep"
+        private const val STEP_BREAKPOINT_LINE = 12
     }
 
     @Test
@@ -90,7 +90,9 @@ class JdiSessionCharacterizationTest {
             worker.isDaemon = true
             worker.start()
 
-            Thread.sleep(5)
+            // The stepped-over line sleeps 5 s, so the step is still pending when the target dies.
+            // Waiting first lets the worker register the step even on a busy CI machine.
+            Thread.sleep(500)
             process.destroyForcibly()
             process.waitFor(5, TimeUnit.SECONDS)
 
