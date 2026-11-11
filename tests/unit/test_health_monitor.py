@@ -268,6 +268,89 @@ class TestGetStatus:
         assert status["devices"]["emulator-5554"]["u2_ok"] is True
 
 
+class TestRunHealthChecks:
+    """Tests for the heartbeat's device selection and logging."""
+
+    @staticmethod
+    def _monitor(*, sessions: list[str], attached: set[str]):
+        from android_emu_agent.daemon.health import HealthMonitor
+
+        device_manager = MagicMock()
+        device_manager._adb_devices = {}
+        device_manager._u2_devices = {}
+        device_manager.get_device = AsyncMock(
+            side_effect=lambda serial: object() if serial in attached else None
+        )
+        device_manager.evict_device = AsyncMock()
+        session_manager = MagicMock()
+        session_manager.list_sessions = AsyncMock(
+            return_value=[SimpleNamespace(device_serial=serial) for serial in sessions]
+        )
+        return HealthMonitor(device_manager, session_manager), device_manager
+
+    @pytest.mark.asyncio
+    async def test_detached_device_without_session_is_dropped(self) -> None:
+        """A stopped emulator whose session closed must not keep the daemon degraded."""
+        from android_emu_agent.daemon.health import DeviceHealth
+
+        monitor, device_manager = self._monitor(sessions=[], attached=set())
+        monitor._device_health["emulator-5554"] = DeviceHealth(
+            serial="emulator-5554", adb_ok=True, u2_ok=True, last_check=datetime.now()
+        )
+
+        await monitor._run_health_checks()
+
+        assert monitor.get_status() == {"devices": {}}
+        device_manager.evict_device.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_attached_device_without_session_is_still_checked(self) -> None:
+        """Pruning only drops devices discovery no longer lists."""
+        from android_emu_agent.daemon.health import DeviceHealth
+
+        monitor, device_manager = self._monitor(sessions=[], attached={"emulator-5554"})
+        device_manager._adb_devices["emulator-5554"] = MagicMock()
+        earlier = datetime(2026, 1, 1)
+        monitor._device_health["emulator-5554"] = DeviceHealth(
+            serial="emulator-5554", adb_ok=True, u2_ok=True, last_check=earlier
+        )
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                "android_emu_agent.daemon.health.run_device_io",
+                AsyncMock(return_value="ok"),
+            )
+            await monitor._run_health_checks()
+
+        assert monitor._device_health["emulator-5554"].last_check > earlier
+
+    @pytest.mark.asyncio
+    async def test_unhealthy_session_device_warns_once_then_logs_recovery(self) -> None:
+        """An unchanged unhealthy state is logged once, not on every heartbeat."""
+        monitor, device_manager = self._monitor(sessions=["emulator-5554"], attached=set())
+        logger = MagicMock()
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr("android_emu_agent.daemon.health.logger", logger)
+            mp.setattr(
+                "android_emu_agent.daemon.health.run_device_io",
+                AsyncMock(return_value="ok"),
+            )
+            await monitor._run_health_checks()
+            await monitor._run_health_checks()
+
+            assert logger.warning.call_count == 1
+            assert device_manager.evict_device.await_count == 2
+            assert monitor.get_status()["devices"]["emulator-5554"]["adb_ok"] is False
+
+            device_manager._adb_devices["emulator-5554"] = MagicMock()
+            await monitor._run_health_checks()
+
+        logger.info.assert_called_once_with("device_recovered", serial="emulator-5554")
+        assert logger.warning.call_count == 1
+        assert monitor.get_status()["devices"]["emulator-5554"]["adb_ok"] is True
+
+
 @pytest.mark.asyncio
 async def test_health_reports_daemon_pid() -> None:
     """The health response should identify the process serving the socket."""

@@ -162,15 +162,29 @@ class HealthMonitor:
         sessions = await self._session_manager.list_sessions()
         session_devices = {s.device_serial for s in sessions}
 
+        # A device with no session that discovery no longer lists was detached or shut
+        # down. Checking it again would report it, and the daemon, unhealthy forever.
+        for serial in [s for s in self._device_health if s not in session_devices]:
+            if await self._device_manager.get_device(serial) is None:
+                del self._device_health[serial]
+
         # Check session devices first, then other known devices
         all_devices = list(session_devices) + [
             s for s in self._device_health if s not in session_devices
         ]
 
         for serial in all_devices:
+            previous = self._device_health.get(serial)
+            was_healthy = previous is None or (previous.adb_ok and previous.u2_ok)
             health = await self.check_device(serial, timeout=3.0)
 
-            if not health.adb_ok or not health.u2_ok:
+            if health.adb_ok and health.u2_ok:
+                if not was_healthy:
+                    logger.info("device_recovered", serial=serial)
+                continue
+            # Log the change, not every heartbeat: a stopped emulator whose session is
+            # still open used to log this every 15 seconds for days.
+            if was_healthy:
                 logger.warning(
                     "device_unhealthy",
                     serial=serial,
@@ -178,5 +192,5 @@ class HealthMonitor:
                     u2_ok=health.u2_ok,
                     error=health.error,
                 )
-                # Evict stale connections
-                await self._device_manager.evict_device(serial)
+            # Evict stale connections
+            await self._device_manager.evict_device(serial)
