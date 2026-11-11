@@ -326,6 +326,9 @@ class UISnapshotter:
         """Infer semantic role from class name."""
         class_lower = class_name.lower()
 
+        # RadioButton class names also contain "button", so test them first.
+        if "radiobutton" in class_lower:
+            return "radio"
         if "button" in class_lower:
             return "button"
         if self._is_editable(node):
@@ -338,8 +341,6 @@ class UISnapshotter:
             return "checkbox"
         if "switch" in class_lower:
             return "switch"
-        if "radiobutton" in class_lower:
-            return "radio"
         if "recyclerview" in class_lower or "listview" in class_lower:
             return "list"
         if "scrollview" in class_lower:

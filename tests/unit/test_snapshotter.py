@@ -257,6 +257,22 @@ class TestInteractiveFilter:
         assert snapshot.elements[0].role == "checkbox"
         assert snapshot.elements[0].state["checked"] is True
 
+    def test_radio_buttons_get_radio_role_not_button(self) -> None:
+        """Radio class names contain "button" but must keep their selection role."""
+        xml = b"""<hierarchy>
+            <node class="android.widget.RadioButton" checkable="true" checked="true"
+                  clickable="true" text="Daily" bounds="[0,0][100,50]" />
+            <node class="com.google.android.material.radiobutton.MaterialRadioButton"
+                  checkable="true" clickable="true" text="Weekly" bounds="[0,50][100,100]" />
+            <node class="android.widget.ImageButton" clickable="true"
+                  content-desc="Close" bounds="[0,100][100,150]" />
+        </hierarchy>"""
+
+        snapshotter = UISnapshotter()
+        snapshot = snapshotter.parse_hierarchy(xml, "s-1", 1, {}, {})
+
+        assert [element.role for element in snapshot.elements] == ["radio", "radio", "button"]
+
     def test_litho_view_is_kept_when_it_carries_accessible_label(self) -> None:
         """Litho host views should not be filtered out when they expose accessibility text."""
         xml = b"""<hierarchy>
