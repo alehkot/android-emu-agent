@@ -295,6 +295,19 @@ def daemon_identity_error(pid: int) -> AgentError:
     )
 
 
+def daemon_stop_timeout_error(pid: int, timeout_seconds: float) -> AgentError:
+    """Create error when a signalled daemon is still running after the stop wait."""
+    return AgentError(
+        code="ERR_DAEMON_STOP_TIMEOUT",
+        message=f"Daemon (pid {pid}) is still running {timeout_seconds:g} seconds after SIGTERM",
+        context={"pid": pid, "timeout_seconds": timeout_seconds},
+        remediation=(
+            "It may still be finishing requests, traces or debugger sessions. Run 'daemon status' "
+            "before retrying, and inspect ~/.android-emu-agent/daemon.log if it does not exit."
+        ),
+    )
+
+
 def invalid_package_error(package: str) -> AgentError:
     """Create error for invalid package name."""
     return AgentError(

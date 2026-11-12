@@ -101,6 +101,10 @@ android-emu-agent daemon start [OPTIONS]
 
 Stop the daemon process.
 
+Stops the daemon that serves the socket, even when its PID file is missing. Exit 1 if it is still
+running 10 seconds after SIGTERM; it may still be finishing traces or debugger sessions, so check
+daemon status before retrying.
+
 **Usage**:
 
 ```console

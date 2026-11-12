@@ -51,7 +51,12 @@ def daemon_start() -> None:
 
 @app.command("stop")
 def daemon_stop() -> None:
-    """Stop the daemon process."""
+    """Stop the daemon process.
+
+    Stops the daemon that serves the socket, even when its PID file is missing. Exit 1 if it is
+    still running 10 seconds after SIGTERM; it may still be finishing traces or debugger sessions,
+    so check daemon status before retrying.
+    """
     controller = DaemonController()
     status = controller.status()
     if status["pid_running"] and not status["pid_matches_daemon"]:
@@ -59,7 +64,12 @@ def daemon_stop() -> None:
         typer.echo(str(error), err=True)
         typer.echo(f"Remediation: {error.remediation}", err=True)
         raise typer.Exit(code=1)
-    stopped = controller.stop()
+    try:
+        stopped = controller.stop()
+    except AgentError as error:
+        typer.echo(str(error), err=True)
+        typer.echo(f"Remediation: {error.remediation}", err=True)
+        raise typer.Exit(code=1) from None
     if stopped:
         typer.echo("Daemon stopped")
     else:

@@ -45,6 +45,7 @@ Match your symptom to the right section:
 | `ERR_JDK_UNSUPPORTED`          | Java too old or lacks JDI            | Point `JAVA_HOME` to a full JDK 17+                                                  | Not recoverable |
 | `ERR_SESSION_EXPIRED`          | Session timed out                    | Create new session with `session start`                                              | Not recoverable |
 | `ERR_DAEMON_START_FAILED`      | Startup exited or timed out          | Inspect daemon logs and `daemon status` before retrying                              | Manual          |
+| `ERR_DAEMON_STOP_TIMEOUT`      | Still running after the stop wait    | Check `daemon status`, then the daemon log if it persists                            | Manual          |
 | `ERR_DAEMON_OFFLINE`           | Daemon not running                   | Run `daemon start`                                                                   | Not recoverable |
 
 > **Note:** Infrastructure errors (device offline, session expired, daemon offline) cannot be

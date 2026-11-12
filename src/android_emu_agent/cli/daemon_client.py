@@ -13,7 +13,7 @@ from typing import Any
 
 import httpx
 
-from android_emu_agent.errors import daemon_start_error
+from android_emu_agent.errors import daemon_start_error, daemon_stop_timeout_error
 from android_emu_agent.security import (
     daemon_socket_path,
     migrate_private_tree,
@@ -28,6 +28,8 @@ PID_FILE = STATE_DIR / "daemon.pid"
 LOG_FILE = STATE_DIR / "daemon.log"
 BASE_URL = "http://android-emu-agent"
 RETRYABLE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+# Shutdown writes active traces and stops debugger bridges, which can take seconds.
+STOP_TIMEOUT_SECONDS = 10.0
 
 
 class DaemonController:
@@ -136,23 +138,32 @@ class DaemonController:
         raise daemon_start_error(process.pid, "did not become healthy within 5 seconds")
 
     def stop(self) -> bool:
-        """Stop the daemon if running."""
+        """Stop the daemon; return False if none is running.
+
+        Raises an AgentError when the daemon is still running after the stop wait.
+        """
         pid = self._read_pid()
-        if not pid:
-            return False
-        if not self._pid_running(pid):
+        if pid and not self._pid_running(pid):
             PID_FILE.unlink(missing_ok=True)
-            return False
-        if not self._pid_matches_daemon(pid):
+            pid = None
+        if pid is None:
+            # The PID file can be lost while the daemon keeps serving its socket, which
+            # 'daemon start' reports as "pid unknown". The socket's owner reports its pid.
+            health = self._socket_health()
+            pid = health.get("pid") if health else None
+            if not isinstance(pid, int) or not self._pid_running(pid):
+                return False
+        elif not self._pid_matches_daemon(pid):
             return False
 
         os.kill(pid, signal.SIGTERM)
-        for _ in range(20):
+        deadline = time.monotonic() + STOP_TIMEOUT_SECONDS
+        while time.monotonic() < deadline:
             if not self._pid_running(pid):
                 PID_FILE.unlink(missing_ok=True)
                 return True
             time.sleep(0.1)
-        return False
+        raise daemon_stop_timeout_error(pid, STOP_TIMEOUT_SECONDS)
 
     def status(self) -> dict[str, Any]:
         """Return daemon status summary."""

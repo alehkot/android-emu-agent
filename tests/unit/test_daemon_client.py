@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import signal
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -10,6 +11,7 @@ import pytest
 
 from android_emu_agent.cli import daemon_client
 from android_emu_agent.cli.daemon_client import DaemonClient, DaemonController
+from android_emu_agent.errors import AgentError
 
 
 def _client_with_transport(transport_client: Mock) -> tuple[DaemonClient, Mock, Mock]:
@@ -113,6 +115,58 @@ def test_stop_refuses_pid_not_serving_daemon_socket(
         assert controller.stop() is False
 
     kill.assert_not_called()
+    assert pid_file.read_text(encoding="utf-8") == "4242"
+
+
+def test_stop_uses_socket_pid_when_pid_file_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A daemon whose PID file was lost must still be stoppable."""
+    monkeypatch.setattr(daemon_client, "PID_FILE", tmp_path / "daemon.pid")
+    controller = _controller(tmp_path / "daemon.sock")
+    running = {9898}
+    monkeypatch.setattr(controller, "_pid_running", lambda pid: pid in running)
+    monkeypatch.setattr(controller, "_socket_health", lambda: {"pid": 9898})
+
+    with patch.object(
+        daemon_client.os, "kill", side_effect=lambda pid, _sig: running.discard(pid)
+    ) as kill:
+        assert controller.stop() is True
+
+    kill.assert_called_once_with(9898, signal.SIGTERM)
+
+
+def test_stop_reports_nothing_running_without_pid_file_or_socket(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without a PID file or a healthy socket there is no daemon to signal."""
+    monkeypatch.setattr(daemon_client, "PID_FILE", tmp_path / "daemon.pid")
+    controller = _controller(tmp_path / "daemon.sock")
+    monkeypatch.setattr(controller, "_socket_health", lambda: None)
+
+    with patch.object(daemon_client.os, "kill") as kill:
+        assert controller.stop() is False
+
+    kill.assert_not_called()
+
+
+def test_stop_raises_when_daemon_outlives_the_wait(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A slow shutdown must not be reported as a daemon that was not running."""
+    pid_file = tmp_path / "daemon.pid"
+    pid_file.write_text("4242", encoding="utf-8")
+    monkeypatch.setattr(daemon_client, "PID_FILE", pid_file)
+    monkeypatch.setattr(daemon_client, "STOP_TIMEOUT_SECONDS", 0.0)
+    controller = _controller(tmp_path / "daemon.sock")
+    monkeypatch.setattr(controller, "_pid_running", lambda _pid: True)
+    monkeypatch.setattr(controller, "_pid_matches_daemon", lambda _pid: True)
+
+    with patch.object(daemon_client.os, "kill") as kill, pytest.raises(AgentError) as exc_info:
+        controller.stop()
+
+    kill.assert_called_once_with(4242, signal.SIGTERM)
+    assert exc_info.value.code == "ERR_DAEMON_STOP_TIMEOUT"
     assert pid_file.read_text(encoding="utf-8") == "4242"
 
 

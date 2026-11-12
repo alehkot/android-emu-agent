@@ -227,6 +227,7 @@ android-emu-agent daemon status --json
 | `ERR_AMBIGUOUS_SELECTOR`     | A single-target selector matched many nodes  | Add filters or use a fresh `^ref`                           |
 | `ERR_DAEMON_START_FAILED`    | New daemon exited or did not become healthy | Inspect daemon logs and `daemon status` before retrying |
 | `ERR_DAEMON_IDENTITY`        | A live PID does not own the daemon socket    | Inspect the daemon log and process before manual cleanup    |
+| `ERR_DAEMON_STOP_TIMEOUT`    | Daemon still running after the stop wait     | Check `daemon status`, then the daemon log if it persists   |
 | `ERR_TASK_INVALID`           | A JSON task file is invalid                  | Fix the task and rerun `task validate`                      |
 | `ERR_TASK_SCRIPT_INVALID`    | A `.aea` script is invalid                   | Fix the reported line and rerun `task validate`             |
 | `ERR_EXPECTATION_FAILED`     | The expected state was not observed          | Inspect the state, selector, and timeout                    |
