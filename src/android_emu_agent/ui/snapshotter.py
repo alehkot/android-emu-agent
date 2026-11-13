@@ -449,6 +449,15 @@ class UISnapshotter:
             ):
                 return label
 
+        # Flutter's root view is focusable but has no action, and every labelled node in it
+        # is focusable too. Naming it after the first button would list a full-screen
+        # "Encyclopedia" element whose tap lands mid-screen, not on that button.
+        if not self._is_editable(node) and not any(
+            node.get(attr) == "true"
+            for attr in ("clickable", "scrollable", "checkable", "long-clickable")
+        ):
+            return None
+
         for descendant in descendants:
             label = self._own_label(descendant)
             if label:

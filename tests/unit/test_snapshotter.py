@@ -231,6 +231,24 @@ class TestInteractiveFilter:
 
         assert [element.label for element in snapshot.elements] == ["Water", "Reading", "\u2605"]
 
+    def test_focus_only_container_does_not_borrow_a_button_label(self) -> None:
+        """A focus-only root, like Flutter's, must not be named after a button inside it."""
+        xml = b"""<hierarchy rotation="0">
+            <node class="android.widget.FrameLayout" focusable="true" bounds="[0,0][1280,2856]">
+                <node class="android.widget.Button" content-desc="Encyclopedia"
+                      clickable="true" focusable="true" bounds="[12,168][156,312]" />
+                <node class="android.view.View" content-desc="Runic Oracle"
+                      focusable="true" bounds="[216,206][558,275]" />
+            </node>
+        </hierarchy>"""
+
+        snapshot = UISnapshotter().parse_hierarchy(xml, "s-1", 1, {}, {})
+
+        labels = [element.label for element in snapshot.elements]
+        assert labels.count("Encyclopedia") == 1
+        assert snapshot.elements[0].class_name == "android.widget.FrameLayout"
+        assert not snapshot.elements[0].label
+
     def test_full_mode_keeps_structure_and_text_nodes(self) -> None:
         """Full snapshots should preserve container and text nodes."""
         xml = b"""<hierarchy>
