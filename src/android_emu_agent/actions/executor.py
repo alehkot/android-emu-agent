@@ -203,12 +203,12 @@ class ActionExecutor:
 
     async def _set_text(self, device: u2.Device, locator: LocatorBundle, text: str) -> None:
         """Set text on an element."""
-        element = await self._find_element(device, locator)
+        element = await self._find_element(device, locator, use_label=False)
         await run_device_io(device, element.set_text, text)
 
     async def _clear(self, device: u2.Device, locator: LocatorBundle) -> None:
         """Clear text from an element."""
-        element = await self._find_element(device, locator)
+        element = await self._find_element(device, locator, use_label=False)
         await run_device_io(device, element.clear_text)
 
     async def _press_back(self, device: u2.Device) -> None:
@@ -223,8 +223,15 @@ class ActionExecutor:
         """Press recents button."""
         await run_device_io(device, device.press, "recent")
 
-    async def _find_element(self, device: u2.Device, locator: LocatorBundle) -> Any:
-        """Find element using locator bundle strategies."""
+    async def _find_element(
+        self, device: u2.Device, locator: LocatorBundle, *, use_label: bool = True
+    ) -> Any:
+        """Find element using locator bundle strategies.
+
+        Text edits pass ``use_label=False``: a borrowed label matches the descendant it came
+        from, such as a Compose text field's floating "Name" label, which ignores set_text.
+        Those edits fall through to the coordinate proxy, which focuses the field and types.
+        """
         selector_candidates: list[dict[str, str]] = []
 
         # Strategy 1: resource-id (most reliable)
@@ -240,7 +247,11 @@ class ActionExecutor:
             selector_candidates.append({"text": locator.text})
 
         # Strategy 4: semantic label fallback for Compose/Litho host views
-        if locator.label and locator.label not in {locator.text, locator.content_desc}:
+        if (
+            use_label
+            and locator.label
+            and locator.label not in {locator.text, locator.content_desc}
+        ):
             selector_candidates.extend(({"description": locator.label}, {"text": locator.label}))
 
         ambiguous_match: tuple[str, int] | None = None

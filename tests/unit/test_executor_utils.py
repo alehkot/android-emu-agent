@@ -261,6 +261,41 @@ class TestFrameworkFriendlyLookup:
         device.assert_any_call(description="Settings")
 
     @pytest.mark.asyncio
+    async def test_set_text_types_into_field_instead_of_its_borrowed_label(self) -> None:
+        """A Compose field's floating label is a TextView; set_text on it changes nothing."""
+        executor = ActionExecutor()
+        device = MagicMock()
+        label_view = MagicMock()
+        label_view.count = 1
+        no_match = MagicMock()
+        no_match.count = 0
+        device.side_effect = lambda **kwargs: label_view if kwargs == {"text": "Name"} else no_match
+
+        locator = LocatorBundle(
+            ref="^a3",
+            generation=2,
+            resource_id=None,
+            content_desc=None,
+            text=None,
+            class_name="android.widget.EditText",
+            bounds=[48, 726, 1232, 918],
+            ancestry_hash="abc123",
+            index=0,
+            role="textfield",
+            state={"editable": True},
+            label="Name",
+        )
+
+        await executor._set_text(device, locator, "Water")
+        await executor._clear(device, locator)
+
+        label_view.set_text.assert_not_called()
+        label_view.clear_text.assert_not_called()
+        device.click.assert_called_with(640, 822)
+        device.send_keys.assert_called_once_with("Water", clear=True)
+        device.clear_text.assert_called_once_with()
+
+    @pytest.mark.asyncio
     async def test_find_element_prefers_exact_resource_id_before_label_fallback(self) -> None:
         """Classic IDs and Compose test tags should still be the first lookup strategy."""
         executor = ActionExecutor()
