@@ -362,7 +362,12 @@ async def _resolve_swipe_bounds(
                 status_code=500,
             )
         assert bounds is not None
-        return bounds, None
+        # Keep a whole-screen gesture off the top and bottom 15%, where status, app and
+        # navigation bars sit: across the full height, the default 80% swipe starts in
+        # the bottom 10%, on a bottom navigation bar, and never reaches the list above it.
+        left, top, right, bottom = bounds
+        inset = (bottom - top) * 15 // 100
+        return [left, top + inset, right, bottom - inset], None
 
     try:
         selector = parse_selector(container)

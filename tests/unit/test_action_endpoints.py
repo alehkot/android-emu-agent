@@ -139,6 +139,24 @@ def test_swipe_uses_ref_container_bounds() -> None:
     device.swipe.assert_called_once_with(200, 400, 200, 200, 0.4)
 
 
+def test_screen_swipe_stays_clear_of_top_and_bottom_bars() -> None:
+    """Without a container, the gesture must not start on a bottom navigation bar."""
+    device = MagicMock()
+    device.info = {"displayWidth": 1280, "displayHeight": 2856}
+
+    with _client_with_core(device) as (client, _ref_resolver):
+        resp = client.post(
+            "/actions/swipe",
+            json={"session_id": "s-abc123", "direction": "up"},
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["bounds"] == [0, 428, 1280, 2428]
+    # 80% of the 2000-pixel band around the center, not 80% of the whole screen,
+    # whose lowest 11% is a bottom navigation bar in a typical Material app.
+    device.swipe.assert_called_once_with(640, 2228, 640, 628, 0.3)
+
+
 def test_tap_tries_fallback_selectors_in_order() -> None:
     """Tap should try selector alternatives separated by ||."""
     device = MagicMock()

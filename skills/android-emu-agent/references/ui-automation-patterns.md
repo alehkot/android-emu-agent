@@ -513,14 +513,15 @@ android-emu-agent ui snapshot s-abc123
 # Repeat until found or max scrolls reached
 ```
 
-Scroll distance guidelines:
+Scroll distance guidelines. Distance is a fraction of the `--in` container. Without `--in`, it is a
+fraction of the screen's middle 70%, which keeps the gesture off status, app and navigation bars.
 
 | Distance | Use Case                                              |
 | -------- | ----------------------------------------------------- |
 | 0.2-0.3  | Small increments, precise positioning                 |
-| 0.5      | Half-screen scroll                                    |
+| 0.5      | Medium scroll                                         |
 | 0.7-0.8  | Fast scrolling through long lists; 0.8 is the default |
-| 1.0      | Maximum scroll, nearly full screen                    |
+| 1.0      | Maximum scroll                                        |
 
 Horizontal scrolling:
 
