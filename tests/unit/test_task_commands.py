@@ -8,6 +8,7 @@ from typing import Any
 from unittest.mock import patch
 
 import httpx
+import pytest
 
 
 class DummyResponse:
@@ -205,5 +206,50 @@ def test_task_run_script_uses_session_directive(tmp_path: Path) -> None:
         )
 
     payload = calls[0][2]
+    assert payload is not None
+    assert payload["session_id"] == "s-from-script"
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        # The daemon reports the unclosed quote; the CLI must still find the session to send it.
+        'name "Login smoke\nsession s-from-script\nwait idle\n',
+        # As in the DSL's compiled task, a later session line replaces an earlier one.
+        "session s-earlier\nsession s-from-script\nwait idle\n",
+    ],
+)
+def test_task_run_script_session_follows_dsl(tmp_path: Path, script: str) -> None:
+    """Should resolve the session line the daemon's script parser would use."""
+    from android_emu_agent.cli.commands import task
+
+    task_path = tmp_path / "login.aea"
+    task_path.write_text(script, encoding="utf-8")
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(
+            self,
+            method: str,
+            path: str,
+            json_body: dict[str, Any] | None = None,
+            *,
+            timeout: httpx.Timeout | None = None,
+        ):
+            assert timeout == httpx.Timeout(10.0)
+            calls.append((method, path, json_body))
+            return DummyResponse({"status": "done"})
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(task, "DaemonClient", DummyClient):
+        task.task_run(str(task_path), session=None, continue_on_failure=False, json_output=False)
+
+    method, path, payload = calls[0]
+    assert (method, path) == ("POST", "/tasks/script/run")
     assert payload is not None
     assert payload["session_id"] == "s-from-script"

@@ -70,6 +70,9 @@ def _resolve_session(task: LoadedTask, session: str | None) -> str:
 
 
 def _script_session_id(script: str) -> str | None:
+    # Mirrors the DSL: the last session line wins. A line that does not tokenize is left for the
+    # daemon to report with its line number; stopping there would hide a later session line.
+    session_id = None
     for line in script.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
@@ -77,10 +80,10 @@ def _script_session_id(script: str) -> str | None:
         try:
             tokens = shlex.split(stripped, comments=True, posix=True)
         except ValueError:
-            return None
+            continue
         if len(tokens) == 2 and tokens[0].lower() == "session":
-            return tokens[1]
-    return None
+            session_id = tokens[1]
+    return session_id
 
 
 def _script_body(task: LoadedTask) -> str:
