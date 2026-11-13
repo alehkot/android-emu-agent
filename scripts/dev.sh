@@ -366,7 +366,7 @@ push_release_refs() {
 
     push_url="$(github_push_url)" || return 1
     echo "Pushing $branch and $tag to GitHub..."
-    git push "$push_url" "$branch"
+    git push "$push_url" "$branch" || return 1
     if [ -n "$RELEASE_FORCE_TAG_PUSH_OLD_SHA" ]; then
         git push --force-with-lease="refs/tags/$tag:$RELEASE_FORCE_TAG_PUSH_OLD_SHA" \
             "$push_url" "refs/tags/$tag"
