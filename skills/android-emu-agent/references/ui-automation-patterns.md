@@ -515,12 +515,12 @@ android-emu-agent ui snapshot s-abc123
 
 Scroll distance guidelines:
 
-| Distance | Use Case                              |
-| -------- | ------------------------------------- |
-| 0.2-0.3  | Small increments, precise positioning |
-| 0.5      | Default, half-screen scroll           |
-| 0.7-0.8  | Fast scrolling through long lists     |
-| 1.0      | Maximum scroll, nearly full screen    |
+| Distance | Use Case                                              |
+| -------- | ----------------------------------------------------- |
+| 0.2-0.3  | Small increments, precise positioning                 |
+| 0.5      | Half-screen scroll                                    |
+| 0.7-0.8  | Fast scrolling through long lists; 0.8 is the default |
+| 1.0      | Maximum scroll, nearly full screen                    |
 
 Horizontal scrolling:
 

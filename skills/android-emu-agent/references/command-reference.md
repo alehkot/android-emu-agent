@@ -660,8 +660,8 @@ Options:
 
 - `--in <target>`: Constrain the gesture to a container `^ref` or selector; `||` fallbacks are tried
   in order and stop on ambiguity
-- `--distance <0-1>`: Gesture distance as fraction of screen (default varies) Must be finite,
-  greater than zero, and at most one. Direct swipe requests reject NaN and infinity with
+- `--distance <0-1>`: Gesture distance as fraction of screen (default 0.8). Must be finite, greater
+  than zero, and at most one. Direct swipe requests reject NaN and infinity with
   `ERR_INVALID_DISTANCE` before accessing the device. JSON tasks reject nonfinite swipe distances
   during validation with `ERR_TASK_INVALID`, before any task action runs.
 - `--duration <ms>`: Swipe duration in milliseconds (swipe only)
