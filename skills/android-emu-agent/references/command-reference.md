@@ -271,8 +271,8 @@ fallbacks for refs. Coordinate actions focus the target field before replacing o
 - `action back <session_id>` Press back button.
 - `action home <session_id>` Press home button.
 - `action recents <session_id>` Open recent apps.
-- `action swipe <dir> -s <session_id>` Swipe gesture.
-- `action scroll <dir> -s <session_id>` Scroll gesture.
+- `action swipe <dir> -s <session_id>` Swipe gesture; `<dir>` is where the finger moves.
+- `action scroll <dir> -s <session_id>` Scroll gesture; `<dir>` is where the view moves.
 
 Refs use `^g<generation>a<element>` and therefore identify their source snapshot unambiguously. If a
 stale ref can be confidently rebound against the latest snapshot generation, action responses may
@@ -652,6 +652,9 @@ android-emu-agent action scroll <direction> -s <session_id> [--in <target>] [--d
 ```
 
 Directions: `up`, `down`, `left`, `right`
+
+`swipe` names where the finger moves and `scroll` names where the view moves, so they are opposites:
+`scroll down` and `swipe up` both reveal the content below.
 
 Options:
 

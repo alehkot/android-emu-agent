@@ -1670,7 +1670,7 @@ android-emu-agent action [OPTIONS] COMMAND [ARGS]...
 - `home`: Press home.
 - `recents`: Press recents.
 - `swipe`: Perform swipe gesture.
-- `scroll`: Scroll in a direction (alias for swipe).
+- `scroll`: Scroll the view; 'down' shows lower content.
 
 ### `android-emu-agent action tap`
 
@@ -1879,7 +1879,19 @@ android-emu-agent action swipe [OPTIONS] DIRECTION
 
 ### `android-emu-agent action scroll`
 
-Scroll in a direction (alias for swipe).
+Scroll the view; 'down' shows lower content.
+
+Unlike swipe, the direction names where the view moves, so 'scroll down' swipes up.
+
+Examples:
+
+```bash
+# Reveal lower content in a long list
+android-emu-agent action scroll down --session s-abc123
+
+# Go back toward the top of a specific container
+android-emu-agent action scroll up --session s-abc123 --in id:com.example:id/recycler
+```
 
 **Usage**:
 
