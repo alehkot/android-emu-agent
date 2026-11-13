@@ -440,7 +440,13 @@ class UISnapshotter:
             if self._is_interactive(descendant):
                 continue
             label = self._own_label(descendant)
-            if label and not self._is_structural(descendant):
+            # Skip icon-only text such as "•" or an emoji, which uiautomator2 dumps as "..":
+            # a chip reading "💧 Water" should be labelled "Water", not "..".
+            if (
+                label
+                and not self._is_structural(descendant)
+                and any(char.isalnum() for char in label)
+            ):
                 return label
 
         for descendant in descendants:

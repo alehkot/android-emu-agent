@@ -210,6 +210,27 @@ class TestInteractiveFilter:
         assert snapshot.elements[0].label == "Settings"
         assert snapshot.elements[0].text is None
 
+    def test_proxy_label_skips_icon_only_child_text(self) -> None:
+        """A leading emoji or bullet must not hide the text that tells siblings apart."""
+        xml = """<hierarchy>
+            <node class="android.view.View" clickable="true" bounds="[0,0][300,100]">
+                <node class="android.widget.TextView" text=".." bounds="[10,10][60,90]" />
+                <node class="android.widget.TextView" text="Water" bounds="[70,10][290,90]" />
+            </node>
+            <node class="android.view.View" clickable="true" bounds="[300,0][600,100]">
+                <node class="android.widget.TextView" text="\u2022" bounds="[310,10][360,90]" />
+                <node class="android.widget.TextView" text="Reading" bounds="[370,10][590,90]" />
+            </node>
+            <node class="android.view.View" clickable="true" bounds="[600,0][700,100]">
+                <node class="android.widget.TextView" text="\u2605" bounds="[610,10][690,90]" />
+            </node>
+        </hierarchy>""".encode()
+
+        snapshotter = UISnapshotter()
+        snapshot = snapshotter.parse_hierarchy(xml, "s-1", 1, {}, {})
+
+        assert [element.label for element in snapshot.elements] == ["Water", "Reading", "\u2605"]
+
     def test_full_mode_keeps_structure_and_text_nodes(self) -> None:
         """Full snapshots should preserve container and text nodes."""
         xml = b"""<hierarchy>
