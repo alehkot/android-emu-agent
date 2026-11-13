@@ -9,6 +9,9 @@ from android_emu_agent.cli.utils import handle_response
 
 app = typer.Typer(help="Action execution commands")
 
+# Scroll names where the view moves; the finger swipes the opposite way.
+_SCROLL_TO_SWIPE = {"up": "down", "down": "up", "left": "right", "right": "left"}
+
 
 @app.command("tap")
 def action_tap(
@@ -192,14 +195,27 @@ def action_scroll(
     distance: float = typer.Option(0.8, "--distance", "-d", help="Scroll distance (0.0-1.0)"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
-    """Scroll in a direction (alias for swipe)."""
+    """Scroll the view; 'down' shows lower content.
+
+    Unlike swipe, the direction names where the view moves, so 'scroll down' swipes up.
+
+    Examples:
+
+    ```bash
+    # Reveal lower content in a long list
+    android-emu-agent action scroll down --session s-abc123
+
+    # Go back toward the top of a specific container
+    android-emu-agent action scroll up --session s-abc123 --in id:com.example:id/recycler
+    ```
+    """
     client = DaemonClient()
     resp = client.request(
         "POST",
         "/actions/swipe",
         json_body={
             "session_id": session,
-            "direction": direction,
+            "direction": _SCROLL_TO_SWIPE.get(direction, direction),
             "container": container,
             "distance": distance,
             "duration_ms": 300,
