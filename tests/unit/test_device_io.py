@@ -38,7 +38,6 @@ class TestDeviceIOPool:
     ) -> None:
         """Python 3.11 wait_for can otherwise swallow cancellation of a finished Future."""
         pool = DeviceIOPool(max_workers=1)
-        loop = asyncio.get_running_loop()
         completed: Future[bool] = Future()
         executor = MagicMock()
         executor.submit.return_value = completed
@@ -47,7 +46,9 @@ class TestDeviceIOPool:
         try:
             await asyncio.sleep(0)  # Let the device await start before racing its completion.
             completed.set_result(True)
-            loop.call_soon(task.cancel)
+            # Cancel before the task can resume. From Python 3.14, set_result completes the
+            # awaited future at once and queues the wakeup, so a call_soon cancel lands late.
+            task.cancel()
             with pytest.raises(asyncio.CancelledError):
                 await task
         finally:

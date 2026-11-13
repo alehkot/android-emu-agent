@@ -226,7 +226,6 @@ async def test_cancellation_racing_success_does_not_continue_workflow(
 ) -> None:
     """Exercise the real I/O helper so Python 3.11 cancellation cannot look like success."""
     pool = DeviceIOPool(max_workers=1)
-    loop = asyncio.get_running_loop()
     completed: Future[bool] = Future()
     following_action = MagicMock()
     executor = MagicMock()
@@ -248,7 +247,7 @@ async def test_cancellation_racing_success_does_not_continue_workflow(
     try:
         await asyncio.sleep(0)
         completed.set_result(True)
-        loop.call_soon(task.cancel)
+        task.cancel()  # Not call_soon: from Python 3.14 that runs after the task resumes.
         with pytest.raises(asyncio.CancelledError):
             await task
         following_action.assert_not_called()
