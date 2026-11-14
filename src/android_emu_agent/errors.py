@@ -370,9 +370,12 @@ def adb_not_found_error() -> AgentError:
 
 def adb_command_error(command: str, reason: str) -> AgentError:
     """Create error for adb command failure."""
+    # Text output prints only the message, so add the first line of adb's explanation;
+    # context keeps all of it.
+    summary = next((line.strip() for line in reason.splitlines() if line.strip()), "")
     return AgentError(
         code="ERR_ADB_COMMAND",
-        message=f"adb command failed: {command}",
+        message=f"adb command failed: {command}" + (f" ({summary})" if summary else ""),
         context={"command": command, "reason": reason},
         remediation="Check adb connection and command arguments, then retry.",
     )

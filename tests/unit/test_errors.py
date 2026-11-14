@@ -67,6 +67,21 @@ class TestErrorConstructors:
         assert error.code == "ERR_BLOCKED_INPUT"
         assert "system dialog" in error.message
 
+    def test_adb_command_error_names_the_first_line_of_the_reason(self) -> None:
+        """Text output shows only the message, so it must say why adb failed."""
+        from android_emu_agent.errors import adb_command_error
+
+        reason = "\nadb: error: failed to stat remote object '/x': No such file or directory\nmore"
+        error = adb_command_error("pull /x out", reason)
+
+        assert error.code == "ERR_ADB_COMMAND"
+        assert error.message == (
+            "adb command failed: pull /x out "
+            "(adb: error: failed to stat remote object '/x': No such file or directory)"
+        )
+        assert error.context["reason"] == reason
+        assert adb_command_error("pull /x out", "").message == "adb command failed: pull /x out"
+
     def test_timeout_error(self) -> None:
         """Should create timeout error."""
         error = timeout_error("wait_for_text", timeout_ms=5000)
