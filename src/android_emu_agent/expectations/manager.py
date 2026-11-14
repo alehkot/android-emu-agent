@@ -45,12 +45,14 @@ class ExpectationManager:
             )
         if not self._is_unmet_condition(response):
             return dict(response)
+        error = response.get("error")
         return self.failed(
             assertion=assertion,
             session_id=session_id,
             expected=expected,
             actual=response,
             remediation="Verify the screen state, adjust the selector, or increase --timeout-ms.",
+            detail=error.get("message") if isinstance(error, Mapping) else None,
         )
 
     def current_app(
@@ -92,6 +94,7 @@ class ExpectationManager:
             expected=expected,
             actual=response,
             remediation="Launch or navigate to the expected app/activity, then retry.",
+            detail=f"found {actual_component or actual_package or 'no foreground app'}",
         )
 
     def failed(
@@ -102,8 +105,12 @@ class ExpectationManager:
         expected: Mapping[str, Any],
         actual: Mapping[str, Any],
         remediation: str,
+        detail: str | None = None,
     ) -> dict[str, Any]:
-        """Return a failed expectation payload."""
+        """Return a failed expectation payload; ``detail`` says what was observed instead."""
+        message = f"Expectation failed: {assertion}"
+        if detail:
+            message += f" ({detail})"
         return {
             "status": "error",
             "passed": False,
@@ -113,7 +120,7 @@ class ExpectationManager:
             "actual": dict(actual),
             "error": {
                 "code": "ERR_EXPECTATION_FAILED",
-                "message": f"Expectation failed: {assertion}",
+                "message": message,
                 "context": {
                     "expected": dict(expected),
                     "actual": dict(actual),

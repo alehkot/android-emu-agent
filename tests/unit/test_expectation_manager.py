@@ -29,12 +29,17 @@ def test_wait_response_timeout_fails_expectation() -> None:
         assertion="exists",
         session_id="s-abc123",
         expected={"text": "Checkout"},
-        response={"status": "timeout", "error": {"code": "ERR_TIMEOUT"}},
+        response={
+            "status": "timeout",
+            "error": {"code": "ERR_TIMEOUT", "message": "Text not found: 'Checkout'"},
+        },
     )
 
     assert result["status"] == "error"
     assert result["passed"] is False
     assert result["error"]["code"] == "ERR_EXPECTATION_FAILED"
+    # Text output prints only the message, so it must say what the wait saw.
+    assert result["error"]["message"] == "Expectation failed: exists (Text not found: 'Checkout')"
     assert result["actual"]["error"]["code"] == "ERR_TIMEOUT"
 
 
@@ -94,6 +99,7 @@ def test_current_app_mismatch_fails_expectation() -> None:
     assert result["status"] == "error"
     assert result["expected"]["package"] == "com.other"
     assert result["actual"]["package"] == "com.example"
+    assert result["error"]["message"] == "Expectation failed: current_app (found com.example)"
 
 
 def test_current_app_infrastructure_error_is_preserved() -> None:
