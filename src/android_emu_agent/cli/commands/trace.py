@@ -126,4 +126,11 @@ def trace_export(
         },
     )
     client.close()
+    data = resp.json()
+    if not json_output and isinstance(data.get("markdown"), str) and not data.get("error"):
+        # "path" is the source archive: name the report that was written, or print the report.
+        typer.echo(
+            f"✓ Done -> {data['output_path']}" if "output_path" in data else data["markdown"]
+        )
+        return
     handle_response(resp, json_output=json_output)

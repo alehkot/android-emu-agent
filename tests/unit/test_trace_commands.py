@@ -95,6 +95,37 @@ def test_trace_status_prints_the_traces_without_json(capsys: pytest.CaptureFixtu
     assert json.loads(capsys.readouterr().out) == payload
 
 
+@pytest.mark.parametrize(
+    ("output", "expected"),
+    [(None, "# Trace report\n\n"), ("/tmp/run.md", "✓ Done -> /tmp/run.md\n")],
+    ids=["no-output", "output"],
+)
+def test_trace_export_text_output_shows_the_report_or_its_path(
+    output: str | None, expected: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Text output shouldn't name the source archive as if the report were written there."""
+    from android_emu_agent.cli.commands import trace
+
+    payload = {"status": "done", "path": "/tmp/run.aea-trace.zip", "markdown": "# Trace report\n"}
+    if output:
+        payload["output_path"] = output
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, *_: Any, **__: Any) -> DummyResponse:
+            return DummyResponse(payload)
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(trace, "DaemonClient", DummyClient):
+        trace.trace_export("/tmp/run.aea-trace.zip", output=output, json_output=False)
+
+    assert capsys.readouterr().out == expected
+
+
 def test_trace_replay_builds_payload() -> None:
     """Should send dry replay options to the daemon."""
     from android_emu_agent.cli.commands import trace
