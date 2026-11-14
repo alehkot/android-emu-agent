@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 from unittest.mock import patch
+
+import pytest
 
 
 class DummyResponse:
@@ -68,6 +71,28 @@ def test_trace_stop_builds_output_payload() -> None:
         "/trace/stop",
         {"session_id": "s-abc123", "output_path": "/tmp/run.aea-trace.zip"},
     )
+
+
+def test_trace_status_prints_the_traces_without_json(capsys: pytest.CaptureFixture[str]) -> None:
+    """Text output should list the traces, not only "✓ Done"."""
+    from android_emu_agent.cli.commands import trace
+
+    payload = {"status": "done", "traces": [{"trace_id": "tr-abc", "trace_status": "active"}]}
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, *_: Any, **__: Any) -> DummyResponse:
+            return DummyResponse(payload)
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(trace, "DaemonClient", DummyClient):
+        trace.trace_status(session_id=None, json_output=False)
+
+    assert json.loads(capsys.readouterr().out) == payload
 
 
 def test_trace_replay_builds_payload() -> None:

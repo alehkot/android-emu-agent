@@ -7,7 +7,7 @@ from pathlib import Path
 import typer
 
 from android_emu_agent.cli.daemon_client import DaemonClient
-from android_emu_agent.cli.utils import handle_response
+from android_emu_agent.cli.utils import handle_query_response, handle_response
 
 app = typer.Typer(help="Agent trace recording and replay commands")
 
@@ -70,7 +70,7 @@ def trace_status(
     client = DaemonClient()
     resp = client.request("GET", path)
     client.close()
-    handle_response(resp, json_output=json_output)
+    handle_query_response(resp, json_output=json_output)
 
 
 @app.command("replay")
@@ -100,7 +100,7 @@ def trace_replay(
         },
     )
     client.close()
-    handle_response(resp, json_output=json_output)
+    handle_query_response(resp, json_output=json_output)
 
 
 @app.command("export")

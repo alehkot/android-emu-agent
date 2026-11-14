@@ -124,6 +124,15 @@ def handle_output_response(resp: Any, json_output: bool = False) -> None:
     typer.echo(format_json(data))
 
 
+def handle_query_response(resp: Any, json_output: bool = False) -> None:
+    """Print a query's whole payload in both modes; "✓ Done" alone would hide the answer."""
+    data = _parse_response_json(resp)
+    if not json_output:
+        _maybe_render_error(data)
+    typer.echo(format_json(data))
+    _exit_if_error(data, resp)
+
+
 def handle_response_with_pull(
     resp: Any,
     *,

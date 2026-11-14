@@ -18,7 +18,12 @@ from android_emu_agent.cli import utils
 from android_emu_agent.cli.commands import app_cmd, emulator, reliability
 from android_emu_agent.daemon import server
 
-HANDLERS = [utils.handle_response, utils.handle_output_response, utils.handle_response_with_pull]
+HANDLERS = [
+    utils.handle_response,
+    utils.handle_output_response,
+    utils.handle_response_with_pull,
+    utils.handle_query_response,
+]
 
 
 @pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
@@ -76,7 +81,7 @@ def test_real_validation_rejection_exits_nonzero(
     assert core.mock_calls == []  # Validation rejected the payload before any device operation.
 
 
-@pytest.mark.parametrize("handler", HANDLERS, ids=["response", "output", "pull"])
+@pytest.mark.parametrize("handler", HANDLERS, ids=["response", "output", "pull", "query"])
 @pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
 @pytest.mark.parametrize("status_code", [400, 404, 422, 500])
 def test_http_error_details_are_preserved_and_fail(
@@ -95,7 +100,7 @@ def test_http_error_details_are_preserved_and_fail(
     assert json.loads(capsys.readouterr().out) == payload
 
 
-@pytest.mark.parametrize("handler", HANDLERS, ids=["response", "output", "pull"])
+@pytest.mark.parametrize("handler", HANDLERS, ids=["response", "output", "pull", "query"])
 @pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
 def test_http_error_cannot_render_success_or_copy_artifact(
     handler: Callable[..., None],
@@ -122,7 +127,7 @@ def test_http_error_cannot_render_success_or_copy_artifact(
     assert source.read_bytes() == b"source artifact"
 
 
-@pytest.mark.parametrize("handler", HANDLERS, ids=["response", "output", "pull"])
+@pytest.mark.parametrize("handler", HANDLERS, ids=["response", "output", "pull", "query"])
 @pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
 def test_success_response_and_artifact_copy_still_work(
     handler: Callable[..., None],
@@ -144,14 +149,14 @@ def test_success_response_and_artifact_copy_still_work(
     if handler is utils.handle_response_with_pull:
         assert destination.read_bytes() == b"source artifact"
         payload["pulled_path"] = str(destination)
-    if json_output:
+    if json_output or handler is utils.handle_query_response:
         assert json.loads(output) == payload
     else:
         assert "✓ Done (12 ms)" in output
         assert str(source) in output
 
 
-@pytest.mark.parametrize("handler", HANDLERS, ids=["response", "output", "pull"])
+@pytest.mark.parametrize("handler", HANDLERS, ids=["response", "output", "pull", "query"])
 @pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
 def test_structured_agent_error_contract_is_unchanged(
     handler: Callable[..., None],

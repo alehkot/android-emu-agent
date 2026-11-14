@@ -5,7 +5,7 @@ from __future__ import annotations
 import typer
 
 from android_emu_agent.cli.daemon_client import DaemonClient, format_json
-from android_emu_agent.cli.utils import handle_response, require_target
+from android_emu_agent.cli.utils import handle_query_response, handle_response, require_target
 
 app = typer.Typer(help="Device management commands")
 device_set_app = typer.Typer(help="Determinism controls")
@@ -62,7 +62,7 @@ def device_capabilities(
     client = DaemonClient()
     resp = client.request("POST", "/devices/capabilities", json_body=payload)
     client.close()
-    handle_response(resp, json_output=json_output)
+    handle_query_response(resp, json_output=json_output)
 
 
 @device_set_app.command("animations")
