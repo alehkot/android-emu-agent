@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 import typer
 
 from android_emu_agent.cli.daemon_client import DaemonClient, format_json
-from android_emu_agent.cli.utils import handle_response
+from android_emu_agent.cli.utils import handle_query_response, handle_response
 
 app = typer.Typer(help="Debugger commands (JDI Bridge)")
 break_app = typer.Typer(help="Breakpoint commands")
@@ -157,7 +157,7 @@ def debug_observe(
         },
     )
     client.close()
-    handle_response(resp, json_output=json_output)
+    handle_query_response(resp, json_output=json_output)
 
 
 @break_app.command("set")
@@ -391,7 +391,7 @@ def debug_stack(
         },
     )
     client.close()
-    handle_response(resp, json_output=json_output)
+    handle_query_response(resp, json_output=json_output)
 
 
 @app.command("inspect")
@@ -419,7 +419,7 @@ def debug_inspect(
         },
     )
     client.close()
-    handle_response(resp, json_output=json_output)
+    handle_query_response(resp, json_output=json_output)
 
 
 @app.command("eval")
@@ -443,7 +443,7 @@ def debug_eval(
         },
     )
     client.close()
-    handle_response(resp, json_output=json_output)
+    handle_query_response(resp, json_output=json_output)
 
 
 @mapping_app.command("load")

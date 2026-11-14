@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 from unittest.mock import patch
+
+import pytest
 
 
 class DummyResponse:
@@ -581,6 +584,28 @@ def test_debug_stack_calls_endpoint() -> None:
         "/debug/stack",
         {"session_id": "s-abc123", "thread": "main", "max_frames": 10},
     )
+
+
+def test_debug_stack_prints_the_frames_without_json(capsys: pytest.CaptureFixture[str]) -> None:
+    """Text output should show the stack, not only "✓ Done"."""
+    from android_emu_agent.cli.commands import debug
+
+    payload = {"status": "done", "thread": "main", "frames": [{"method": "onCreate", "line": 42}]}
+
+    class DummyClient:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def request(self, *_: Any, **__: Any) -> DummyResponse:
+            return DummyResponse(payload)
+
+        def close(self) -> None:
+            return None
+
+    with patch.object(debug, "DaemonClient", DummyClient):
+        debug.debug_stack(session_id="s-abc123", thread="main", max_frames=10, json_output=False)
+
+    assert json.loads(capsys.readouterr().out) == payload
 
 
 def test_debug_inspect_calls_endpoint() -> None:
