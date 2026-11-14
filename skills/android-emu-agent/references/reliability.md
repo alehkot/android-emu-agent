@@ -200,6 +200,9 @@ android-emu-agent reliability screenrecord --session s-abc123 --duration 10
 Keep durations short and repeatable. Use `--categories` on `perfetto` only when you know which data
 sources you need; the default captures common scheduling, graphics, input, and runtime categories.
 
+Without root, `simpleperf` records from inside the app, so the app must be debuggable or
+profileable. On emulators it samples `cpu-clock`, because they have no hardware counters.
+
 ### ART Compilation Mode
 
 Use `--mode reset` to clear compiled code (simulates cold-start / unoptimized path). Use

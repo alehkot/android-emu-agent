@@ -367,7 +367,17 @@ class TestNativePerformanceArtifacts:
         assert shell_mock.await_args_list[-1].args[1].startswith("rm -f ")
 
     @pytest.mark.asyncio
-    async def test_simpleperf_record_writes_report_and_pulls_data(self, tmp_path: Path) -> None:
+    @pytest.mark.parametrize(
+        ("is_rooted", "is_emulator", "record"),
+        [
+            (False, True, "simpleperf record --app com.example.app -e cpu-clock --duration 2"),
+            (True, False, "simpleperf record -p 1234 --duration 2"),
+        ],
+        ids=["emulator-without-root", "rooted-device"],
+    )
+    async def test_simpleperf_record_writes_report_and_pulls_data(
+        self, tmp_path: Path, is_rooted: bool, is_emulator: bool, record: str
+    ) -> None:
         """Should record simpleperf data and write a local text report."""
         from android_emu_agent.reliability.manager import ReliabilityManager
 
@@ -389,11 +399,13 @@ class TestNativePerformanceArtifacts:
                 "emulator-5554",
                 "com.example.app",
                 duration_seconds=2,
+                is_rooted=is_rooted,
+                is_emulator=is_emulator,
             )
 
         assert result["pid"] == 1234
         assert Path(result["report_path"]).read_text(encoding="utf-8") == "Samples: 42"
-        assert "simpleperf record -p 1234 --duration 2" in shell_mock.await_args_list[0].args[1]
+        assert record in shell_mock.await_args_list[0].args[1]
         assert "simpleperf report -i" in shell_mock.await_args_list[1].args[1]
         adb_mock.assert_awaited_once()
 

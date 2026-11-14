@@ -390,6 +390,8 @@ class ReliabilityManager:
         *,
         duration_seconds: int,
         filename: str | None = None,
+        is_rooted: bool = False,
+        is_emulator: bool = False,
     ) -> dict[str, Any]:
         """Capture a bounded simpleperf CPU profile and pull data plus report artifacts."""
         self._validate_duration(duration_seconds)
@@ -405,13 +407,18 @@ class ReliabilityManager:
         remote_data = f"/data/local/tmp/{base_name}"
         local_data = self.output_dir / base_name
         local_report = self.output_dir / f"{stem}.txt"
+        # Without root, shell can't profile another app's process by pid; --app records from
+        # inside a debuggable or profileable app instead. Emulators have no hardware counters
+        # for simpleperf's default cpu-cycles event.
+        target = f"-p {pid}" if is_rooted else f"--app {shlex.quote(package)}"
+        event = " -e cpu-clock" if is_emulator else ""
 
         cleanup_error: str | None = None
         try:
             await self._shell(
                 device,
                 (
-                    f"simpleperf record -p {pid} --duration {duration_seconds} "
+                    f"simpleperf record {target}{event} --duration {duration_seconds} "
                     f"-o {shlex.quote(remote_data)}"
                 ),
             )

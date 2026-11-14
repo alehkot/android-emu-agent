@@ -2211,7 +2211,7 @@ async def reliability_simpleperf(req: ReliabilitySimpleperfRequest) -> EndpointR
     resolved = await _resolve_device_target(core, req.session_id, req.serial)
     if isinstance(resolved, JSONResponse):
         return resolved
-    serial, device, _info = resolved
+    serial, device, info = resolved
 
     try:
         result = await core.reliability_manager.simpleperf_record(
@@ -2220,6 +2220,8 @@ async def reliability_simpleperf(req: ReliabilitySimpleperfRequest) -> EndpointR
             req.package,
             duration_seconds=req.duration_seconds,
             filename=req.filename,
+            is_rooted=bool(info and info.is_rooted),
+            is_emulator=bool(info and info.is_emulator),
         )
     except AgentError as exc:
         return _error_response(exc, status_code=400)

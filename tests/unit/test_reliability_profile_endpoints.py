@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
@@ -31,10 +32,10 @@ class DummyDeviceManager:
             return None
         return self.device
 
-    async def get_device(self, serial: str) -> dict[str, str] | None:
+    async def get_device(self, serial: str) -> SimpleNamespace | None:
         if serial != "emulator-5554":
             return None
-        return {"serial": serial}
+        return SimpleNamespace(serial=serial, is_rooted=False, is_emulator=True)
 
 
 class DummyReliabilityManager:
@@ -94,6 +95,8 @@ class DummyReliabilityManager:
         *,
         duration_seconds: int,
         filename: str | None,
+        is_rooted: bool,
+        is_emulator: bool,
     ) -> dict[str, Any]:
         self.calls.append(
             {
@@ -103,6 +106,8 @@ class DummyReliabilityManager:
                 "package": package,
                 "duration_seconds": duration_seconds,
                 "filename": filename,
+                "is_rooted": is_rooted,
+                "is_emulator": is_emulator,
             }
         )
         return {"path": "/tmp/profile.data", "report_path": "/tmp/profile.txt", "pid": 123}
@@ -256,6 +261,8 @@ def test_reliability_simpleperf_endpoint_calls_manager() -> None:
             "package": "com.example.app",
             "duration_seconds": 4,
             "filename": "profile.data",
+            "is_rooted": False,
+            "is_emulator": True,
         }
     ]
 
