@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 import typer
 
 from android_emu_agent.cli.daemon_client import DaemonClient, format_json
-from android_emu_agent.cli.utils import handle_query_response, handle_response
+from android_emu_agent.cli.utils import finite_float, handle_query_response, handle_response
 
 app = typer.Typer(help="Debugger commands (JDI Bridge)")
 break_app = typer.Typer(help="Breakpoint commands")
@@ -493,6 +493,7 @@ def debug_step_over(
     timeout_seconds: float = typer.Option(
         10.0,
         "--timeout-seconds",
+        callback=finite_float,
         help="Step timeout in seconds",
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
@@ -519,6 +520,7 @@ def debug_step_into(
     timeout_seconds: float = typer.Option(
         10.0,
         "--timeout-seconds",
+        callback=finite_float,
         help="Step timeout in seconds",
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
@@ -545,6 +547,7 @@ def debug_step_out(
     timeout_seconds: float = typer.Option(
         10.0,
         "--timeout-seconds",
+        callback=finite_float,
         help="Step timeout in seconds",
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),

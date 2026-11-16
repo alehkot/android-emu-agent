@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import shutil
 from pathlib import Path
 from typing import Any, cast
@@ -21,6 +22,13 @@ EMULATOR_START_TIMEOUT = 240.0
 EMULATOR_STOP_TIMEOUT = 60.0
 EMULATOR_SNAPSHOT_TIMEOUT = 60.0
 EMULATOR_RESTORE_TIMEOUT = 180.0
+
+
+def finite_float(value: float) -> float:
+    """Typer callback: refuse nan and inf, which a daemon request can't encode as JSON."""
+    if not math.isfinite(value):
+        raise typer.BadParameter("must be a finite number")
+    return value
 
 
 def wait_http_timeout(timeout_ms: int | None) -> float:

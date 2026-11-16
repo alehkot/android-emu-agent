@@ -5,7 +5,7 @@ from __future__ import annotations
 import typer
 
 from android_emu_agent.cli.daemon_client import DaemonClient
-from android_emu_agent.cli.utils import handle_response
+from android_emu_agent.cli.utils import finite_float, handle_response
 
 app = typer.Typer(help="Action execution commands")
 
@@ -148,7 +148,9 @@ def action_swipe(
     container: str | None = typer.Option(
         None, "--in", help="Container ^ref or selector; supports || fallbacks"
     ),
-    distance: float = typer.Option(0.8, "--distance", "-d", help="Swipe distance (0.0-1.0)"),
+    distance: float = typer.Option(
+        0.8, "--distance", "-d", callback=finite_float, help="Swipe distance (0.0-1.0)"
+    ),
     duration: int = typer.Option(300, "--duration", help="Swipe duration in ms"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
@@ -192,7 +194,9 @@ def action_scroll(
     container: str | None = typer.Option(
         None, "--in", help="Container ^ref or selector; supports || fallbacks"
     ),
-    distance: float = typer.Option(0.8, "--distance", "-d", help="Scroll distance (0.0-1.0)"),
+    distance: float = typer.Option(
+        0.8, "--distance", "-d", callback=finite_float, help="Scroll distance (0.0-1.0)"
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ) -> None:
     """Scroll the view; 'down' shows lower content.

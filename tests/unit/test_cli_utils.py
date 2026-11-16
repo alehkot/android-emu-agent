@@ -1,15 +1,20 @@
-"""Tests for shared CLI response handling."""
+"""Tests for shared CLI helpers: response handling and option validation."""
 
 from __future__ import annotations
 
 import json
 from collections.abc import Callable
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 import typer
+from typer.testing import CliRunner
 
+from android_emu_agent.cli.commands import action, debug
+from android_emu_agent.cli.main import app as cli_app
 from android_emu_agent.cli.utils import (
+    finite_float,
     handle_output_response,
     handle_response,
     handle_response_with_pull,
@@ -69,3 +74,30 @@ def test_json_success_output_keeps_zero_exit(capsys: pytest.CaptureFixture[str])
     handle_response(DummyResponse(payload), json_output=True)
 
     assert json.loads(capsys.readouterr().out) == payload
+
+
+@pytest.mark.parametrize("value", ["nan", "inf", "-inf"])
+@pytest.mark.parametrize(
+    ("command", "flag"),
+    [
+        (["action", "swipe", "up"], "--distance"),
+        (["action", "scroll", "down"], "--distance"),
+        (["debug", "step-over"], "--timeout-seconds"),
+        (["debug", "step-into"], "--timeout-seconds"),
+        (["debug", "step-out"], "--timeout-seconds"),
+    ],
+)
+def test_non_finite_float_options_are_usage_errors(
+    monkeypatch: pytest.MonkeyPatch, command: list[str], flag: str, value: str
+) -> None:
+    # httpx can't encode nan or inf as JSON, so these ended in a ValueError traceback.
+    for module in (action, debug):
+        monkeypatch.setattr(module, "DaemonClient", MagicMock(side_effect=AssertionError))
+    result = CliRunner().invoke(cli_app, [*command, "--session", "s-test", f"{flag}={value}"])
+    assert result.exit_code == 2, result.output
+    assert "must be a finite number" in result.output
+
+
+def test_finite_float_passes_finite_values_through() -> None:
+    assert finite_float(0.5) == 0.5
+    assert finite_float(-3.0) == -3.0
