@@ -207,6 +207,13 @@ If stopping fails, inspect daemon status and logs before trying again. In the JS
 `health.version` identifies the running daemon's version, not the CLI you just invoked. A
 checkout and a release with the same version number cannot be distinguished by that field.
 
+To check without interrupting active work, take the serving process ID from `health.pid`. The
+top-level `pid` comes from the PID file, which can be missing or stale. If `health` is null, the
+status output did not identify a serving process. Check the serving PID in your local process
+viewer, then run status again and confirm that `health.pid` is unchanged. A distinct interpreter
+path can help identify the environment; a shared or abbreviated path does not distinguish the
+two installs. Avoid sharing raw process arguments.
+
 ## Troubleshooting
 
 Start with these checks:
