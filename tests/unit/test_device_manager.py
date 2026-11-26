@@ -1075,9 +1075,10 @@ class TestEmulatorSnapshot:
             ("emulator-5554", ["shell", "getprop", "sys.boot_completed"]),
             ("emulator-5554", ["shell", "getprop", "sys.boot_completed"]),
         ]
-        # wait-for-device blocks until the device appears, so the subprocess gets its own
-        # budget -- slightly beyond the async deadline so wait_for still owns the timeout.
-        assert mock_run_adb.await_args_list[0].kwargs["timeout_s"] > 5.0
+        # All ADB calls share the monotonic readiness deadline and get short thread cleanup grace.
+        budgets = [c.kwargs["timeout_s"] for c in mock_run_adb.await_args_list]
+        assert budgets == sorted(budgets, reverse=True)
+        assert all(5.0 < seconds <= 10.0 for seconds in budgets)
         mock_refresh.assert_awaited_once()
         mock_sleep.assert_awaited_once()
 

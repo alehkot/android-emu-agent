@@ -1226,35 +1226,45 @@ class DeviceManager:
         operation = f"emulator boot readiness for {serial}"
         timeout_ms = timeout_s * 1000
 
-        remaining = max(deadline - loop.time(), 0.1)
+        last_context: dict[str, Any] = {"serial": serial, "stage": "wait-for-device"}
+        readiness = asyncio.timeout_at(deadline)
+
+        def adb_budget() -> float:
+            # The async deadline owns the result; the subprocess also needs a
+            # short grace period because cancellation cannot stop its worker thread.
+            return max(deadline - loop.time(), 0.0) + 5.0
+
         try:
-            await asyncio.wait_for(
-                # `adb wait-for-device` blocks until the device appears. Give the
-                # subprocess a slightly longer budget so wait_for keeps owning the
-                # timeout semantics while the subprocess timeout still frees the
-                # worker thread, which wait_for alone cannot cancel.
-                self._run_adb(serial, ["wait-for-device"], timeout_s=remaining + 5.0),
-                timeout=remaining,
-            )
+            async with readiness:
+                await self._run_adb(serial, ["wait-for-device"], timeout_s=adb_budget())
+                last_context.update(stage="boot-property", property="sys.boot_completed")
+                while True:
+                    if loop.time() >= deadline:
+                        raise timeout_error(operation, timeout_ms, last_context)
+                    try:
+                        result = await self._run_adb(
+                            serial,
+                            ["shell", "getprop", "sys.boot_completed"],
+                            timeout_s=adb_budget(),
+                        )
+                    except AgentError as exc:
+                        last_context["reason"] = exc.context.get("reason") or exc.message
+                    else:
+                        last_context.pop("reason", None)
+                        boot_completed = result.stdout.strip()
+                        last_context["boot_completed"] = boot_completed
+                        if boot_completed == "1":
+                            last_context["stage"] = "refresh"
+                            await self.refresh()
+                            if loop.time() >= deadline:
+                                raise timeout_error(operation, timeout_ms, last_context)
+                            return
+
+                    await asyncio.sleep(EMULATOR_BOOT_POLL_INTERVAL_S)
         except TimeoutError as exc:
-            raise timeout_error(operation, timeout_ms, {"serial": serial}) from exc
-
-        last_context: dict[str, Any] = {"serial": serial, "property": "sys.boot_completed"}
-        while True:
-            try:
-                result = await self._run_adb(serial, ["shell", "getprop", "sys.boot_completed"])
-                boot_completed = result.stdout.strip()
-                last_context["boot_completed"] = boot_completed
-                if boot_completed == "1":
-                    await self.refresh()
-                    return
-            except AgentError as exc:
-                last_context["reason"] = exc.context.get("reason") or exc.message
-
-            if loop.time() >= deadline:
-                raise timeout_error(operation, timeout_ms, last_context)
-
-            await asyncio.sleep(EMULATOR_BOOT_POLL_INTERVAL_S)
+            if not readiness.expired():
+                raise
+            raise timeout_error(operation, timeout_ms, last_context) from exc
 
     async def _send_console_command(self, port: int, command: str) -> str:
         """Send command to emulator console.
