@@ -256,8 +256,10 @@ cd android-emu-agent
 uv sync --all-extras
 ```
 
-Inside the checkout, run the CLI as `uv run android-emu-agent <command>` so it uses the project
-environment and your local changes take precedence over any installed release.
+Inside the checkout, run the CLI as `uv run android-emu-agent <command>` to use the project
+environment. If an installed release already started the daemon, follow the
+[daemon switch instructions](docs/installation.md#when-both-installs-exist) to run the checkout's
+daemon code as well.
 
 Use `./scripts/dev.sh` as the main entry point for local development.
 

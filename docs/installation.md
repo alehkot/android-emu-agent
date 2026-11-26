@@ -183,16 +183,29 @@ uv run android-emu-agent <command>
 
 ### When both installs exist
 
-A checkout and an installed release share one daemon socket, so a daemon started by one serves
-commands issued by the other. After switching between them, restart the daemon:
+With the default socket, both installations talk to the same daemon. Switching which CLI you
+invoke does not switch the running daemon. Finish any active tasks or debugger sessions before
+stopping it.
+
+To switch to the source checkout, run this from the checkout:
 
 ```bash
-android-emu-agent daemon stop
-android-emu-agent daemon start
+uv run android-emu-agent daemon stop &&
+  uv run android-emu-agent daemon start &&
+  uv run android-emu-agent daemon status --json
 ```
 
-`android-emu-agent daemon status --json` reports the running daemon's `version` so you can tell
-which install owns the socket.
+To switch back, use the standalone installed command for all three steps:
+
+```bash
+android-emu-agent daemon stop &&
+  android-emu-agent daemon start &&
+  android-emu-agent daemon status --json
+```
+
+If stopping fails, inspect daemon status and logs before trying again. In the JSON output,
+`health.version` identifies the running daemon's version, not the CLI you just invoked. A
+checkout and a release with the same version number cannot be distinguished by that field.
 
 ## Troubleshooting
 
